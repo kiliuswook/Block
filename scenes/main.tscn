@@ -114,7 +114,7 @@ offset_bottom = 1060.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.45)
 horizontal_alignment = 1
-text = "< >  이동 (더블탭: 대시 = 블록 파괴)      ^ / SPACE  점프 (머리 위 블록 파괴)      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
+text = "< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
 
 [node name="GameOverLabel" type="Label" parent="UI"]
 visible = false

@@ -63,6 +63,18 @@ func _ready() -> void:
 	board.grid.clear()
 	board.cracked.clear()
 
+	# Wall contact detection (for wall slide / wall jump)
+	player.position = Vector2(Player.SIZE / 2.0, 500.0)
+	_check(player._wall_contact() == -1, "left wall contact detected")
+	player.position = Vector2(EscapeBoard.COLS * c - Player.SIZE / 2.0, 500.0)
+	_check(player._wall_contact() == 1, "right wall contact detected")
+	player.position = Vector2(320.0, 500.0)
+	_check(player._wall_contact() == 0, "no wall contact in open air")
+	board.grid[Vector2i(6, 7)] = "J"
+	player.position = Vector2(6 * c - Player.SIZE / 2.0, 7 * c + 32.0)
+	_check(player._wall_contact() == 1, "block face counts as a wall")
+	board.grid.clear()
+
 	# Cracks follow blocks down through a line clear
 	for x in range(EscapeBoard.COLS):
 		board.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"

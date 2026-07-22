@@ -12,6 +12,9 @@ const DOUBLE_TAP := 0.3
 const BREAK_PROBE := 10.0
 const KNOCKBACK_SPEED := 420.0
 const KNOCKBACK_TIME := 0.15
+const WALL_SLIDE_SPEED := 160.0
+const WALL_JUMP_PUSH := 430.0
+const WALL_JUMP_TIME := 0.18
 const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
@@ -30,6 +33,8 @@ var coyote_timer := 0.0
 var jump_buffer := 0.0
 var knockback_timer := 0.0
 var knockback_vx := 0.0
+var wall_dir := 0  # -1: wall on the left, 1: on the right, 0: none
+var wall_jumps_left := 1
 var last_tap := {-1: -1e9, 1: -1e9}
 
 @onready var board: EscapeBoard = get_parent()
@@ -45,6 +50,8 @@ func respawn(pos: Vector2) -> void:
 	coyote_timer = 0.0
 	jump_buffer = 0.0
 	knockback_timer = 0.0
+	wall_dir = 0
+	wall_jumps_left = 1
 	queue_redraw()
 
 
@@ -90,14 +97,27 @@ func _handle_input(delta: float) -> void:
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
 	coyote_timer = COYOTE if on_floor else maxf(coyote_timer - delta, 0.0)
+	wall_dir = _wall_contact()
 	if jump_buffer > 0.0 and coyote_timer > 0.0:
 		velocity.y = JUMP_VEL
 		jump_buffer = 0.0
 		coyote_timer = 0.0
+	elif jump_buffer > 0.0 and not on_floor and wall_dir != 0 and wall_jumps_left > 0:
+		# Wall jump: leap up and away from the wall, once per airtime.
+		velocity.y = JUMP_VEL
+		knockback_timer = WALL_JUMP_TIME
+		knockback_vx = -wall_dir * WALL_JUMP_PUSH
+		wall_jumps_left -= 1
+		jump_buffer = 0.0
+		dash_timer = 0.0
 	var g := GRAVITY
-	if velocity.y > 0.0 and Input.is_action_pressed("soft_drop"):
+	var fast_fall := Input.is_action_pressed("soft_drop")
+	if velocity.y > 0.0 and fast_fall:
 		g *= FAST_FALL_FACTOR
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
+	# Hug a wall while falling to slide down it slowly (unless fast-falling).
+	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
+		velocity.y = WALL_SLIDE_SPEED
 
 
 func _apply_motion(delta: float) -> void:
@@ -115,6 +135,7 @@ func _apply_motion(delta: float) -> void:
 	if hit_v:
 		if velocity.y > 0.0:
 			on_floor = true
+			wall_jumps_left = 1
 		elif velocity.y < 0.0:
 			# Head-bump smashes the single block above.
 			var head := rect()
@@ -124,6 +145,20 @@ func _apply_motion(delta: float) -> void:
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
 		on_floor = velocity.y >= 0.0 and board.rect_hits_solid(feet)
+		if on_floor:
+			wall_jumps_left = 1
+
+
+## Returns which side has a wall/block flush against the player.
+func _wall_contact() -> int:
+	var half := SIZE / 2.0
+	var left := Rect2(position.x - half - 2.0, position.y - half + 6.0, 2.0, SIZE - 12.0)
+	var right := Rect2(position.x + half, position.y - half + 6.0, 2.0, SIZE - 12.0)
+	if board.rect_hits_solid(left):
+		return -1
+	if board.rect_hits_solid(right):
+		return 1
+	return 0
 
 
 ## Moves along one axis in small steps; returns true if blocked.
