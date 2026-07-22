@@ -20,7 +20,8 @@ Godot 4.6 (2D) 게임 프로젝트.
 
 ## 게임 코어
 
-- 현재 메인 모드는 "테트리스 탈출": 캐릭터가 블록을 밟고 올라가 상단 탈출구로 나가는 플랫포머
+- 시작 씬은 타이틀(`scenes/title.tscn`) — 모드 선택 후 `GameState.mode`에 저장하고 `scenes/main.tscn` 로드
+- 모드 2개: 탈출 모드(상단 탈출구로 나가면 레벨업) / 무한의 계단 모드(상승 전용 카메라, 화면 아래 추락 시 사망, 높이 기록)
   - `scripts/escape_board.gd` — 필드/블록 로직 (블록이 캐릭터 열 추적 → 5초 후 자유낙하 → 락, 줄 클리어, 깔림 판정, 탈출 판정)
   - `scripts/player.gd` — 캐릭터 물리 (이동, 더블탭 대시, 점프+공중 제어, 빠른 낙하, AABB 충돌)
 - 클래식 테트리스 로직은 `scripts/board.gd`에 유지 (SRS 회전+월킥, 7-bag 등) — escape_board가 SHAPES/KICKS/COLORS 상수를 재사용
