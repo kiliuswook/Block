@@ -1,0 +1,21 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Build artifacts
+/build/
+/export/
+*.translation
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude Code local overrides
+.claude/settings.local.json
+
+# Python (gdtoolkit cache)
+__pycache__/
+*.pyc
