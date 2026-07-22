@@ -144,7 +144,7 @@ func _apply_motion(delta: float) -> void:
 		velocity.y = 0.0
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
-		on_floor = velocity.y >= 0.0 and board.rect_hits_solid(feet)
+		on_floor = velocity.y >= 0.0 and board.rect_blocked_for_player(feet)
 		if on_floor:
 			wall_jumps_left = 1
 
@@ -154,9 +154,9 @@ func _wall_contact() -> int:
 	var half := SIZE / 2.0
 	var left := Rect2(position.x - half - 2.0, position.y - half + 6.0, 2.0, SIZE - 12.0)
 	var right := Rect2(position.x + half, position.y - half + 6.0, 2.0, SIZE - 12.0)
-	if board.rect_hits_solid(left):
+	if board.rect_blocked_for_player(left):
 		return -1
-	if board.rect_hits_solid(right):
+	if board.rect_blocked_for_player(right):
 		return 1
 	return 0
 
@@ -170,9 +170,9 @@ func _move_axis(motion: Vector2) -> bool:
 	while remaining > 0.0:
 		var step := minf(remaining, STEP)
 		var next := position + dir * step
-		if board.rect_hits_solid(Rect2(next - Vector2.ONE * SIZE / 2.0, Vector2.ONE * SIZE)):
+		if board.rect_blocked_for_player(Rect2(next - Vector2.ONE * SIZE / 2.0, Vector2.ONE * SIZE)):
 			# Creep up to the surface pixel by pixel.
-			while not board.rect_hits_solid(
+			while not board.rect_blocked_for_player(
 					Rect2(position + dir - Vector2.ONE * SIZE / 2.0, Vector2.ONE * SIZE)):
 				position += dir
 			return true

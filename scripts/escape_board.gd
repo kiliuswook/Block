@@ -134,6 +134,21 @@ func rect_hits_solid(r: Rect2) -> bool:
 	return false
 
 
+## What the player collides with: locked grid, walls, and the falling piece.
+## The falling piece is a solid body — the player can never pass through it.
+func rect_blocked_for_player(r: Rect2) -> bool:
+	return rect_hits_solid(r) or piece_hits_rect(r)
+
+
+func piece_hits_rect(r: Rect2) -> bool:
+	if piece_state != PieceState.FALLING or piece_type == "":
+		return false
+	for c in _cells(piece_type, piece_rot, piece_pos):
+		if _cell_rect(c).intersects(r):
+			return true
+	return false
+
+
 func _track(delta: float) -> void:
 	if Input.is_action_just_pressed("soft_drop"):
 		_start_fall()
@@ -155,11 +170,11 @@ func _track(delta: float) -> void:
 func _start_fall() -> void:
 	piece_state = PieceState.FALLING
 	fall_timer = 0.0
-	# If the stack has grown into the spawn area, back off upward.
-	var guard := 64
-	while _piece_collides(piece_rot, piece_pos, false) and guard > 0:
-		piece_pos.y -= 1
-		guard -= 1
+	# Classic Tetris block out: the stack reaches the spawn area and the
+	# piece has nowhere to start falling — game over in every mode.
+	if _piece_collides(piece_rot, piece_pos, false):
+		_kill_player()
+		return
 	_resolve_piece_overlap()
 
 
@@ -178,8 +193,8 @@ func _fall(delta: float) -> void:
 			return
 
 
-## The falling piece overlaps the player: shove them out (down or sideways)
-## if there is room. Death only when truly pinned — crushed, not bumped.
+## The falling piece overlaps the player: drive them straight down with it,
+## sideways only as a last resort. Death only when truly pinned — crushed.
 func _resolve_piece_overlap() -> bool:
 	var pr := player.rect().grow(-CRUSH_MARGIN)
 	var cell_rects: Array = []
@@ -199,14 +214,17 @@ func _resolve_piece_overlap() -> bool:
 		d_down = maxf(d_down, r.end.y - full.position.y)
 		d_left = maxf(d_left, full.end.x - r.position.x)
 		d_right = maxf(d_right, r.end.x - full.position.x)
-	var candidates := [
-		[Vector2(0.0, d_down + 1.0), d_down],
+	var sides := [
 		[Vector2(-(d_left + 1.0), 0.0), d_left],
 		[Vector2(d_right + 1.0, 0.0), d_right],
 	]
-	candidates.sort_custom(func(a: Array, b: Array) -> bool: return a[1] < b[1])
+	sides.sort_custom(func(a: Array, b: Array) -> bool: return a[1] < b[1])
+	# Down always wins: a descending block shoves the player beneath it.
+	var candidates := [[Vector2(0.0, d_down + 1.0), d_down, CELL * 1.6]]
+	for s in sides:
+		candidates.append([s[0], s[1], CELL])
 	for cand in candidates:
-		if cand[1] > CELL:
+		if cand[1] > cand[2]:
 			continue
 		var moved := Rect2(full.position + cand[0], full.size)
 		if rect_hits_solid(moved):
@@ -219,6 +237,10 @@ func _resolve_piece_overlap() -> bool:
 		if still_overlaps:
 			continue
 		player.position += cand[0]
+		if cand[0].y > 0.0:
+			# Carry the piece's fall speed so the player is driven downward.
+			player.velocity.y = maxf(player.velocity.y, CELL / _fall_interval())
+			player.on_floor = false
 		return false
 	_kill_player()
 	return true
@@ -338,6 +360,9 @@ func _spawn_piece() -> void:
 	piece_state = PieceState.TRACKING
 	track_timer = 0.0
 	track_move_timer = 0.0
+	# Classic Tetris block out: the new piece spawns inside the stack.
+	if _piece_collides(piece_rot, piece_pos, false):
+		_kill_player()
 
 
 ## In endless mode the piece hovers a fixed number of cells above the

@@ -95,6 +95,16 @@ func _ready() -> void:
 	_check(player.alive, "bumped airborne player survives")
 	_check(player.position.y > 6 * c, "player was shoved below the piece")
 
+	# The falling piece is solid to the player — no passing through it
+	_check(board.piece_hits_rect(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
+			"falling piece cell blocks the player")
+	_check(board.rect_blocked_for_player(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
+			"player collision includes the falling piece")
+	board.piece_state = board.PieceState.TRACKING
+	_check(not board.piece_hits_rect(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
+			"tracking piece is not solid")
+	board.piece_state = board.PieceState.FALLING
+
 	# A falling piece landing on a grounded player kills them
 	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)
 	player.position = board._spawn_point()
@@ -134,6 +144,37 @@ func _ready() -> void:
 	p2.position = Vector2(320, cam2.position.y + 700.0)
 	b2._update_endless()
 	_check(not p2.alive, "falling below the screen is death")
+	GameState.mode = GameState.MODE_ESCAPE
+
+	# Classic Tetris block out: stack reaching the spawn area ends the game
+	var b3: Node2D = load("res://scripts/escape_board.gd").new()
+	var p3: Node2D = load("res://scripts/player.gd").new()
+	p3.name = "Player"
+	b3.add_child(p3)
+	add_child(b3)
+	b3.start_game()
+	for x in range(EscapeBoard.COLS):
+		for y in range(3):
+			b3.grid[Vector2i(x, y)] = "O"
+	b3._spawn_piece()
+	_check(not b3.playing, "escape: piece spawning inside the stack ends the game")
+
+	GameState.mode = GameState.MODE_ENDLESS
+	var b4: Node2D = load("res://scripts/escape_board.gd").new()
+	var p4: Node2D = load("res://scripts/player.gd").new()
+	p4.name = "Player"
+	b4.add_child(p4)
+	var cam4 := Camera2D.new()
+	cam4.name = "Cam"
+	b4.add_child(cam4)
+	add_child(b4)
+	b4.start_game()
+	var spawn_row: int = b4._endless_spawn_row()
+	for x in range(EscapeBoard.COLS):
+		for y in range(spawn_row, spawn_row + 3):
+			b4.grid[Vector2i(x, y)] = "O"
+	b4._spawn_piece()
+	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
 	GameState.mode = GameState.MODE_ESCAPE
 
 	if failures == 0:
