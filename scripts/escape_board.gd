@@ -99,6 +99,9 @@ func rect_hits_solid(r: Rect2) -> bool:
 
 
 func _track(delta: float) -> void:
+	if Input.is_action_just_pressed("soft_drop"):
+		_start_fall()
+		return
 	track_timer += delta
 	track_move_timer += delta
 	while track_move_timer >= TRACK_STEP:
