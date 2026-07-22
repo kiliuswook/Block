@@ -16,6 +16,12 @@ script = ExtResource("2_board")
 [node name="Player" type="Node2D" parent="Board"]
 script = ExtResource("3_player")
 
+[node name="Cam" type="Camera2D" parent="Board"]
+enabled = false
+position = Vector2(320, 448)
+position_smoothing_enabled = true
+position_smoothing_speed = 6.0
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="ScoreTitle" type="Label" parent="UI"]
@@ -69,6 +75,25 @@ offset_bottom = 496.0
 theme_override_font_sizes/font_size = 40
 text = "0"
 
+[node name="HeightTitle" type="Label" parent="UI"]
+visible = false
+offset_left = 1360.0
+offset_top = 310.0
+offset_right = 1540.0
+offset_bottom = 338.0
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+text = "HEIGHT"
+
+[node name="HeightLabel" type="Label" parent="UI"]
+visible = false
+offset_left = 1360.0
+offset_top = 338.0
+offset_right = 1590.0
+offset_bottom = 386.0
+theme_override_font_sizes/font_size = 40
+text = "0"
+
 [node name="GoalLabel" type="Label" parent="UI"]
 offset_left = 1360.0
 offset_top = 560.0
@@ -89,7 +114,7 @@ offset_bottom = 1060.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.45)
 horizontal_alignment = 1
-text = "< >  이동 (더블탭: 대시 = 블록 파괴)      ^ / SPACE  점프 (머리 위 블록 파괴)      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작"
+text = "< >  이동 (더블탭: 대시 = 블록 파괴)      ^ / SPACE  점프 (머리 위 블록 파괴)      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
 
 [node name="GameOverLabel" type="Label" parent="UI"]
 visible = false
@@ -105,7 +130,7 @@ theme_override_constants/outline_size = 12
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "GAME OVER
-R 키 또는 화면 터치로 재시작"
+R / 화면 터치  재시작      ESC  타이틀"
 
 [node name="EscapeLabel" type="Label" parent="UI"]
 visible = false
@@ -125,6 +150,16 @@ text = "ESCAPE!"
 [node name="TouchControls" type="CanvasLayer" parent="."]
 layer = 2
 script = ExtResource("4_touch")
+
+[node name="MenuButton" type="Control" parent="TouchControls"]
+offset_left = 40.0
+offset_top = 40.0
+offset_right = 220.0
+offset_bottom = 110.0
+script = ExtResource("5_tbtn")
+action = "to_title"
+label = "타이틀"
+font_size = 28
 
 [node name="LeftButton" type="Control" parent="TouchControls"]
 offset_left = 40.0

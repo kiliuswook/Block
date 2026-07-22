@@ -6,6 +6,7 @@ extends Node2D
 ## under a falling piece is death. Reuses SHAPES/KICKS/COLORS from Board.
 
 enum PieceState { TRACKING, FALLING }
+enum Mode { ESCAPE, ENDLESS }
 
 const COLS := 10
 const ROWS := 14
@@ -23,6 +24,9 @@ const CRUSH_MARGIN := 6.0
 const SOFT_DROP_FACTOR := 4.0
 const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
+const HEIGHT_SCORE := 10
+const FALL_DEATH_MARGIN := 620.0
+const ENDLESS_SPAWN_AHEAD := 7  # piece spawns this many cells above the camera cell
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -39,24 +43,34 @@ var total_lines := 0
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
+var mode := Mode.ESCAPE
+var best_height := 0
 
 @onready var player: Player = $Player
+@onready var cam: Camera2D = get_node_or_null("Cam")
 
 
 func start_game() -> void:
+	mode = GameState.mode as Mode
 	grid.clear()
 	cracked.clear()
 	bag.clear()
 	level = 1
 	total_lines = 0
+	best_height = 0
 	is_paused = false
 	GameState.reset()
+	if cam:
+		cam.enabled = mode == Mode.ENDLESS
+		cam.position = Vector2(COLS * CELL / 2.0, ROWS * CELL / 2.0)
+		cam.reset_smoothing()
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	playing = true
 	EventBus.game_started.emit()
 	EventBus.lines_changed.emit(0)
 	EventBus.level_changed.emit(1)
+	EventBus.height_changed.emit(0)
 	queue_redraw()
 
 
@@ -75,9 +89,29 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-	if playing and player.position.y < -CELL * 0.6:
-		_escape()
+	if mode == Mode.ESCAPE:
+		if playing and player.position.y < -CELL * 0.6:
+			_escape()
+	else:
+		_update_endless()
 	queue_redraw()
+
+
+func _update_endless() -> void:
+	if not playing or cam == null:
+		return
+	# Camera only ever rises: follow the player upward, never back down.
+	cam.position.y = minf(cam.position.y, player.position.y)
+	# Falling below the visible screen is death.
+	if player.position.y - Player.SIZE / 2.0 > cam.position.y + FALL_DEATH_MARGIN:
+		_kill_player()
+		return
+	var feet := player.position.y + Player.SIZE / 2.0
+	var h := int(round((ROWS * CELL - feet) / CELL))
+	if h > best_height:
+		GameState.score += (h - best_height) * HEIGHT_SCORE
+		best_height = h
+		EventBus.height_changed.emit(best_height)
 
 
 func rect_hits_solid(r: Rect2) -> bool:
@@ -85,13 +119,13 @@ func rect_hits_solid(r: Rect2) -> bool:
 		return true
 	if r.end.y > ROWS * CELL:
 		return true
-	if r.position.y < 0.0:
+	if mode == Mode.ESCAPE and r.position.y < 0.0:
 		var in_door := r.position.x >= DOOR_MIN * CELL and r.end.x <= (DOOR_MAX + 1) * CELL
 		if not in_door:
 			return true
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
-	var y0 := maxi(int(floor(r.position.y / CELL)), 0)
+	var y0 := int(floor(r.position.y / CELL))
 	var y1 := int(floor((r.end.y - 0.01) / CELL))
 	for y in range(y0, y1 + 1):
 		for x in range(x0, x1 + 1):
@@ -106,6 +140,8 @@ func _track(delta: float) -> void:
 		return
 	track_timer += delta
 	track_move_timer += delta
+	if mode == Mode.ENDLESS:
+		piece_pos.y = _endless_spawn_row()
 	while track_move_timer >= TRACK_STEP:
 		track_move_timer -= TRACK_STEP
 		var target := int(player.position.x / CELL) - 2
@@ -120,7 +156,7 @@ func _start_fall() -> void:
 	piece_state = PieceState.FALLING
 	fall_timer = 0.0
 	# If the stack has grown into the spawn area, back off upward.
-	var guard := 8
+	var guard := 64
 	while _piece_collides(piece_rot, piece_pos, false) and guard > 0:
 		piece_pos.y -= 1
 		guard -= 1
@@ -195,7 +231,7 @@ func _lock_piece() -> void:
 		cracked.erase(c)
 		if c.y < 0:
 			overflow = true
-	if overflow:
+	if overflow and mode == Mode.ESCAPE:
 		_kill_player()
 		return
 	if not _shove_player_out_of_grid():
@@ -214,8 +250,11 @@ func _lock_piece() -> void:
 
 
 func _clear_lines() -> int:
+	var rows := {}
+	for c in grid:
+		rows[c.y] = true
 	var full_rows: Array = []
-	for y in range(ROWS):
+	for y in rows:
 		var full := true
 		for x in range(COLS):
 			if not grid.has(Vector2i(x, y)):
@@ -262,7 +301,7 @@ func _shove_player_out_of_grid() -> bool:
 func break_cell_in_rect(r: Rect2) -> bool:
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
-	var y0 := maxi(int(floor(r.position.y / CELL)), 0)
+	var y0 := int(floor(r.position.y / CELL))
 	var y1 := int(floor((r.end.y - 0.01) / CELL))
 	var center := r.get_center()
 	var best := Vector2i(-1, -1)
@@ -294,10 +333,19 @@ func _spawn_piece() -> void:
 		bag.shuffle()
 	piece_type = bag.pop_back()
 	piece_rot = 0
-	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), 0)
+	var spawn_row := 0 if mode == Mode.ESCAPE else _endless_spawn_row()
+	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
 	track_timer = 0.0
 	track_move_timer = 0.0
+
+
+## In endless mode the piece hovers a fixed number of cells above the
+## (rise-only) camera, so it climbs along with the player.
+func _endless_spawn_row() -> int:
+	if cam == null:
+		return 0
+	return int(floor(cam.position.y / CELL)) - ENDLESS_SPAWN_AHEAD
 
 
 func _try_rotate(dir: int) -> void:
@@ -353,12 +401,19 @@ func _kill_player() -> void:
 	queue_redraw()
 
 
+## Difficulty driver: escape scales with level, endless with height climbed.
+func _difficulty() -> int:
+	if mode == Mode.ESCAPE:
+		return level
+	return 1 + best_height / 8
+
+
 func _track_time() -> float:
-	return maxf(TRACK_TIME_BASE - (level - 1) * 0.4, TRACK_TIME_MIN)
+	return maxf(TRACK_TIME_BASE - (_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
 
 
 func _fall_interval() -> float:
-	return maxf(FALL_INTERVAL_BASE - (level - 1) * 0.02, FALL_INTERVAL_MIN)
+	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
 func _spawn_point() -> Vector2:
@@ -379,13 +434,17 @@ func _cell_rect(c: Vector2i) -> Rect2:
 func _draw() -> void:
 	var w := COLS * CELL
 	var h := ROWS * CELL
-	draw_rect(Rect2(0, 0, w, h), Color(0.08, 0.09, 0.12))
+	var top := 0.0
+	if mode == Mode.ENDLESS and cam:
+		top = minf(0.0, cam.position.y - FALL_DEATH_MARGIN)
+	draw_rect(Rect2(0, top, w, h - top), Color(0.08, 0.09, 0.12))
 	for x in range(1, COLS):
-		draw_line(Vector2(x * CELL, 0), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
-	for y in range(1, ROWS):
+		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
+	for y in range(int(floor(top / CELL)) + 1, ROWS):
 		draw_line(Vector2(0, y * CELL), Vector2(w, y * CELL), Color(1, 1, 1, 0.04))
+	var show_hidden := mode == Mode.ENDLESS
 	for c in grid:
-		if c.y >= 0:
+		if show_hidden or c.y >= 0:
 			_draw_cell(c, Board.COLORS[grid[c]])
 			if cracked.has(c):
 				_draw_crack(c)
@@ -393,10 +452,16 @@ func _draw() -> void:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
-	_draw_door()
+	if mode == Mode.ESCAPE:
+		_draw_door()
 	if piece_type != "":
 		_draw_piece()
-	draw_rect(Rect2(-2, -2, w + 4, h + 4), Color(1, 1, 1, 0.35), false, 2.0)
+	if mode == Mode.ESCAPE:
+		draw_rect(Rect2(-2, -2, w + 4, h + 4), Color(1, 1, 1, 0.35), false, 2.0)
+	else:
+		draw_line(Vector2(-2, top), Vector2(-2, h + 2), Color(1, 1, 1, 0.35), 2.0)
+		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), Color(1, 1, 1, 0.35), 2.0)
+		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), Color(1, 1, 1, 0.35), 2.0)
 
 
 func _draw_door() -> void:
@@ -420,7 +485,7 @@ func _draw_piece() -> void:
 		if t > 0.7 and fmod(track_timer, 0.3) < 0.15:
 			color.a = 1.0
 	for c in _cells(piece_type, piece_rot, piece_pos):
-		if c.y >= 0:
+		if mode == Mode.ENDLESS or c.y >= 0:
 			_draw_cell(c, color)
 	if piece_state == PieceState.TRACKING:
 		var remain := ceili(_track_time() - track_timer)

@@ -3,6 +3,11 @@ extends Node
 
 const SAVE_PATH := "user://save.json"
 
+const MODE_ESCAPE := 0
+const MODE_ENDLESS := 1
+
+var mode: int = MODE_ESCAPE
+
 var score: int = 0:
 	set(value):
 		score = value

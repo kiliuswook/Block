@@ -90,6 +90,40 @@ func _ready() -> void:
 	_check(not player.alive, "falling piece crushes pinned player")
 	_check(not board.playing, "crush ends the game")
 
+	# --- Endless (infinite stairs) mode ---
+	GameState.mode = GameState.MODE_ENDLESS
+	var b2: Node2D = load("res://scripts/escape_board.gd").new()
+	var p2: Node2D = load("res://scripts/player.gd").new()
+	p2.name = "Player"
+	b2.add_child(p2)
+	var cam2 := Camera2D.new()
+	cam2.name = "Cam"
+	b2.add_child(cam2)
+	add_child(b2)
+	b2.start_game()
+	_check(b2.mode == b2.Mode.ENDLESS, "endless mode starts")
+	_check(not b2.rect_hits_solid(Rect2(100, -200, 10, 10)), "no ceiling in endless")
+	b2.piece_type = "O"
+	b2.piece_rot = 0
+	b2.piece_state = b2.PieceState.FALLING
+	b2.piece_pos = Vector2i(0, -6)
+	b2._lock_piece()
+	_check(b2.playing, "locking above the top keeps the game running")
+	_check(b2.grid.has(Vector2i(1, -5)), "cells lock at negative rows")
+	_check(b2.rect_hits_solid(Rect2(1 * c + 30, -5 * c + 30, 10, 10)), "negative-row cell is solid")
+	cam2.position = Vector2(320, 448)
+	p2.position = Vector2(320, 200)
+	b2._update_endless()
+	_check(cam2.position.y == 200.0, "camera follows the player up")
+	_check(b2.best_height > 0, "height is tracked")
+	p2.position = Vector2(320, 500)
+	b2._update_endless()
+	_check(cam2.position.y == 200.0, "camera never moves back down")
+	p2.position = Vector2(320, cam2.position.y + 700.0)
+	b2._update_endless()
+	_check(not p2.alive, "falling below the screen is death")
+	GameState.mode = GameState.MODE_ESCAPE
+
 	if failures == 0:
 		print("ALL TESTS PASSED")
 	else:
