@@ -249,24 +249,31 @@ func _shove_player_out_of_grid() -> bool:
 	return false
 
 
-## Destroys locked blocks overlapping the rect (jump head-bump / dash impact).
-func break_cells_in_rect(r: Rect2) -> bool:
+## Destroys the single locked block nearest the probe rect's center
+## (jump head-bump / dash impact). Always breaks at most one block.
+func break_cell_in_rect(r: Rect2) -> bool:
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
 	var y0 := maxi(int(floor(r.position.y / CELL)), 0)
 	var y1 := int(floor((r.end.y - 0.01) / CELL))
-	var broke := false
+	var center := r.get_center()
+	var best := Vector2i(-1, -1)
+	var best_d := INF
 	for y in range(y0, y1 + 1):
 		for x in range(x0, x1 + 1):
 			var c := Vector2i(x, y)
 			if grid.has(c):
-				grid.erase(c)
-				break_fx.append([c, 0.0])
-				GameState.score += BREAK_SCORE
-				broke = true
-	if broke:
-		queue_redraw()
-	return broke
+				var d := _cell_rect(c).get_center().distance_squared_to(center)
+				if d < best_d:
+					best_d = d
+					best = c
+	if best.x < 0:
+		return false
+	grid.erase(best)
+	break_fx.append([best, 0.0])
+	GameState.score += BREAK_SCORE
+	queue_redraw()
+	return true
 
 
 func _spawn_piece() -> void:

@@ -43,11 +43,17 @@ func _ready() -> void:
 	_check(board.grid.is_empty(), "escape clears the field")
 	_check(player.alive, "player alive after escape")
 
-	# Head-bump / dash impact breaks locked blocks
+	# Head-bump / dash impact breaks exactly one locked block
 	board.grid[Vector2i(4, 10)] = "T"
-	_check(board.break_cells_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "break removes a block")
+	_check(board.break_cell_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "break removes a block")
 	_check(not board.grid.has(Vector2i(4, 10)), "broken block is gone")
-	_check(not board.break_cells_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "empty cell breaks nothing")
+	_check(not board.break_cell_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "empty cell breaks nothing")
+	board.grid[Vector2i(4, 10)] = "T"
+	board.grid[Vector2i(5, 10)] = "T"
+	_check(board.break_cell_in_rect(Rect2(4 * c + 20, 10 * c + 20, 80, 20)), "break hits probe area")
+	_check(not board.grid.has(Vector2i(4, 10)) and board.grid.has(Vector2i(5, 10)),
+			"only the nearest block breaks, neighbor survives")
+	board.grid.clear()
 
 	# A falling piece bumping an airborne player shoves them instead of killing
 	board.piece_type = "O"

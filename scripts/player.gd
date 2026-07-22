@@ -10,6 +10,8 @@ const DASH_TIME := 0.22
 const DASH_COOLDOWN := 0.25
 const DOUBLE_TAP := 0.3
 const BREAK_PROBE := 10.0
+const KNOCKBACK_SPEED := 420.0
+const KNOCKBACK_TIME := 0.15
 const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
@@ -26,6 +28,8 @@ var dash_dir := 0
 var dash_cooldown := 0.0
 var coyote_timer := 0.0
 var jump_buffer := 0.0
+var knockback_timer := 0.0
+var knockback_vx := 0.0
 var last_tap := {-1: -1e9, 1: -1e9}
 
 @onready var board: EscapeBoard = get_parent()
@@ -40,6 +44,7 @@ func respawn(pos: Vector2) -> void:
 	dash_cooldown = 0.0
 	coyote_timer = 0.0
 	jump_buffer = 0.0
+	knockback_timer = 0.0
 	queue_redraw()
 
 
@@ -72,7 +77,10 @@ func _handle_input(delta: float) -> void:
 				dash_cooldown = DASH_COOLDOWN
 			last_tap[dir] = now
 	var axis := Input.get_axis("move_left", "move_right")
-	if dash_timer > 0.0:
+	if knockback_timer > 0.0:
+		knockback_timer -= delta
+		velocity.x = knockback_vx
+	elif dash_timer > 0.0:
 		dash_timer -= delta
 		velocity.x = dash_dir * DASH_SPEED
 	else:
@@ -95,19 +103,23 @@ func _handle_input(delta: float) -> void:
 func _apply_motion(delta: float) -> void:
 	var hit_h := _move_axis(Vector2(velocity.x * delta, 0.0))
 	if hit_h and dash_timer > 0.0 and velocity.x != 0.0:
-		# Dash impact smashes the blocks beside the player.
+		# Dash impact smashes one block, then bounces the player off it.
+		var dirx := signf(velocity.x)
 		var side := rect()
-		side.position.x += signf(velocity.x) * BREAK_PROBE
-		board.break_cells_in_rect(side.grow_individual(0.0, -6.0, 0.0, -6.0))
+		side.position.x += dirx * BREAK_PROBE
+		if board.break_cell_in_rect(side.grow_individual(0.0, -6.0, 0.0, -6.0)):
+			dash_timer = 0.0
+			knockback_timer = KNOCKBACK_TIME
+			knockback_vx = -dirx * KNOCKBACK_SPEED
 	var hit_v := _move_axis(Vector2(0.0, velocity.y * delta))
 	if hit_v:
 		if velocity.y > 0.0:
 			on_floor = true
 		elif velocity.y < 0.0:
-			# Head-bump smashes the blocks above.
+			# Head-bump smashes the single block above.
 			var head := rect()
 			head.position.y -= BREAK_PROBE
-			board.break_cells_in_rect(head.grow_individual(-6.0, 0.0, -6.0, 0.0))
+			board.break_cell_in_rect(head.grow_individual(-6.0, 0.0, -6.0, 0.0))
 		velocity.y = 0.0
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
