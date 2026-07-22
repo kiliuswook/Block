@@ -43,17 +43,35 @@ func _ready() -> void:
 	_check(board.grid.is_empty(), "escape clears the field")
 	_check(player.alive, "player alive after escape")
 
-	# Head-bump / dash impact breaks exactly one locked block
+	# Two-stage breaking: first hit cracks, second destroys — one block at a time
+	var probe := Rect2(4 * c + 30, 10 * c + 30, 10, 10)
 	board.grid[Vector2i(4, 10)] = "T"
-	_check(board.break_cell_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "break removes a block")
-	_check(not board.grid.has(Vector2i(4, 10)), "broken block is gone")
-	_check(not board.break_cell_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "empty cell breaks nothing")
+	_check(board.break_cell_in_rect(probe), "first hit registers")
+	_check(board.grid.has(Vector2i(4, 10)), "cracked block still stands")
+	_check(board.cracked.has(Vector2i(4, 10)), "block is marked cracked")
+	_check(board.break_cell_in_rect(probe), "second hit registers")
+	_check(not board.grid.has(Vector2i(4, 10)), "second hit destroys the block")
+	_check(not board.break_cell_in_rect(probe), "empty cell breaks nothing")
 	board.grid[Vector2i(4, 10)] = "T"
 	board.grid[Vector2i(5, 10)] = "T"
-	_check(board.break_cell_in_rect(Rect2(4 * c + 20, 10 * c + 20, 80, 20)), "break hits probe area")
+	var wide := Rect2(4 * c + 20, 10 * c + 20, 80, 20)
+	board.break_cell_in_rect(wide)
+	board.break_cell_in_rect(wide)
 	_check(not board.grid.has(Vector2i(4, 10)) and board.grid.has(Vector2i(5, 10)),
 			"only the nearest block breaks, neighbor survives")
+	_check(not board.cracked.has(Vector2i(5, 10)), "neighbor is not even cracked")
 	board.grid.clear()
+	board.cracked.clear()
+
+	# Cracks follow blocks down through a line clear
+	for x in range(EscapeBoard.COLS):
+		board.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"
+	board.grid[Vector2i(0, EscapeBoard.ROWS - 2)] = "T"
+	board.cracked[Vector2i(0, EscapeBoard.ROWS - 2)] = true
+	board._clear_lines()
+	_check(board.cracked.has(Vector2i(0, EscapeBoard.ROWS - 1)), "crack shifted down with its block")
+	board.grid.clear()
+	board.cracked.clear()
 
 	# A falling piece bumping an airborne player shoves them instead of killing
 	board.piece_type = "O"

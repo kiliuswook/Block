@@ -25,6 +25,7 @@ const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
 
 var grid := {}  # Vector2i -> piece type
+var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
 var bag: Array = []
 var piece_type := ""
 var piece_rot := 0
@@ -44,6 +45,7 @@ var break_fx: Array = []  # [cell: Vector2i, age: float]
 
 func start_game() -> void:
 	grid.clear()
+	cracked.clear()
 	bag.clear()
 	level = 1
 	total_lines = 0
@@ -190,6 +192,7 @@ func _lock_piece() -> void:
 	var overflow := false
 	for c in _cells(piece_type, piece_rot, piece_pos):
 		grid[c] = piece_type
+		cracked.erase(c)
 		if c.y < 0:
 			overflow = true
 	if overflow:
@@ -223,6 +226,7 @@ func _clear_lines() -> int:
 	if full_rows.is_empty():
 		return 0
 	var new_grid := {}
+	var new_cracked := {}
 	for c in grid:
 		if c.y in full_rows:
 			continue
@@ -230,8 +234,12 @@ func _clear_lines() -> int:
 		for fy in full_rows:
 			if c.y < fy:
 				shift += 1
-		new_grid[Vector2i(c.x, c.y + shift)] = grid[c]
+		var dest := Vector2i(c.x, c.y + shift)
+		new_grid[dest] = grid[c]
+		if cracked.has(c):
+			new_cracked[dest] = true
 	grid = new_grid
+	cracked = new_cracked
 	return full_rows.size()
 
 
@@ -269,9 +277,13 @@ func break_cell_in_rect(r: Rect2) -> bool:
 					best = c
 	if best.x < 0:
 		return false
-	grid.erase(best)
-	break_fx.append([best, 0.0])
-	GameState.score += BREAK_SCORE
+	if cracked.has(best):
+		cracked.erase(best)
+		grid.erase(best)
+		break_fx.append([best, 0.0])
+		GameState.score += BREAK_SCORE
+	else:
+		cracked[best] = true
 	queue_redraw()
 	return true
 
@@ -327,6 +339,7 @@ func _escape() -> void:
 	level += 1
 	GameState.score += ESCAPE_SCORE * (level - 1)
 	grid.clear()
+	cracked.clear()
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	EventBus.level_changed.emit(level)
@@ -374,6 +387,8 @@ func _draw() -> void:
 	for c in grid:
 		if c.y >= 0:
 			_draw_cell(c, Board.COLORS[grid[c]])
+			if cracked.has(c):
+				_draw_crack(c)
 	for fx in break_fx:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
@@ -412,6 +427,17 @@ func _draw_piece() -> void:
 		var top_left := Vector2(piece_pos) * CELL
 		draw_string(ThemeDB.fallback_font, top_left + Vector2(CELL * 1.6, CELL * 1.4),
 				str(remain), HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(1, 1, 1, 0.9))
+
+
+func _draw_crack(c: Vector2i) -> void:
+	var p := Vector2(c) * CELL
+	var col := Color(0.0, 0.0, 0.0, 0.55)
+	draw_polyline(PackedVector2Array([
+		p + Vector2(14, 8), p + Vector2(30, 26), p + Vector2(22, 40), p + Vector2(38, 56),
+	]), col, 2.5)
+	draw_polyline(PackedVector2Array([
+		p + Vector2(48, 12), p + Vector2(36, 30), p + Vector2(50, 44),
+	]), col, 2.0)
 
 
 func _draw_cell(c: Vector2i, color: Color) -> void:
