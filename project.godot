@@ -27,6 +27,10 @@ window/size/viewport_width=1920
 window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 
+[gui]
+
+theme/custom_font="res://assets/fonts/NotoSansKR-Regular.otf"
+
 [input]
 
 move_left={

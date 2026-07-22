@@ -28,7 +28,9 @@ func _on_escaped(new_level: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("restart"):
+	var touch_restart: bool = game_over_label.visible \
+			and event is InputEventScreenTouch and event.pressed
+	if event.is_action_pressed("restart") or touch_restart:
 		game_over_label.visible = false
 		pause_label.visible = false
 		escape_label.visible = false
