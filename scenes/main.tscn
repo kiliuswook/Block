@@ -78,7 +78,8 @@ theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 text = "블록을 밟고 올라가
 상단의 ESCAPE 구역으로 탈출!
-낙하하는 블록에 깔리면 사망"
+낙하 블록에 깔리면 사망 (부딪히는 건 OK)
+대시로 옆 블록, 점프로 머리 위 블록 파괴!"
 
 [node name="HelpLabel" type="Label" parent="UI"]
 offset_left = 160.0
@@ -88,7 +89,7 @@ offset_bottom = 1060.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.45)
 horizontal_alignment = 1
-text = "< >  이동 (더블탭: 대시)      ^ / SPACE  점프      v  빠른 낙하      Z / X  블록 회전      P  일시정지      R  재시작"
+text = "< >  이동 (더블탭: 대시 = 블록 파괴)      ^ / SPACE  점프 (머리 위 블록 파괴)      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작"
 
 [node name="GameOverLabel" type="Label" parent="UI"]
 visible = false

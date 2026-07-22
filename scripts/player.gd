@@ -5,10 +5,11 @@ extends Node2D
 
 const SIZE := 50.0
 const RUN_SPEED := 330.0
-const DASH_SPEED := 720.0
-const DASH_TIME := 0.16
-const DASH_COOLDOWN := 0.35
-const DOUBLE_TAP := 0.25
+const DASH_SPEED := 850.0
+const DASH_TIME := 0.22
+const DASH_COOLDOWN := 0.25
+const DOUBLE_TAP := 0.3
+const BREAK_PROBE := 10.0
 const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
@@ -92,11 +93,21 @@ func _handle_input(delta: float) -> void:
 
 
 func _apply_motion(delta: float) -> void:
-	_move_axis(Vector2(velocity.x * delta, 0.0))
+	var hit_h := _move_axis(Vector2(velocity.x * delta, 0.0))
+	if hit_h and dash_timer > 0.0 and velocity.x != 0.0:
+		# Dash impact smashes the blocks beside the player.
+		var side := rect()
+		side.position.x += signf(velocity.x) * BREAK_PROBE
+		board.break_cells_in_rect(side.grow_individual(0.0, -6.0, 0.0, -6.0))
 	var hit_v := _move_axis(Vector2(0.0, velocity.y * delta))
 	if hit_v:
 		if velocity.y > 0.0:
 			on_floor = true
+		elif velocity.y < 0.0:
+			# Head-bump smashes the blocks above.
+			var head := rect()
+			head.position.y -= BREAK_PROBE
+			board.break_cells_in_rect(head.grow_individual(-6.0, 0.0, -6.0, 0.0))
 		velocity.y = 0.0
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
@@ -129,6 +140,10 @@ func _draw() -> void:
 	var color := Color("ffd166") if alive else Color("777777")
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color("ffd166", 0.25))
+		for i in range(1, 4):
+			var ghost := body
+			ghost.position.x -= dash_dir * i * 16.0
+			draw_rect(ghost, Color("ffd166", 0.22 - i * 0.06))
 	draw_rect(body, color)
 	draw_rect(body, color.darkened(0.35), false, 3.0)
 	var eye := Vector2(6.0, 9.0)

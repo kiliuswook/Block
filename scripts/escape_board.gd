@@ -20,6 +20,9 @@ const FALL_INTERVAL_MIN := 0.1
 const ESCAPE_SCORE := 1000
 const LINE_SCORES := [0, 100, 300, 500, 800]
 const CRUSH_MARGIN := 6.0
+const SOFT_DROP_FACTOR := 4.0
+const BREAK_SCORE := 20
+const BREAK_FX_TIME := 0.3
 
 var grid := {}  # Vector2i -> piece type
 var bag: Array = []
@@ -34,6 +37,7 @@ var level := 1
 var total_lines := 0
 var playing := false
 var is_paused := false
+var break_fx: Array = []  # [cell: Vector2i, age: float]
 
 @onready var player: Player = $Player
 
@@ -66,6 +70,9 @@ func _process(delta: float) -> void:
 			_track(delta)
 		PieceState.FALLING:
 			_fall(delta)
+	for fx in break_fx:
+		fx[1] += delta
+	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
 	if playing and player.position.y < -CELL * 0.6:
 		_escape()
 	queue_redraw()
@@ -112,42 +119,80 @@ func _start_fall() -> void:
 	while _piece_collides(piece_rot, piece_pos, false) and guard > 0:
 		piece_pos.y -= 1
 		guard -= 1
-	_check_crush()
+	_resolve_piece_overlap()
 
 
 func _fall(delta: float) -> void:
 	fall_timer += delta
 	var interval := _fall_interval()
+	if Input.is_action_pressed("soft_drop"):
+		interval /= SOFT_DROP_FACTOR
 	while fall_timer >= interval and playing:
 		fall_timer -= interval
 		if _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
 			_lock_piece()
 			return
 		piece_pos.y += 1
-		if _check_crush():
+		if _resolve_piece_overlap():
 			return
 
 
-func _check_crush() -> bool:
-	var player_rect := player.rect().grow(-CRUSH_MARGIN)
+## The falling piece overlaps the player: shove them out (down or sideways)
+## if there is room. Death only when truly pinned — crushed, not bumped.
+func _resolve_piece_overlap() -> bool:
+	var pr := player.rect().grow(-CRUSH_MARGIN)
+	var cell_rects: Array = []
+	var overlapping: Array = []
 	for c in _cells(piece_type, piece_rot, piece_pos):
-		if _cell_rect(c).intersects(player_rect):
-			_kill_player()
-			return true
-	return false
+		var r := _cell_rect(c)
+		cell_rects.append(r)
+		if r.intersects(pr):
+			overlapping.append(r)
+	if overlapping.is_empty():
+		return false
+	var full := player.rect()
+	var d_down := 0.0
+	var d_left := 0.0
+	var d_right := 0.0
+	for r in overlapping:
+		d_down = maxf(d_down, r.end.y - full.position.y)
+		d_left = maxf(d_left, full.end.x - r.position.x)
+		d_right = maxf(d_right, r.end.x - full.position.x)
+	var candidates := [
+		[Vector2(0.0, d_down + 1.0), d_down],
+		[Vector2(-(d_left + 1.0), 0.0), d_left],
+		[Vector2(d_right + 1.0, 0.0), d_right],
+	]
+	candidates.sort_custom(func(a: Array, b: Array) -> bool: return a[1] < b[1])
+	for cand in candidates:
+		if cand[1] > CELL:
+			continue
+		var moved := Rect2(full.position + cand[0], full.size)
+		if rect_hits_solid(moved):
+			continue
+		var still_overlaps := false
+		for r in cell_rects:
+			if r.intersects(moved.grow(-CRUSH_MARGIN)):
+				still_overlaps = true
+				break
+		if still_overlaps:
+			continue
+		player.position += cand[0]
+		return false
+	_kill_player()
+	return true
 
 
 func _lock_piece() -> void:
-	var player_rect := player.rect().grow(-CRUSH_MARGIN)
 	var overflow := false
 	for c in _cells(piece_type, piece_rot, piece_pos):
 		grid[c] = piece_type
 		if c.y < 0:
 			overflow = true
-		if _cell_rect(c).intersects(player_rect):
-			_kill_player()
-			return
 	if overflow:
+		_kill_player()
+		return
+	if not _shove_player_out_of_grid():
 		_kill_player()
 		return
 	GameState.score += 10 * level
@@ -156,7 +201,9 @@ func _lock_piece() -> void:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
 		EventBus.lines_changed.emit(total_lines)
-		_push_player_out()
+		if not _shove_player_out_of_grid():
+			_kill_player()
+			return
 	_spawn_piece()
 
 
@@ -185,12 +232,38 @@ func _clear_lines() -> int:
 	return full_rows.size()
 
 
-## After lines shift down, the player may end up inside a block: nudge up.
-func _push_player_out() -> void:
-	var guard := ROWS
-	while rect_hits_solid(player.rect()) and guard > 0:
-		player.position.y -= CELL
-		guard -= 1
+## The player ended up inside locked cells (piece lock or line shift):
+## nudge them to the nearest free spot. Returns false if nowhere to go.
+func _shove_player_out_of_grid() -> bool:
+	if not rect_hits_solid(player.rect()):
+		return true
+	for dist in [8.0, 16.0, 24.0, 32.0, 48.0, 64.0, 96.0, 128.0]:
+		for dir in [Vector2.UP, Vector2.LEFT, Vector2.RIGHT, Vector2.DOWN]:
+			var moved := Rect2(player.rect().position + dir * dist, player.rect().size)
+			if not rect_hits_solid(moved):
+				player.position += dir * dist
+				return true
+	return false
+
+
+## Destroys locked blocks overlapping the rect (jump head-bump / dash impact).
+func break_cells_in_rect(r: Rect2) -> bool:
+	var x0 := int(floor(r.position.x / CELL))
+	var x1 := int(floor((r.end.x - 0.01) / CELL))
+	var y0 := maxi(int(floor(r.position.y / CELL)), 0)
+	var y1 := int(floor((r.end.y - 0.01) / CELL))
+	var broke := false
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			var c := Vector2i(x, y)
+			if grid.has(c):
+				grid.erase(c)
+				break_fx.append([c, 0.0])
+				GameState.score += BREAK_SCORE
+				broke = true
+	if broke:
+		queue_redraw()
+	return broke
 
 
 func _spawn_piece() -> void:
@@ -291,6 +364,10 @@ func _draw() -> void:
 	for c in grid:
 		if c.y >= 0:
 			_draw_cell(c, Board.COLORS[grid[c]])
+	for fx in break_fx:
+		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
+		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
+		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
 	_draw_door()
 	if piece_type != "":
 		_draw_piece()

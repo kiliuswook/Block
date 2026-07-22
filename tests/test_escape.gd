@@ -43,13 +43,27 @@ func _ready() -> void:
 	_check(board.grid.is_empty(), "escape clears the field")
 	_check(player.alive, "player alive after escape")
 
-	# A falling piece landing on the player kills them
+	# Head-bump / dash impact breaks locked blocks
+	board.grid[Vector2i(4, 10)] = "T"
+	_check(board.break_cells_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "break removes a block")
+	_check(not board.grid.has(Vector2i(4, 10)), "broken block is gone")
+	_check(not board.break_cells_in_rect(Rect2(4 * c + 30, 10 * c + 30, 10, 10)), "empty cell breaks nothing")
+
+	# A falling piece bumping an airborne player shoves them instead of killing
 	board.piece_type = "O"
 	board.piece_rot = 0
 	board.piece_state = board.PieceState.FALLING
+	board.piece_pos = Vector2i(3, 4)  # O cells span y 4..5, bottom edge at 6*CELL
+	player.position = Vector2(5 * c, 6 * c + Player.SIZE / 2.0 - 20.0)  # 20px overlap from below
+	board._resolve_piece_overlap()
+	_check(player.alive, "bumped airborne player survives")
+	_check(player.position.y > 6 * c, "player was shoved below the piece")
+
+	# A falling piece landing on a grounded player kills them
 	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)
-	board._check_crush()
-	_check(not player.alive, "falling piece crushes player")
+	player.position = board._spawn_point()
+	board._resolve_piece_overlap()
+	_check(not player.alive, "falling piece crushes pinned player")
 	_check(not board.playing, "crush ends the game")
 
 	if failures == 0:
