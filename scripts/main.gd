@@ -30,7 +30,7 @@ func _ready() -> void:
 	if endless:
 		goal_label.text = "블록을 쌓고 밟으며
 끝없이 위로 올라가자!
-화면 아래로 떨어지면 사망
+아래에서 용암이 올라온다 — 닿으면 사망
 대시/점프 2회 타격으로 블록 파괴"
 	board.start_game()
 

@@ -119,7 +119,7 @@ offset_bottom = 700.0
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 text = "블록을 밟고 올라가
-상단의 ESCAPE 구역으로 탈출!
+좌우 벽 꼭대기의 출구로 탈출!
 낙하 블록에 깔리면 사망 (부딪히는 건 OK)
 대시로 옆 블록, 점프로 머리 위 블록 파괴!"
 

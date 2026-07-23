@@ -43,7 +43,7 @@ offset_bottom = 680.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "블록을 밟고 올라가 상단 탈출구로 탈출!"
+text = "블록을 밟고 올라가 좌우 벽 위의 탈출구로!"
 
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0

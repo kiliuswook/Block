@@ -12,12 +12,16 @@ func _ready() -> void:
 	await _capture("res://scenes/main.tscn", OUT + "/escape.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://scenes/main.tscn", OUT + "/endless.png")
+	await _capture("res://scenes/main.tscn", OUT + "/endless_lava.png",
+			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
 	get_tree().quit()
 
 
-func _capture(scene_path: String, out: String) -> void:
+func _capture(scene_path: String, out: String, setup: Callable = Callable()) -> void:
 	var inst: Node = (load(scene_path) as PackedScene).instantiate()
 	get_tree().root.add_child(inst)
+	if setup.is_valid():
+		setup.call(inst)
 	for i in range(40):
 		await get_tree().process_frame
 	get_viewport().get_texture().get_image().save_png(out)

@@ -11,8 +11,8 @@ enum Mode { ESCAPE, ENDLESS }
 const COLS := 10
 const ROWS := 14
 const CELL := 64.0
-const DOOR_MIN := 3
-const DOOR_MAX := 6
+const DOOR_ROW_TOP := 0
+const DOOR_ROW_BOTTOM := 1
 const TRACK_TIME_BASE := 5.0
 const TRACK_TIME_MIN := 2.0
 const TRACK_STEP := 0.07
@@ -26,8 +26,13 @@ const DROP_DOUBLE_TAP := 0.3
 const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
 const HEIGHT_SCORE := 10
-const FALL_DEATH_MARGIN := 620.0
+const VIEW_BELOW := 620.0  # how far below the camera center the pit stays drawn
 const ENDLESS_SPAWN_AHEAD := 7  # piece spawns this many cells above the camera cell
+const LAVA_START_OFFSET := CELL * 3.0
+const LAVA_SPEED_BASE := 3.2
+const LAVA_SPEED_STEP := 0.8
+const LAVA_SPEED_MAX := 18.0
+const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -48,6 +53,8 @@ var break_fx: Array = []  # [cell: Vector2i, age: float]
 var mode := Mode.ESCAPE
 var best_height := 0
 var drop_tap_time := -1e9
+var lava_y := 0.0
+var lava_phase := 0.0
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -62,6 +69,8 @@ func start_game() -> void:
 	level = 1
 	total_lines = 0
 	best_height = 0
+	lava_y = ROWS * CELL + LAVA_START_OFFSET
+	lava_phase = 0.0
 	is_paused = false
 	GameState.reset()
 	if cam:
@@ -94,23 +103,29 @@ func _process(delta: float) -> void:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
 	if mode == Mode.ESCAPE:
-		if playing and player.position.y < -CELL * 0.6:
+		if playing and (player.position.x < -CELL * 0.6
+				or player.position.x > COLS * CELL + CELL * 0.6):
 			_escape()
 	else:
-		_update_endless()
+		_update_endless(delta)
 	queue_redraw()
 
 
-func _update_endless() -> void:
+func _update_endless(delta: float) -> void:
 	if not playing or cam == null:
 		return
-	# Camera only ever rises: follow the player upward, never back down.
-	cam.position.y = minf(cam.position.y, player.position.y)
-	# Falling below the visible screen is death.
-	if player.position.y - Player.SIZE / 2.0 > cam.position.y + FALL_DEATH_MARGIN:
+	# Camera follows the player both ways: rises with the climb, and scrolls
+	# back down when they drop into a hole. Never sinks past the start view.
+	cam.position.y = minf(player.position.y, ROWS * CELL / 2.0)
+	# Lava creeps up from below; it also keeps pace with the camera so a
+	# fast climber can never leave it arbitrarily far behind.
+	lava_phase += delta
+	lava_y -= _lava_speed() * delta
+	lava_y = minf(lava_y, cam.position.y + LAVA_MAX_GAP)
+	var feet := player.position.y + Player.SIZE / 2.0
+	if feet > lava_y:
 		_kill_player()
 		return
-	var feet := player.position.y + Player.SIZE / 2.0
 	var h := int(round((ROWS * CELL - feet) / CELL))
 	if h > best_height:
 		GameState.score += (h - best_height) * HEIGHT_SCORE
@@ -120,13 +135,13 @@ func _update_endless() -> void:
 
 func rect_hits_solid(r: Rect2) -> bool:
 	if r.position.x < 0.0 or r.end.x > COLS * CELL:
-		return true
+		# Escape mode: the side walls open at the top rows — one exit each.
+		if not (mode == Mode.ESCAPE and _rect_in_side_door(r)):
+			return true
 	if r.end.y > ROWS * CELL:
 		return true
 	if mode == Mode.ESCAPE and r.position.y < 0.0:
-		var in_door := r.position.x >= DOOR_MIN * CELL and r.end.x <= (DOOR_MAX + 1) * CELL
-		if not in_door:
-			return true
+		return true
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
 	var y0 := int(floor(r.position.y / CELL))
@@ -136,6 +151,10 @@ func rect_hits_solid(r: Rect2) -> bool:
 			if grid.has(Vector2i(x, y)):
 				return true
 	return false
+
+
+func _rect_in_side_door(r: Rect2) -> bool:
+	return r.position.y >= DOOR_ROW_TOP * CELL and r.end.y <= (DOOR_ROW_BOTTOM + 1) * CELL
 
 
 ## What the player collides with: locked grid, walls, and the falling piece.
@@ -482,6 +501,10 @@ func _fall_interval() -> float:
 	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
+func _lava_speed() -> float:
+	return minf(LAVA_SPEED_BASE + (_difficulty() - 1) * LAVA_SPEED_STEP, LAVA_SPEED_MAX)
+
+
 func _spawn_point() -> Vector2:
 	return Vector2(COLS * CELL / 2.0, ROWS * CELL - Player.SIZE / 2.0)
 
@@ -502,7 +525,7 @@ func _draw() -> void:
 	var h := ROWS * CELL
 	var top := 0.0
 	if mode == Mode.ENDLESS and cam:
-		top = minf(0.0, cam.position.y - FALL_DEATH_MARGIN)
+		top = minf(0.0, cam.position.y - VIEW_BELOW)
 	_draw_pit_background(w, h, top)
 	for x in range(1, COLS):
 		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
@@ -519,15 +542,22 @@ func _draw() -> void:
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
 	if mode == Mode.ESCAPE:
-		_draw_door()
+		_draw_doors()
 	if piece_type != "":
 		_draw_piece()
+	var border := Color(1, 1, 1, 0.35)
 	if mode == Mode.ESCAPE:
-		draw_rect(Rect2(-2, -2, w + 4, h + 4), Color(1, 1, 1, 0.35), false, 2.0)
+		# Side walls open at the exit rows: draw them with a gap at the doors.
+		var door_bottom := (DOOR_ROW_BOTTOM + 1) * CELL
+		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, 2.0)
+		draw_line(Vector2(-2, door_bottom), Vector2(-2, h + 2), border, 2.0)
+		draw_line(Vector2(w + 2, door_bottom), Vector2(w + 2, h + 2), border, 2.0)
+		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
 	else:
-		draw_line(Vector2(-2, top), Vector2(-2, h + 2), Color(1, 1, 1, 0.35), 2.0)
-		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), Color(1, 1, 1, 0.35), 2.0)
-		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), Color(1, 1, 1, 0.35), 2.0)
+		draw_line(Vector2(-2, top), Vector2(-2, h + 2), border, 2.0)
+		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), border, 2.0)
+		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
+		_draw_lava(w)
 
 
 ## Pit backdrop: daylight seeps in from above, darkness pools below. In
@@ -544,29 +574,57 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
 	if mode == Mode.ESCAPE:
-		# Warm light shaft falling from the exit door.
-		var lx0 := DOOR_MIN * CELL
-		var lx1 := (DOOR_MAX + 1) * CELL
-		var spread := CELL * 1.2
+		# Warm light shafts slanting in from the two side exits.
+		var y0 := DOOR_ROW_TOP * CELL
+		var y1 := (DOOR_ROW_BOTTOM + 1) * CELL
 		var warm := Color(1.0, 0.95, 0.82, 0.1)
 		var faded := Color(1.0, 0.95, 0.82, 0.0)
 		draw_polygon(PackedVector2Array([
-			Vector2(lx0, 0), Vector2(lx1, 0),
-			Vector2(minf(lx1 + spread, w), h), Vector2(maxf(lx0 - spread, 0.0), h),
-		]), PackedColorArray([warm, warm, faded, faded]))
+			Vector2(0, y0), Vector2(0, y1), Vector2(w * 0.55, h * 0.7),
+		]), PackedColorArray([warm, warm, faded]))
+		draw_polygon(PackedVector2Array([
+			Vector2(w, y0), Vector2(w, y1), Vector2(w * 0.45, h * 0.7),
+		]), PackedColorArray([warm, warm, faded]))
 
 
-func _draw_door() -> void:
-	var door := Rect2(DOOR_MIN * CELL, -CELL, (DOOR_MAX - DOOR_MIN + 1) * CELL, CELL)
-	draw_rect(door, Color(1.0, 0.95, 0.82, 0.18))
-	draw_rect(door, Color(1.0, 0.95, 0.82, 0.75), false, 2.0)
+## One exit tunnel in each side wall, at the top rows.
+func _draw_doors() -> void:
+	var w := COLS * CELL
+	var door_h := (DOOR_ROW_BOTTOM - DOOR_ROW_TOP + 1) * CELL
+	var y := DOOR_ROW_TOP * CELL
+	var glow := Color(1.0, 0.95, 0.82, 0.18)
+	var frame := Color(1.0, 0.95, 0.82, 0.75)
 	var font := ThemeDB.fallback_font
-	draw_string(font, door.position + Vector2(door.size.x / 2.0 - 44.0, CELL / 2.0 + 8.0),
-			"ESCAPE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.95, 0.82, 0.9))
-	# Solid ceiling on both sides of the door.
-	draw_rect(Rect2(0, -8, DOOR_MIN * CELL, 8), Color(0.55, 0.58, 0.68, 0.5))
-	draw_rect(Rect2((DOOR_MAX + 1) * CELL, -8, (COLS - DOOR_MAX - 1) * CELL, 8),
-			Color(0.55, 0.58, 0.68, 0.5))
+	for door in [Rect2(-CELL, y, CELL, door_h), Rect2(w, y, CELL, door_h)]:
+		draw_rect(door, glow)
+		draw_rect(door, frame, false, 2.0)
+	var mid_y := y + door_h / 2.0 + 9.0
+	draw_string(font, Vector2(CELL * 0.25, mid_y), "← ESC",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
+	draw_string(font, Vector2(w - CELL * 1.55, mid_y), "ESC →",
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
+
+
+## Rising lava: hot glowing surface with a slow wave, cooling to dark below.
+func _draw_lava(w: float) -> void:
+	var bottom := maxf(ROWS * CELL, lava_y) + CELL * 6.0
+	var hot := Color("ff8c38")
+	var dark := Color("6d1a0c")
+	draw_polygon(PackedVector2Array([
+		Vector2(0, lava_y), Vector2(w, lava_y), Vector2(w, bottom), Vector2(0, bottom),
+	]), PackedColorArray([hot, hot, dark, dark]))
+	# Faint heat glow just above the surface.
+	var glow := Color(1.0, 0.55, 0.2, 0.22)
+	var faded := Color(1.0, 0.55, 0.2, 0.0)
+	draw_polygon(PackedVector2Array([
+		Vector2(0, lava_y - CELL), Vector2(w, lava_y - CELL),
+		Vector2(w, lava_y), Vector2(0, lava_y),
+	]), PackedColorArray([faded, faded, glow, glow]))
+	var points := PackedVector2Array()
+	for i in range(21):
+		var x := w * i / 20.0
+		points.append(Vector2(x, lava_y + sin(x * 0.045 + lava_phase * 2.6) * 4.0))
+	draw_polyline(points, Color("ffd27a"), 5.0)
 
 
 func _draw_piece() -> void:

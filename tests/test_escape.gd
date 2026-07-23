@@ -23,12 +23,14 @@ func _ready() -> void:
 
 	# Solidity queries
 	var c := EscapeBoard.CELL
-	_check(board.rect_hits_solid(Rect2(-5, 100, 10, 10)), "left wall is solid")
-	_check(board.rect_hits_solid(Rect2(EscapeBoard.COLS * c - 5, 100, 10, 10)), "right wall is solid")
+	_check(board.rect_hits_solid(Rect2(-5, 300, 10, 10)), "left wall below the door is solid")
+	_check(board.rect_hits_solid(Rect2(EscapeBoard.COLS * c - 5, 300, 10, 10)),
+			"right wall below the door is solid")
 	_check(board.rect_hits_solid(Rect2(100, EscapeBoard.ROWS * c - 5, 10, 10)), "floor is solid")
-	_check(board.rect_hits_solid(Rect2(0, -20, 10, 10)), "ceiling outside door is solid")
-	var door_x := (EscapeBoard.DOOR_MIN + 1) * c
-	_check(not board.rect_hits_solid(Rect2(door_x, -20, 10, 10)), "door opening is free")
+	_check(board.rect_hits_solid(Rect2(100, -20, 10, 10)), "ceiling is solid")
+	_check(not board.rect_hits_solid(Rect2(-30, c, 10, 10)), "left side door is open")
+	_check(not board.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, c, 10, 10)),
+			"right side door is open")
 	board.grid[Vector2i(4, 10)] = "T"
 	_check(board.rect_hits_solid(Rect2(4 * c + 10, 10 * c + 10, 10, 10)), "locked cell is solid")
 	board.grid.clear()
@@ -156,15 +158,18 @@ func _ready() -> void:
 	_check(b2.rect_hits_solid(Rect2(1 * c + 30, -5 * c + 30, 10, 10)), "negative-row cell is solid")
 	cam2.position = Vector2(320, 448)
 	p2.position = Vector2(320, 200)
-	b2._update_endless()
+	b2._update_endless(0.016)
 	_check(cam2.position.y == 200.0, "camera follows the player up")
 	_check(b2.best_height > 0, "height is tracked")
-	p2.position = Vector2(320, 500)
-	b2._update_endless()
-	_check(cam2.position.y == 200.0, "camera never moves back down")
-	p2.position = Vector2(320, cam2.position.y + 700.0)
-	b2._update_endless()
-	_check(not p2.alive, "falling below the screen is death")
+	var lava_before: float = b2.lava_y
+	p2.position = Vector2(320, 400)
+	b2._update_endless(0.016)
+	_check(cam2.position.y == 400.0, "camera follows the player back down")
+	_check(p2.alive, "falling down a hole is not death by itself")
+	_check(b2.lava_y < lava_before, "lava rises over time")
+	b2.lava_y = p2.position.y  # lava reaches the player's feet
+	b2._update_endless(0.016)
+	_check(not p2.alive, "touching lava is death")
 	GameState.mode = GameState.MODE_ESCAPE
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
