@@ -14,6 +14,7 @@ const INK := Color("2a2230")
 var _panel: PanelContainer
 var _record_label: Label
 var _stats_label: Label
+var _reward_label: Label
 
 
 func _ready() -> void:
@@ -80,6 +81,13 @@ func _ready() -> void:
 	_stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
 	v.add_child(_stats_label)
 
+	_reward_label = Label.new()
+	_reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_reward_label.add_theme_font_size_override("font_size", 26)
+	_reward_label.add_theme_color_override("font_color", GOLD)
+	_reward_label.visible = false
+	v.add_child(_reward_label)
+
 	v.add_child(_spacer(10.0))
 
 	var cont := _make_button("이어서 하기", true)
@@ -105,9 +113,11 @@ func _ready() -> void:
 	v.add_child(to_title)
 
 
-func open(stats: String, new_record: bool) -> void:
+func open(stats: String, new_record: bool, earned := "") -> void:
 	_stats_label.text = stats
 	_record_label.visible = new_record
+	_reward_label.text = earned
+	_reward_label.visible = earned != ""
 	visible = true
 	_panel.modulate.a = 0.0
 	await get_tree().process_frame

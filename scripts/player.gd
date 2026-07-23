@@ -212,12 +212,14 @@ func _draw() -> void:
 	var half := SIZE / 2.0
 	var body := Rect2(-Vector2.ONE * half, Vector2.ONE * SIZE)
 	var look := signf(velocity.x) * 4.0
+	var skin: Dictionary = GameState.cat_skin(GameState.selected_cat)
+	var trail: Color = skin.get("body", BODY_COLOR)
 	if dash_timer > 0.0:
-		draw_rect(body.grow(5.0), Color(BODY_COLOR, 0.22))
+		draw_rect(body.grow(5.0), Color(trail, 0.22))
 		for i in range(1, 4):
 			var ghost := body
 			ghost.position.x -= dash_dir * i * 16.0
-			draw_rect(ghost, Color(BODY_COLOR, 0.2 - i * 0.05))
+			draw_rect(ghost, Color(trail, 0.2 - i * 0.05))
 	# Squash on landing, stretch while airborne.
 	var scale_xy := Vector2.ONE
 	if squash_timer > 0.0:
@@ -230,7 +232,7 @@ func _draw() -> void:
 			scale_xy = Vector2(0.94, 1.07)
 	draw_set_transform(Vector2(0.0, half * (1.0 - scale_xy.y)), 0.0, scale_xy)
 	var mouth_open := not on_floor and velocity.y < -100.0
-	paint_cat(self, Vector2.ZERO, SIZE, look, alive, mouth_open)
+	paint_cat(self, Vector2.ZERO, SIZE, look, alive, mouth_open, skin)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -238,11 +240,13 @@ static var _body_box: StyleBoxFlat
 
 
 ## Draws the cube cat onto any canvas item (player, title screen, ...).
+## skin can override colors: {"body": Color, "ear": Color, "ink": Color}.
 static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
-		cat_alive := true, mouth_open := false) -> void:
+		cat_alive := true, mouth_open := false, skin: Dictionary = {}) -> void:
 	var half := s / 2.0
-	var body_col := BODY_COLOR if cat_alive else DEAD_BODY_COLOR
-	var ear_col := EAR_COLOR if cat_alive else DEAD_EAR_COLOR
+	var body_col: Color = skin.get("body", BODY_COLOR) if cat_alive else DEAD_BODY_COLOR
+	var ear_col: Color = skin.get("ear", EAR_COLOR) if cat_alive else DEAD_EAR_COLOR
+	var ink_col: Color = skin.get("ink", INK_COLOR)
 	# Protruding ears (behind the body).
 	for sg in [-1.0, 1.0]:
 		ci.draw_colored_polygon(PackedVector2Array([
@@ -272,13 +276,13 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	var ey := -s * 0.06
 	var er := s * 0.065
 	if cat_alive:
-		ci.draw_circle(center + Vector2(-ex + look, ey), er, INK_COLOR)
-		ci.draw_circle(center + Vector2(ex + look, ey), er, INK_COLOR)
+		ci.draw_circle(center + Vector2(-ex + look, ey), er, ink_col)
+		ci.draw_circle(center + Vector2(ex + look, ey), er, ink_col)
 		if mouth_open:
 			ci.draw_circle(center + Vector2(look * 0.5, s * 0.15), s * 0.055, Color("e58a86"))
 		else:
 			var mc := center + Vector2(look * 0.5, s * 0.10)
-			var mouth_col := Color(0.54, 0.35, 0.29)
+			var mouth_col := Color(ink_col, 0.85) if skin.has("ink") else Color(0.54, 0.35, 0.29)
 			ci.draw_arc(mc + Vector2(-s * 0.045, 0.0), s * 0.05, 0.3, PI - 0.3, 8, mouth_col, s * 0.035)
 			ci.draw_arc(mc + Vector2(s * 0.045, 0.0), s * 0.05, 0.3, PI - 0.3, 8, mouth_col, s * 0.035)
 		ci.draw_circle(center + Vector2(-s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
@@ -289,6 +293,8 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			ci.draw_line(c + Vector2(-er, -er), c + Vector2(er, er), INK_COLOR, s * 0.05)
 			ci.draw_line(c + Vector2(er, -er), c + Vector2(-er, er), INK_COLOR, s * 0.05)
 	var wh_col := Color(0.35, 0.27, 0.2, 0.75) if cat_alive else Color(0.28, 0.26, 0.24, 0.7)
+	if cat_alive and skin.has("ink"):
+		wh_col = Color(ink_col, 0.7)
 	var wh_w := maxf(1.4, s * 0.028)
 	for sg in [-1.0, 1.0]:
 		ci.draw_line(center + Vector2(sg * s * 0.34, s * 0.04),

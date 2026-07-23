@@ -6,6 +6,7 @@
 /build/
 /export/
 *.translation
+/.tmp_shots/
 
 # OS / IDE
 .DS_Store

@@ -9,9 +9,9 @@ script = ExtResource("1_title")
 
 [node name="TitleLabel" type="Label" parent="UI"]
 offset_left = 460.0
-offset_top = 180.0
+offset_top = 130.0
 offset_right = 1460.0
-offset_bottom = 340.0
+offset_bottom = 290.0
 theme_override_font_sizes/font_size = 120
 theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 1)
 horizontal_alignment = 1
@@ -19,9 +19,9 @@ text = "CAT-TRIS"
 
 [node name="SubtitleLabel" type="Label" parent="UI"]
 offset_left = 460.0
-offset_top = 350.0
+offset_top = 300.0
 offset_right = 1460.0
-offset_bottom = 400.0
+offset_bottom = 350.0
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 horizontal_alignment = 1
@@ -29,17 +29,17 @@ text = "구덩이에 빠진 큐브 고양이의 탈출극"
 
 [node name="EscapeBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 540.0
+offset_top = 420.0
 offset_right = 1210.0
-offset_bottom = 640.0
+offset_bottom = 505.0
 theme_override_font_sizes/font_size = 36
 text = "1.  탈출 모드"
 
 [node name="EscapeDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 645.0
+offset_top = 510.0
 offset_right = 1210.0
-offset_bottom = 680.0
+offset_bottom = 540.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
@@ -47,27 +47,37 @@ text = "블록을 밟고 올라가 좌우 벽 위의 탈출구로!"
 
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 720.0
+offset_top = 570.0
 offset_right = 1210.0
-offset_bottom = 820.0
+offset_bottom = 655.0
 theme_override_font_sizes/font_size = 36
 text = "2.  무한의 계단 모드"
 
 [node name="EndlessDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 825.0
+offset_top = 660.0
 offset_right = 1210.0
-offset_bottom = 860.0
+offset_bottom = 690.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
 text = "끝없이 블록을 쌓으며 최대한 높이 올라가자!"
 
+[node name="CharTitle" type="Label" parent="UI"]
+offset_left = 460.0
+offset_top = 726.0
+offset_right = 1460.0
+offset_bottom = 760.0
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 0.85)
+horizontal_alignment = 1
+text = "캐릭터 선택"
+
 [node name="HintLabel" type="Label" parent="UI"]
 offset_left = 460.0
-offset_top = 960.0
+offset_top = 1000.0
 offset_right = 1460.0
-offset_bottom = 1000.0
+offset_bottom = 1040.0
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.4)
 horizontal_alignment = 1

@@ -28,6 +28,9 @@ var height := 0
 var record_broken := false
 var height_tween: Tween
 var record_tween: Tween
+# Rewards already paid out this run — a revived player only earns the delta.
+var gold_awarded := 0
+var gems_awarded := 0
 
 
 func _ready() -> void:
@@ -65,6 +68,8 @@ func _ready() -> void:
 func _on_game_started() -> void:
 	height = 0
 	record_broken = false
+	gold_awarded = 0
+	gems_awarded = 0
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
@@ -176,12 +181,39 @@ func _on_game_over() -> void:
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
 	else:
 		stats = "LEVEL %d      SCORE %d" % [board.level, GameState.score]
+	var earned := _award_run_rewards(was_record)
 	# Let the death sink in for a beat before the popup slides up.
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record))
+			death_popup.open(stats, was_record, earned))
+
+
+## Pays out gold/gems for the whole run so far (minus what a previous death in
+## this run already paid). Gems are deliberately scarce. Returns a display line.
+func _award_run_rewards(was_record: bool) -> String:
+	var run_gold := 0
+	var run_gems := 0
+	if GameState.mode == GameState.MODE_ENDLESS:
+		run_gold = height * 3
+		run_gems = mini(height / 30, 3)
+	else:
+		run_gold = GameState.score / 20
+		run_gems = mini(board.level - 1, 3)
+	if was_record and run_gold > 0:
+		run_gems += 1
+	var earn_gold := maxi(run_gold - gold_awarded, 0)
+	var earn_gems := maxi(run_gems - gems_awarded, 0)
+	gold_awarded = maxi(run_gold, gold_awarded)
+	gems_awarded = maxi(run_gems, gems_awarded)
+	if earn_gold <= 0 and earn_gems <= 0:
+		return ""
+	GameState.add_currency(earn_gold, earn_gems)
+	var line := "획득   +%d G" % earn_gold
+	if earn_gems > 0:
+		line += "   +%d ◆" % earn_gems
+	return line
 
 
 func _on_revive() -> void:
