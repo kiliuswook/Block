@@ -43,6 +43,7 @@ var knockback_vx := 0.0
 var wall_dir := 0  # -1: wall on the left, 1: on the right, 0: none
 var squash_timer := 0.0
 var wall_jumps_left := 1
+var facing := 1
 var last_tap := {-1: -1e9, 1: -1e9}
 
 @onready var board: EscapeBoard = get_parent()
@@ -60,6 +61,7 @@ func respawn(pos: Vector2) -> void:
 	knockback_timer = 0.0
 	wall_dir = 0
 	wall_jumps_left = 1
+	facing = 1
 	queue_redraw()
 
 
@@ -93,6 +95,13 @@ func _handle_input(delta: float) -> void:
 				dash_cooldown = DASH_COOLDOWN
 			last_tap[dir] = now
 	var axis := Input.get_axis("move_left", "move_right")
+	if axis != 0.0:
+		facing = int(signf(axis))
+	# Shift dash: dashes toward the held direction, or the way we last faced.
+	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0.0:
+		dash_timer = DASH_TIME
+		dash_dir = int(signf(axis)) if axis != 0.0 else facing
+		dash_cooldown = DASH_COOLDOWN
 	if knockback_timer > 0.0:
 		knockback_timer -= delta
 		velocity.x = knockback_vx
@@ -132,11 +141,18 @@ func _handle_input(delta: float) -> void:
 func _apply_motion(delta: float) -> void:
 	var hit_h := _move_axis(Vector2(velocity.x * delta, 0.0))
 	if hit_h and dash_timer > 0.0 and velocity.x != 0.0:
-		# Dash impact smashes one block, then bounces the player off it.
+		# Dash impact shoves the falling piece a cell sideways, or smashes
+		# one locked block — either way the player bounces off.
 		var dirx := signf(velocity.x)
 		var side := rect()
 		side.position.x += dirx * BREAK_PROBE
-		if board.break_cell_in_rect(side.grow_individual(0.0, -6.0, 0.0, -6.0)):
+		var probe := side.grow_individual(0.0, -6.0, 0.0, -6.0)
+		if board.piece_hits_rect(probe):
+			board.shove_piece(int(dirx))
+			dash_timer = 0.0
+			knockback_timer = KNOCKBACK_TIME
+			knockback_vx = -dirx * KNOCKBACK_SPEED
+		elif board.break_cell_in_rect(probe):
 			dash_timer = 0.0
 			knockback_timer = KNOCKBACK_TIME
 			knockback_vx = -dirx * KNOCKBACK_SPEED

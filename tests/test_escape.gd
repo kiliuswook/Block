@@ -16,6 +16,10 @@ func _ready() -> void:
 	_check(board.playing, "game starts in playing state")
 	_check(board.piece_type in Board.PIECES, "a piece has spawned")
 	_check(board.piece_state == board.PieceState.TRACKING, "piece starts tracking")
+	_check(board.next_type in Board.PIECES, "next piece is queued")
+	var queued: String = board.next_type
+	board._spawn_piece()
+	_check(board.piece_type == queued, "queued piece becomes the current piece")
 
 	# Solidity queries
 	var c := EscapeBoard.CELL
@@ -103,6 +107,23 @@ func _ready() -> void:
 	board.piece_state = board.PieceState.TRACKING
 	_check(not board.piece_hits_rect(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
 			"tracking piece is not solid")
+	board.piece_state = board.PieceState.FALLING
+
+	# Dash impact shoves the falling piece one cell sideways
+	player.position = Vector2(8 * c, 500.0)  # out of the piece's way
+	board.piece_pos = Vector2i(3, 4)
+	_check(board.shove_piece(1), "shove moves the piece right")
+	_check(board.piece_pos == Vector2i(4, 4), "piece shifted one cell right")
+	_check(board.shove_piece(-1), "shove moves the piece left")
+	_check(board.piece_pos == Vector2i(3, 4), "piece shifted back left")
+	board.piece_pos = Vector2i(-1, 4)  # O cells hug the left wall
+	_check(not board.shove_piece(-1), "shove into the wall fails")
+	board.grid[Vector2i(3, 4)] = "T"
+	board.piece_pos = Vector2i(0, 4)
+	_check(not board.shove_piece(1), "shove into a locked block fails")
+	board.grid.clear()
+	board.piece_state = board.PieceState.TRACKING
+	_check(not board.shove_piece(1), "tracking piece cannot be shoved")
 	board.piece_state = board.PieceState.FALLING
 
 	# A falling piece landing on a grounded player kills them

@@ -22,6 +22,7 @@ const ESCAPE_SCORE := 1000
 const LINE_SCORES := [0, 100, 300, 500, 800]
 const CRUSH_MARGIN := 6.0
 const SOFT_DROP_FACTOR := 4.0
+const DROP_DOUBLE_TAP := 0.3
 const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
 const HEIGHT_SCORE := 10
@@ -32,6 +33,7 @@ var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
 var bag: Array = []
 var piece_type := ""
+var next_type := ""
 var piece_rot := 0
 var piece_pos := Vector2i.ZERO
 var piece_state := PieceState.TRACKING
@@ -45,6 +47,7 @@ var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
 var mode := Mode.ESCAPE
 var best_height := 0
+var drop_tap_time := -1e9
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -55,6 +58,7 @@ func start_game() -> void:
 	grid.clear()
 	cracked.clear()
 	bag.clear()
+	next_type = ""
 	level = 1
 	total_lines = 0
 	best_height = 0
@@ -151,6 +155,7 @@ func piece_hits_rect(r: Rect2) -> bool:
 
 func _track(delta: float) -> void:
 	if Input.is_action_just_pressed("soft_drop"):
+		drop_tap_time = Time.get_ticks_msec() / 1000.0
 		_start_fall()
 		return
 	track_timer += delta
@@ -179,6 +184,14 @@ func _start_fall() -> void:
 
 
 func _fall(delta: float) -> void:
+	# Double-tap soft drop slams the piece all the way down.
+	if Input.is_action_just_pressed("soft_drop"):
+		var now := Time.get_ticks_msec() / 1000.0
+		if now - drop_tap_time <= DROP_DOUBLE_TAP:
+			drop_tap_time = -1e9
+			_hard_drop()
+			return
+		drop_tap_time = now
 	fall_timer += delta
 	var interval := _fall_interval()
 	if Input.is_action_pressed("soft_drop"):
@@ -191,6 +204,26 @@ func _fall(delta: float) -> void:
 		piece_pos.y += 1
 		if _resolve_piece_overlap():
 			return
+
+
+## Dash impact from the player shoves the falling piece one cell sideways.
+func shove_piece(dir: int) -> bool:
+	if piece_state != PieceState.FALLING or piece_type == "":
+		return false
+	if _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), false):
+		return false
+	piece_pos.x += dir
+	_resolve_piece_overlap()
+	return true
+
+
+func _hard_drop() -> void:
+	while playing and not _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
+		piece_pos.y += 1
+		if _resolve_piece_overlap():
+			return
+	if playing:
+		_lock_piece()
 
 
 ## The falling piece overlaps the player: drive them straight down with it,
@@ -350,10 +383,11 @@ func break_cell_in_rect(r: Rect2) -> bool:
 
 
 func _spawn_piece() -> void:
-	if bag.is_empty():
-		bag = Board.PIECES.duplicate()
-		bag.shuffle()
-	piece_type = bag.pop_back()
+	if next_type == "":
+		next_type = _draw_from_bag()
+	piece_type = next_type
+	next_type = _draw_from_bag()
+	EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
 	var spawn_row := 0 if mode == Mode.ESCAPE else _endless_spawn_row()
 	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
@@ -363,6 +397,13 @@ func _spawn_piece() -> void:
 	# Classic Tetris block out: the new piece spawns inside the stack.
 	if _piece_collides(piece_rot, piece_pos, false):
 		_kill_player()
+
+
+func _draw_from_bag() -> String:
+	if bag.is_empty():
+		bag = Board.PIECES.duplicate()
+		bag.shuffle()
+	return bag.pop_back()
 
 
 ## In endless mode the piece hovers a fixed number of cells above the
