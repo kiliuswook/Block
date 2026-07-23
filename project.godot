@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Block"
+config/name="Cat-Tris"
 config/version="0.1.0"
 run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
@@ -94,4 +94,4 @@ pause={
 [rendering]
 
 rendering_device/driver.windows="d3d12"
-environment/defaults/default_clear_color=Color(0.05, 0.06, 0.08, 1)
+environment/defaults/default_clear_color=Color(0.043, 0.047, 0.071, 1)

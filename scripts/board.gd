@@ -18,14 +18,16 @@ const LINE_SCORES := [0, 100, 300, 500, 800]
 const PIECES := ["I", "O", "T", "S", "Z", "J", "L"]
 const HOLD_PANEL := Rect2(-186, 0, 146, 96)
 
+# Cat-Tris palette: classic tetromino hues, deepened so blocks read as
+# cold pit debris and never outshine the warm cream cat.
 const COLORS := {
-	"I": Color("4dd9e8"),
-	"O": Color("f7d94c"),
-	"T": Color("a678de"),
-	"S": Color("6fce6f"),
-	"Z": Color("e05656"),
-	"J": Color("5c7fdd"),
-	"L": Color("e8944a"),
+	"I": Color("3aa8b5"),
+	"O": Color("d9b93e"),
+	"T": Color("8f65c4"),
+	"S": Color("5cae5c"),
+	"Z": Color("c34a4a"),
+	"J": Color("4f6cc0"),
+	"L": Color("c97e3f"),
 }
 
 # 4 rotation states per piece (SRS), cell offsets in a 3x3 (4x4 for I) box.

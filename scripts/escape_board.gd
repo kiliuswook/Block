@@ -462,7 +462,7 @@ func _draw() -> void:
 	var top := 0.0
 	if mode == Mode.ENDLESS and cam:
 		top = minf(0.0, cam.position.y - FALL_DEATH_MARGIN)
-	draw_rect(Rect2(0, top, w, h - top), Color(0.08, 0.09, 0.12))
+	_draw_pit_background(w, h, top)
 	for x in range(1, COLS):
 		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
 	for y in range(int(floor(top / CELL)) + 1, ROWS):
@@ -489,17 +489,43 @@ func _draw() -> void:
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), Color(1, 1, 1, 0.35), 2.0)
 
 
+## Pit backdrop: daylight seeps in from above, darkness pools below. In
+## endless mode the whole pit brightens as the climb record grows, so the
+## height record is visible as color.
+func _draw_pit_background(w: float, h: float, top: float) -> void:
+	var top_col := Color("2a3040")
+	var bot_col := Color("0b0c12")
+	if mode == Mode.ENDLESS:
+		var t := clampf(best_height / 80.0, 0.0, 1.0)
+		top_col = top_col.lerp(Color("6a7186"), t)
+		bot_col = bot_col.lerp(Color("2a3040"), t)
+	draw_polygon(PackedVector2Array([
+		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
+	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
+	if mode == Mode.ESCAPE:
+		# Warm light shaft falling from the exit door.
+		var lx0 := DOOR_MIN * CELL
+		var lx1 := (DOOR_MAX + 1) * CELL
+		var spread := CELL * 1.2
+		var warm := Color(1.0, 0.95, 0.82, 0.1)
+		var faded := Color(1.0, 0.95, 0.82, 0.0)
+		draw_polygon(PackedVector2Array([
+			Vector2(lx0, 0), Vector2(lx1, 0),
+			Vector2(minf(lx1 + spread, w), h), Vector2(maxf(lx0 - spread, 0.0), h),
+		]), PackedColorArray([warm, warm, faded, faded]))
+
+
 func _draw_door() -> void:
 	var door := Rect2(DOOR_MIN * CELL, -CELL, (DOOR_MAX - DOOR_MIN + 1) * CELL, CELL)
-	draw_rect(door, Color(0.3, 0.9, 0.5, 0.18))
-	draw_rect(door, Color(0.3, 0.9, 0.5, 0.7), false, 2.0)
+	draw_rect(door, Color(1.0, 0.95, 0.82, 0.18))
+	draw_rect(door, Color(1.0, 0.95, 0.82, 0.75), false, 2.0)
 	var font := ThemeDB.fallback_font
 	draw_string(font, door.position + Vector2(door.size.x / 2.0 - 44.0, CELL / 2.0 + 8.0),
-			"ESCAPE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0.5, 1.0, 0.7, 0.9))
+			"ESCAPE", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.95, 0.82, 0.9))
 	# Solid ceiling on both sides of the door.
-	draw_rect(Rect2(0, -8, DOOR_MIN * CELL, 8), Color(1, 1, 1, 0.35))
+	draw_rect(Rect2(0, -8, DOOR_MIN * CELL, 8), Color(0.55, 0.58, 0.68, 0.5))
 	draw_rect(Rect2((DOOR_MAX + 1) * CELL, -8, (COLS - DOOR_MAX - 1) * CELL, 8),
-			Color(1, 1, 1, 0.35))
+			Color(0.55, 0.58, 0.68, 0.5))
 
 
 func _draw_piece() -> void:
@@ -521,7 +547,7 @@ func _draw_piece() -> void:
 
 func _draw_crack(c: Vector2i) -> void:
 	var p := Vector2(c) * CELL
-	var col := Color(0.0, 0.0, 0.0, 0.55)
+	var col := Color(1.0, 0.96, 0.84, 0.65)
 	draw_polyline(PackedVector2Array([
 		p + Vector2(14, 8), p + Vector2(30, 26), p + Vector2(22, 40), p + Vector2(38, 56),
 	]), col, 2.5)
@@ -532,6 +558,13 @@ func _draw_crack(c: Vector2i) -> void:
 
 func _draw_cell(c: Vector2i, color: Color) -> void:
 	var p := Vector2(c) * CELL
+	var a := color.a
 	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), color)
-	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)),
-			color.darkened(0.3), false, 2.0)
+	# Light always comes from above: bright top face, shaded bottom.
+	draw_rect(Rect2(p + Vector2(5.0, 3.0), Vector2(CELL - 10.0, 5.0)),
+			Color(1.0, 0.96, 0.84, 0.4 * a))
+	draw_rect(Rect2(p + Vector2(1.0, CELL - 6.0), Vector2(CELL - 2.0, 5.0)),
+			Color(0.0, 0.0, 0.0, 0.28 * a))
+	var edge := color.darkened(0.4)
+	edge.a = a
+	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), edge, false, 2.0)

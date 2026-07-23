@@ -1,9 +1,16 @@
 class_name Player
 extends Node2D
-## Square-block character: run, double-tap dash, jump with air control,
+## Cube-cat character: run, double-tap dash, jump with air control,
 ## fast fall. Custom AABB physics against the EscapeBoard grid.
 
 const SIZE := 50.0
+const SQUASH_TIME := 0.12
+
+const BODY_COLOR := Color("f4e3c8")
+const EAR_COLOR := Color("d9a05c")
+const DEAD_BODY_COLOR := Color("a8a29a")
+const DEAD_EAR_COLOR := Color("7d7770")
+const INK_COLOR := Color("4a3b30")
 const RUN_SPEED := 330.0
 const DASH_SPEED := 850.0
 const DASH_TIME := 0.22
@@ -34,6 +41,7 @@ var jump_buffer := 0.0
 var knockback_timer := 0.0
 var knockback_vx := 0.0
 var wall_dir := 0  # -1: wall on the left, 1: on the right, 0: none
+var squash_timer := 0.0
 var wall_jumps_left := 1
 var last_tap := {-1: -1e9, 1: -1e9}
 
@@ -67,6 +75,7 @@ func rect() -> Rect2:
 func _physics_process(delta: float) -> void:
 	if not alive or not board.playing or board.is_paused:
 		return
+	squash_timer = maxf(squash_timer - delta, 0.0)
 	_handle_input(delta)
 	_apply_motion(delta)
 	queue_redraw()
@@ -134,6 +143,8 @@ func _apply_motion(delta: float) -> void:
 	var hit_v := _move_axis(Vector2(0.0, velocity.y * delta))
 	if hit_v:
 		if velocity.y > 0.0:
+			if not on_floor and velocity.y > 300.0:
+				squash_timer = SQUASH_TIME
 			on_floor = true
 			wall_jumps_left = 1
 		elif velocity.y < 0.0:
@@ -184,18 +195,87 @@ func _move_axis(motion: Vector2) -> bool:
 func _draw() -> void:
 	var half := SIZE / 2.0
 	var body := Rect2(-Vector2.ONE * half, Vector2.ONE * SIZE)
-	var color := Color("ffd166") if alive else Color("777777")
+	var look := signf(velocity.x) * 4.0
 	if dash_timer > 0.0:
-		draw_rect(body.grow(5.0), Color("ffd166", 0.25))
+		draw_rect(body.grow(5.0), Color(BODY_COLOR, 0.22))
 		for i in range(1, 4):
 			var ghost := body
 			ghost.position.x -= dash_dir * i * 16.0
-			draw_rect(ghost, Color("ffd166", 0.22 - i * 0.06))
-	draw_rect(body, color)
-	draw_rect(body, color.darkened(0.35), false, 3.0)
-	var eye := Vector2(6.0, 9.0)
-	var look := signf(velocity.x) * 4.0
-	draw_rect(Rect2(Vector2(-14.0 + look, -10.0), eye), Color(0.15, 0.15, 0.2))
-	draw_rect(Rect2(Vector2(8.0 + look, -10.0), eye), Color(0.15, 0.15, 0.2))
-	if not alive:
-		draw_line(Vector2(-14, 4), Vector2(14, 10), Color(0.15, 0.15, 0.2), 3.0)
+			draw_rect(ghost, Color(BODY_COLOR, 0.2 - i * 0.05))
+	# Squash on landing, stretch while airborne.
+	var scale_xy := Vector2.ONE
+	if squash_timer > 0.0:
+		var t := squash_timer / SQUASH_TIME
+		scale_xy = Vector2(1.0 + 0.2 * t, 1.0 - 0.24 * t)
+	elif not on_floor:
+		if velocity.y < -220.0:
+			scale_xy = Vector2(0.9, 1.13)
+		elif velocity.y > 500.0:
+			scale_xy = Vector2(0.94, 1.07)
+	draw_set_transform(Vector2(0.0, half * (1.0 - scale_xy.y)), 0.0, scale_xy)
+	var mouth_open := not on_floor and velocity.y < -100.0
+	paint_cat(self, Vector2.ZERO, SIZE, look, alive, mouth_open)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+static var _body_box: StyleBoxFlat
+
+
+## Draws the cube cat onto any canvas item (player, title screen, ...).
+static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
+		cat_alive := true, mouth_open := false) -> void:
+	var half := s / 2.0
+	var body_col := BODY_COLOR if cat_alive else DEAD_BODY_COLOR
+	var ear_col := EAR_COLOR if cat_alive else DEAD_EAR_COLOR
+	# Protruding ears (behind the body).
+	for sg in [-1.0, 1.0]:
+		ci.draw_colored_polygon(PackedVector2Array([
+			center + Vector2(sg * s * 0.40, -half + 2.0),
+			center + Vector2(sg * s * 0.28, -half - s * 0.16),
+			center + Vector2(sg * s * 0.13, -half + 2.0),
+		]), ear_col)
+	# Rounded body with soft dark outline.
+	if _body_box == null:
+		_body_box = StyleBoxFlat.new()
+		_body_box.anti_aliasing = true
+	_body_box.set_corner_radius_all(int(s * 0.22))
+	_body_box.set_border_width_all(maxi(2, int(s * 0.055)))
+	_body_box.bg_color = body_col
+	_body_box.border_color = Color(0.24, 0.18, 0.14, 0.55)
+	_body_box.draw(ci.get_canvas_item(), Rect2(center - Vector2.ONE * half, Vector2.ONE * s))
+	# Keycap-style ear patches on the top corners.
+	var inset := s * 0.12
+	for sg in [-1.0, 1.0]:
+		ci.draw_colored_polygon(PackedVector2Array([
+			center + Vector2(sg * (half - inset), -half + 3.0),
+			center + Vector2(sg * (half - s * 0.38), -half + 3.0),
+			center + Vector2(sg * (half - inset), -half + s * 0.30),
+		]), ear_col)
+	# Face: eyes, mouth, blush, whiskers.
+	var ex := s * 0.19
+	var ey := -s * 0.06
+	var er := s * 0.065
+	if cat_alive:
+		ci.draw_circle(center + Vector2(-ex + look, ey), er, INK_COLOR)
+		ci.draw_circle(center + Vector2(ex + look, ey), er, INK_COLOR)
+		if mouth_open:
+			ci.draw_circle(center + Vector2(look * 0.5, s * 0.15), s * 0.055, Color("e58a86"))
+		else:
+			var mc := center + Vector2(look * 0.5, s * 0.10)
+			var mouth_col := Color(0.54, 0.35, 0.29)
+			ci.draw_arc(mc + Vector2(-s * 0.045, 0.0), s * 0.05, 0.3, PI - 0.3, 8, mouth_col, s * 0.035)
+			ci.draw_arc(mc + Vector2(s * 0.045, 0.0), s * 0.05, 0.3, PI - 0.3, 8, mouth_col, s * 0.035)
+		ci.draw_circle(center + Vector2(-s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
+		ci.draw_circle(center + Vector2(s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
+	else:
+		for sg in [-1.0, 1.0]:
+			var c := center + Vector2(sg * ex, ey)
+			ci.draw_line(c + Vector2(-er, -er), c + Vector2(er, er), INK_COLOR, s * 0.05)
+			ci.draw_line(c + Vector2(er, -er), c + Vector2(-er, er), INK_COLOR, s * 0.05)
+	var wh_col := Color(0.35, 0.27, 0.2, 0.75) if cat_alive else Color(0.28, 0.26, 0.24, 0.7)
+	var wh_w := maxf(1.4, s * 0.028)
+	for sg in [-1.0, 1.0]:
+		ci.draw_line(center + Vector2(sg * s * 0.34, s * 0.04),
+				center + Vector2(sg * s * 0.52, s * 0.01), wh_col, wh_w)
+		ci.draw_line(center + Vector2(sg * s * 0.34, s * 0.13),
+				center + Vector2(sg * s * 0.52, s * 0.12), wh_col, wh_w)

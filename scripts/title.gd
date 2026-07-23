@@ -25,6 +25,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _draw() -> void:
+	var vp := get_viewport_rect().size
+	# Pit backdrop: light seeping down from above.
+	draw_polygon(PackedVector2Array([
+		Vector2.ZERO, Vector2(vp.x, 0), vp, Vector2(0, vp.y),
+	]), PackedColorArray([
+		Color("2a3040"), Color("2a3040"), Color("0b0c12"), Color("0b0c12"),
+	]))
+	var warm := Color(1.0, 0.95, 0.82, 0.08)
+	var faded := Color(1.0, 0.95, 0.82, 0.0)
+	draw_polygon(PackedVector2Array([
+		Vector2(vp.x * 0.32, 0), Vector2(vp.x * 0.68, 0),
+		Vector2(vp.x * 0.78, vp.y), Vector2(vp.x * 0.22, vp.y),
+	]), PackedColorArray([warm, warm, faded, faded]))
 	# Decorative tetromino scatter.
 	var decos := [
 		["T", Vector2(280, 260)], ["L", Vector2(1460, 220)], ["S", Vector2(240, 700)],
@@ -36,4 +49,7 @@ func _draw() -> void:
 		for c in Board.SHAPES[d[0]][0]:
 			var p: Vector2 = d[1] + Vector2(c) * 44.0
 			draw_rect(Rect2(p, Vector2(42.0, 42.0)), color)
-			draw_rect(Rect2(p, Vector2(42.0, 42.0)), color.darkened(0.3), false, 2.0)
+			draw_rect(Rect2(p, Vector2(42.0, 42.0)),
+					Color(1.0, 0.96, 0.84, 0.18), false, 2.0)
+	# The cube cat perched above the title, gazing up at the light.
+	Player.paint_cat(self, Vector2(960, 120), 96.0, 0.0, true, false)

@@ -1,6 +1,6 @@
-# Block
+# Block (게임 타이틀: Cat-Tris)
 
-Godot 4.6 (2D) 게임 프로젝트.
+Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테트리스 블록을 밟고 위로 탈출하는 게임.
 
 ## 실행
 
@@ -27,6 +27,8 @@ Godot 4.6 (2D) 게임 프로젝트.
 - 클래식 테트리스 로직은 `scripts/board.gd`에 유지 (SRS 회전+월킥, 7-bag 등) — escape_board가 SHAPES/KICKS/COLORS 상수를 재사용
 - UI 배선/재시작/일시정지: `scripts/main.gd`
 - 렌더링은 텍스처 없이 `_draw()`로 직접 그림
+- 아트 규칙(Cat-Tris): 빛은 항상 위에서(블록 윗면만 하이라이트), 가장 따뜻한 것 = 플레이어(크림 #f4e3c8), 가장 밝은 것 = 출구의 빛(#fff3d0). 무한의 계단은 높이 오를수록 배경이 밝아짐. 큐브 고양이 렌더는 `Player.paint_cat()` 정적 함수 — 타이틀 등 어디서든 재사용
+- 씬 스크린샷 캡처: `& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn` → `.tmp_shots/`에 저장
 - 새 `class_name` 추가 시 헤드리스 실행 전 `--import`로 전역 클래스 캐시 갱신 필요
 
 ## 컨벤션

@@ -13,8 +13,9 @@ offset_top = 180.0
 offset_right = 1460.0
 offset_bottom = 340.0
 theme_override_font_sizes/font_size = 120
+theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 1)
 horizontal_alignment = 1
-text = "BLOCK"
+text = "CAT-TRIS"
 
 [node name="SubtitleLabel" type="Label" parent="UI"]
 offset_left = 460.0
@@ -24,7 +25,7 @@ offset_bottom = 400.0
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 horizontal_alignment = 1
-text = "테트리스 블록 액션"
+text = "구덩이에 빠진 큐브 고양이의 탈출극"
 
 [node name="EscapeBtn" type="Button" parent="UI"]
 offset_left = 710.0
