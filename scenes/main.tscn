@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/escape_board.gd" id="2_board"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/touch_controls.gd" id="4_touch"]
 [ext_resource type="Script" path="res://scripts/next_preview.gd" id="6_next"]
 [ext_resource type="Script" path="res://scripts/touch_button.gd" id="5_tbtn"]
+[ext_resource type="Script" path="res://scripts/death_popup.gd" id="7_death"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -193,22 +194,6 @@ theme_override_colors/font_color = Color(1, 1, 1, 0.45)
 horizontal_alignment = 1
 text = "< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
 
-[node name="GameOverLabel" type="Label" parent="UI"]
-visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_font_sizes/font_size = 72
-theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 12
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "GAME OVER
-R / 화면 터치  재시작      ESC  타이틀"
-
 [node name="EscapeLabel" type="Label" parent="UI"]
 visible = false
 anchors_preset = 15
@@ -308,3 +293,14 @@ theme_override_constants/outline_size = 12
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "PAUSED"
+
+[node name="PopupLayer" type="CanvasLayer" parent="."]
+layer = 3
+
+[node name="DeathPopup" type="Control" parent="PopupLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("7_death")

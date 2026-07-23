@@ -213,6 +213,30 @@ func _ready() -> void:
 	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
 	GameState.mode = GameState.MODE_ESCAPE
 
+	# --- Revive ("이어서 하기") ---
+	# Escape block-out: revive reopens the spawn window and resumes play
+	b3.revive_player()
+	_check(b3.playing, "revive resumes an escape run")
+	_check(p3.alive, "revived player is alive")
+	_check(not b3.rect_hits_solid(p3.rect()), "revived player stands in a free spot")
+	_check(b3.piece_state == b3.PieceState.TRACKING, "revive spawns a fresh tracking piece")
+
+	# Endless lava death: revive pushes the lava back below the feet
+	b2.revive_player()
+	_check(b2.playing, "revive resumes an endless run")
+	_check(p2.alive, "lava-killed player revives")
+	_check(b2.lava_y >= p2.position.y + Player.SIZE / 2.0 + c,
+			"revive pushes the lava back down")
+
+	# Crushed under blocks: the revive blast clears the cells around the cat
+	for x in range(3, 8):
+		for y in range(10, EscapeBoard.ROWS):
+			board.grid[Vector2i(x, y)] = "T"
+	player.position = Vector2(5 * c + c / 2.0, 12 * c)
+	board.revive_player()
+	_check(player.alive and board.playing, "crushed player revives")
+	_check(not board.rect_hits_solid(player.rect()), "revive blast frees the crushed cat")
+
 	if failures == 0:
 		print("ALL TESTS PASSED")
 	else:

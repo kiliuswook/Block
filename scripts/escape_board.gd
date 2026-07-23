@@ -34,6 +34,8 @@ const LAVA_SPEED_BASE := 8.0
 const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
+const LAVA_REVIVE_GAP := CELL * 5.0  # revive pushes the lava this far below the feet
+const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -506,6 +508,65 @@ func _escape() -> void:
 	_spawn_piece()
 	EventBus.level_changed.emit(level)
 	EventBus.player_escaped.emit(level)
+
+
+## Revive after death ("continue"): blast the blocks around the cat open,
+## push the lava back down and resume the run right where it ended.
+func revive_player() -> void:
+	_erase_cells_around(Vector2i((player.position / CELL).floor()), REVIVE_BLAST)
+	var spot := _find_revive_spot()
+	player.respawn(spot)
+	if mode == Mode.ENDLESS:
+		lava_y = maxf(lava_y, spot.y + Player.SIZE / 2.0 + LAVA_REVIVE_GAP)
+	playing = true
+	is_paused = false
+	_clear_spawn_window()
+	_spawn_piece()
+	queue_redraw()
+
+
+## Nearest free spot for the revived cat: death position first, then upward,
+## then sideways columns. Falls back to the pit-bottom spawn point.
+func _find_revive_spot() -> Vector2:
+	var half := Player.SIZE / 2.0
+	var size := Vector2.ONE * Player.SIZE
+	for radius in range(0, COLS):
+		var offsets: Array = [0] if radius == 0 else [-radius, radius]
+		for sx in offsets:
+			var x: float = clampf(player.position.x + sx * CELL, half, COLS * CELL - half)
+			for up in range(0, ROWS * 2):
+				var p := Vector2(x, player.position.y - up * CELL)
+				if p.y - half < 0.0 and mode == Mode.ESCAPE:
+					break
+				if p.y + half > ROWS * CELL:
+					continue
+				if not rect_hits_solid(Rect2(p - Vector2.ONE * half, size)):
+					return p
+	return _spawn_point()
+
+
+func _erase_cells_around(center: Vector2i, radius: int) -> void:
+	for y in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			_erase_cell(Vector2i(x, y))
+
+
+## Clears the 4x4 window where the next piece will spawn, so reviving can
+## never immediately block out again ([_spawn_piece] would kill on collide).
+func _clear_spawn_window() -> void:
+	var spawn_row := 0 if mode == Mode.ESCAPE else _endless_spawn_row()
+	var spawn_x := clampi(int(player.position.x / CELL) - 2, 0, COLS - 4)
+	for y in range(spawn_row, spawn_row + 4):
+		for x in range(spawn_x, spawn_x + 4):
+			_erase_cell(Vector2i(x, y))
+
+
+func _erase_cell(c: Vector2i) -> void:
+	if not grid.has(c):
+		return
+	grid.erase(c)
+	cracked.erase(c)
+	break_fx.append([c, 0.0])
 
 
 func _kill_player() -> void:

@@ -20,9 +20,9 @@ const GOLD := Color(1.0, 0.85, 0.35)
 @onready var lines_title: Label = $UI/LinesTitle
 @onready var lines_label: Label = $UI/LinesLabel
 @onready var goal_label: Label = $UI/GoalLabel
-@onready var game_over_label: Label = $UI/GameOverLabel
 @onready var pause_label: Label = $UI/PauseLabel
 @onready var escape_label: Label = $UI/EscapeLabel
+@onready var death_popup: Control = $PopupLayer/DeathPopup
 
 var height := 0
 var record_broken := false
@@ -38,6 +38,9 @@ func _ready() -> void:
 	EventBus.game_started.connect(_on_game_started)
 	EventBus.game_over.connect(_on_game_over)
 	EventBus.player_escaped.connect(_on_escaped)
+	death_popup.continue_pressed.connect(_on_revive)
+	death_popup.restart_pressed.connect(_restart)
+	death_popup.title_pressed.connect(_to_title)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	level_title.visible = not endless
 	level_label.visible = not endless
@@ -69,8 +72,6 @@ func _on_game_started() -> void:
 	best_label.modulate = Color.WHITE
 	height_label.modulate = Color.WHITE
 	height_label.scale = Vector2.ONE
-	if GameState.mode == GameState.MODE_ENDLESS:
-		game_over_label.text = "GAME OVER\nR / 화면 터치  재시작      ESC  타이틀"
 
 
 func _on_height_changed(v: int) -> void:
@@ -168,12 +169,36 @@ func _show_new_record() -> void:
 
 
 func _on_game_over() -> void:
-	if GameState.mode != GameState.MODE_ENDLESS:
-		return
-	var was_record := GameState.record_height(height)
-	var head := "☆ 신기록 달성! ☆\n" if was_record else ""
-	game_over_label.text = "%sGAME OVER\n도달 높이 %d층      최고 기록 %d층\nR / 화면 터치  재시작      ESC  타이틀" \
-			% [head, height, GameState.best_height]
+	var was_record := false
+	var stats := ""
+	if GameState.mode == GameState.MODE_ENDLESS:
+		was_record = GameState.record_height(height)
+		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
+	else:
+		stats = "LEVEL %d      SCORE %d" % [board.level, GameState.score]
+	# Let the death sink in for a beat before the popup slides up.
+	var tw := create_tween()
+	tw.tween_interval(0.9)
+	tw.tween_callback(func() -> void:
+		if not board.playing:
+			death_popup.open(stats, was_record))
+
+
+func _on_revive() -> void:
+	death_popup.close()
+	board.revive_player()
+	_screen_flash(0.25)
+
+
+func _restart() -> void:
+	death_popup.close()
+	pause_label.visible = false
+	escape_label.visible = false
+	board.start_game()
+
+
+func _to_title() -> void:
+	get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 
 func _on_escaped(new_level: int) -> void:
@@ -185,15 +210,10 @@ func _on_escaped(new_level: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var touch_restart: bool = game_over_label.visible \
-			and event is InputEventScreenTouch and event.pressed
 	if event.is_action_pressed("to_title"):
-		get_tree().change_scene_to_file("res://scenes/title.tscn")
-	elif event.is_action_pressed("restart") or touch_restart:
-		game_over_label.visible = false
-		pause_label.visible = false
-		escape_label.visible = false
-		board.start_game()
+		_to_title()
+	elif event.is_action_pressed("restart"):
+		_restart()
 	elif event.is_action_pressed("pause") and board.playing:
 		board.is_paused = not board.is_paused
 		pause_label.visible = board.is_paused
