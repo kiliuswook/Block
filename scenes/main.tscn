@@ -95,9 +95,9 @@ text = "0"
 [node name="HeightTitle" type="Label" parent="UI"]
 visible = false
 offset_left = 1360.0
-offset_top = 310.0
-offset_right = 1540.0
-offset_bottom = 338.0
+offset_top = 200.0
+offset_right = 1600.0
+offset_bottom = 228.0
 theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 text = "HEIGHT"
@@ -105,11 +105,71 @@ text = "HEIGHT"
 [node name="HeightLabel" type="Label" parent="UI"]
 visible = false
 offset_left = 1360.0
-offset_top = 338.0
-offset_right = 1590.0
-offset_bottom = 386.0
-theme_override_font_sizes/font_size = 40
-text = "0"
+offset_top = 228.0
+offset_right = 1720.0
+offset_bottom = 348.0
+theme_override_font_sizes/font_size = 96
+theme_override_colors/font_color = Color(0.956863, 0.890196, 0.784314, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
+theme_override_constants/outline_size = 10
+text = "0층"
+
+[node name="BestTitle" type="Label" parent="UI"]
+visible = false
+offset_left = 1360.0
+offset_top = 372.0
+offset_right = 1600.0
+offset_bottom = 400.0
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 0.92, 0.65, 0.7)
+text = "BEST"
+
+[node name="BestLabel" type="Label" parent="UI"]
+visible = false
+offset_left = 1360.0
+offset_top = 400.0
+offset_right = 1720.0
+offset_bottom = 452.0
+theme_override_font_sizes/font_size = 44
+theme_override_colors/font_color = Color(1, 0.92, 0.65, 1)
+text = "0층"
+
+[node name="RecordLabel" type="Label" parent="UI"]
+visible = false
+offset_left = 1360.0
+offset_top = 460.0
+offset_right = 1720.0
+offset_bottom = 496.0
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
+theme_override_constants/outline_size = 6
+text = "★ NEW RECORD!"
+
+[node name="FlashRect" type="ColorRect" parent="UI"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(1, 0.952941, 0.815686, 0)
+
+[node name="MilestoneLabel" type="Label" parent="UI"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 100
+theme_override_colors/font_color = Color(1, 0.952941, 0.815686, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.08, 0.04, 1)
+theme_override_constants/outline_size = 16
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "10층 돌파!"
 
 [node name="GoalLabel" type="Label" parent="UI"]
 offset_left = 1360.0

@@ -14,6 +14,8 @@ func _ready() -> void:
 	await _capture("res://scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://scenes/main.tscn", OUT + "/endless_lava.png",
 			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
+	await _capture("res://scenes/main.tscn", OUT + "/endless_hud.png",
+			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
 	get_tree().quit()
 
 
