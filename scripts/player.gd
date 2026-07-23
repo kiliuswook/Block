@@ -45,6 +45,13 @@ var squash_timer := 0.0
 var wall_jumps_left := 1
 var facing := 1
 var last_tap := {-1: -1e9, 1: -1e9}
+# Split screen: P2's cat reads its own action set and wears a distinct skin.
+var act_left := "move_left"
+var act_right := "move_right"
+var act_jump := "jump"
+var act_drop := "soft_drop"
+var act_dash := "dash"
+var skin_override := ""
 
 @onready var board: EscapeBoard = get_parent()
 
@@ -87,18 +94,18 @@ func _handle_input(delta: float) -> void:
 	dash_cooldown = maxf(dash_cooldown - delta, 0.0)
 	var now := Time.get_ticks_msec() / 1000.0
 	for dir in [-1, 1]:
-		var action := "move_left" if dir == -1 else "move_right"
+		var action := act_left if dir == -1 else act_right
 		if Input.is_action_just_pressed(action):
 			if now - last_tap[dir] <= DOUBLE_TAP and dash_cooldown <= 0.0:
 				dash_timer = DASH_TIME
 				dash_dir = dir
 				dash_cooldown = DASH_COOLDOWN
 			last_tap[dir] = now
-	var axis := Input.get_axis("move_left", "move_right")
+	var axis := Input.get_axis(act_left, act_right)
 	if axis != 0.0:
 		facing = int(signf(axis))
 	# Shift dash: dashes toward the held direction, or the way we last faced.
-	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0.0:
+	if Input.is_action_just_pressed(act_dash) and dash_cooldown <= 0.0:
 		dash_timer = DASH_TIME
 		dash_dir = int(signf(axis)) if axis != 0.0 else facing
 		dash_cooldown = DASH_COOLDOWN
@@ -110,7 +117,7 @@ func _handle_input(delta: float) -> void:
 		velocity.x = dash_dir * DASH_SPEED
 	else:
 		velocity.x = axis * RUN_SPEED
-	if Input.is_action_just_pressed("jump"):
+	if Input.is_action_just_pressed(act_jump):
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
@@ -129,7 +136,7 @@ func _handle_input(delta: float) -> void:
 		jump_buffer = 0.0
 		dash_timer = 0.0
 	var g := GRAVITY
-	var fast_fall := Input.is_action_pressed("soft_drop")
+	var fast_fall := Input.is_action_pressed(act_drop)
 	if velocity.y > 0.0 and fast_fall:
 		g *= FAST_FALL_FACTOR
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
@@ -212,7 +219,8 @@ func _draw() -> void:
 	var half := SIZE / 2.0
 	var body := Rect2(-Vector2.ONE * half, Vector2.ONE * SIZE)
 	var look := signf(velocity.x) * 4.0
-	var skin: Dictionary = GameState.cat_skin(GameState.selected_cat)
+	var skin_id := skin_override if skin_override != "" else GameState.selected_cat
+	var skin: Dictionary = GameState.cat_skin(skin_id)
 	var trail: Color = skin.get("body", BODY_COLOR)
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color(trail, 0.22))

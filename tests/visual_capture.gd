@@ -16,6 +16,17 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
 	await _capture("res://scenes/main.tscn", OUT + "/endless_hud.png",
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
+	GameState.split = true
+	GameState.mode = GameState.MODE_ESCAPE
+	await _capture("res://scenes/main.tscn", OUT + "/split_escape.png")
+	GameState.mode = GameState.MODE_ENDLESS
+	await _capture("res://scenes/main.tscn", OUT + "/split_endless.png")
+	GameState.split = false
+	GameState.mode = GameState.MODE_VERSUS
+	await _capture("res://scenes/main.tscn", OUT + "/versus.png")
+	await _capture("res://scenes/main.tscn", OUT + "/versus_round.png",
+			func(inst: Node) -> void: inst.get_node("Board")._versus_over(1))
+	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://scenes/main.tscn", OUT + "/death_popup.png",
 			func(inst: Node) -> void:
 				inst.get_node("Board")._kill_player()

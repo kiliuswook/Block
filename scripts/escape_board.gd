@@ -5,8 +5,11 @@ extends Node2D
 ## climbs the stack and escapes through the door at the top. Getting caught
 ## under a falling piece is death. Reuses SHAPES/KICKS/COLORS from Board.
 
+## Split screen: this board's round result (true = this player escaped/won).
+signal finished(win: bool)
+
 enum PieceState { TRACKING, FALLING, LANDED }
-enum Mode { ESCAPE, ENDLESS }
+enum Mode { ESCAPE, ENDLESS, VERSUS }
 
 const COLS := 10
 const ROWS := 14
@@ -36,6 +39,9 @@ const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
 const LAVA_REVIVE_GAP := CELL * 5.0  # revive pushes the lava this far below the feet
 const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
+const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
+const P2_DAS_REPEAT := 0.06
+const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -59,6 +65,14 @@ var best_height := 0
 var drop_tap_time := -1e9
 var lava_y := 0.0
 var lava_phase := 0.0
+var p2_das_timer := 0.0
+var versus_pieces := 0
+# Split screen: one board per player — global EventBus signals are muted and
+# the piece is driven by this board's own action set instead of the defaults.
+var split := false
+var act_rot_cw := "rotate_cw"
+var act_rot_ccw := "rotate_ccw"
+var act_drop := "soft_drop"
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -66,6 +80,7 @@ var lava_phase := 0.0
 
 func start_game() -> void:
 	mode = GameState.mode as Mode
+	split = GameState.split
 	grid.clear()
 	cracked.clear()
 	bag.clear()
@@ -73,6 +88,8 @@ func start_game() -> void:
 	level = 1
 	total_lines = 0
 	best_height = 0
+	versus_pieces = 0
+	p2_das_timer = 0.0
 	lava_y = ROWS * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	is_paused = false
@@ -84,20 +101,24 @@ func start_game() -> void:
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	playing = true
-	EventBus.game_started.emit()
-	EventBus.lines_changed.emit(0)
-	EventBus.level_changed.emit(1)
-	EventBus.height_changed.emit(0)
+	if not split:
+		EventBus.game_started.emit()
+		EventBus.lines_changed.emit(0)
+		EventBus.level_changed.emit(1)
+		EventBus.height_changed.emit(0)
 	queue_redraw()
 
 
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
-	if Input.is_action_just_pressed("rotate_cw"):
-		_try_rotate(1)
-	if Input.is_action_just_pressed("rotate_ccw"):
-		_try_rotate(-1)
+	if mode == Mode.VERSUS:
+		_p2_input(delta)
+	else:
+		if Input.is_action_just_pressed(act_rot_cw):
+			_try_rotate(1)
+		if Input.is_action_just_pressed(act_rot_ccw):
+			_try_rotate(-1)
 	match piece_state:
 		PieceState.TRACKING:
 			_track(delta)
@@ -108,12 +129,14 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-	if mode == Mode.ESCAPE:
-		if playing and (player.position.x < -CELL * 0.6
-				or player.position.x > COLS * CELL + CELL * 0.6):
-			_escape()
-	else:
+	if mode == Mode.ENDLESS:
 		_update_endless(delta)
+	elif playing and (player.position.x < -CELL * 0.6
+			or player.position.x > COLS * CELL + CELL * 0.6):
+		if mode == Mode.VERSUS:
+			_versus_over(1)
+		else:
+			_escape()
 	queue_redraw()
 
 
@@ -136,17 +159,18 @@ func _update_endless(delta: float) -> void:
 	if h > best_height:
 		GameState.score += (h - best_height) * HEIGHT_SCORE
 		best_height = h
-		EventBus.height_changed.emit(best_height)
+		if not split:
+			EventBus.height_changed.emit(best_height)
 
 
 func rect_hits_solid(r: Rect2) -> bool:
 	if r.position.x < 0.0 or r.end.x > COLS * CELL:
-		# Escape mode: the side walls open at the top rows — one exit each.
-		if not (mode == Mode.ESCAPE and _rect_in_side_door(r)):
+		# Escape/versus: the side walls open at the top rows — one exit each.
+		if not (mode != Mode.ENDLESS and _rect_in_side_door(r)):
 			return true
 	if r.end.y > ROWS * CELL:
 		return true
-	if mode == Mode.ESCAPE and r.position.y < 0.0:
+	if mode != Mode.ENDLESS and r.position.y < 0.0:
 		return true
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
@@ -179,7 +203,7 @@ func piece_hits_rect(r: Rect2) -> bool:
 
 
 func _track(delta: float) -> void:
-	if Input.is_action_just_pressed("soft_drop"):
+	if Input.is_action_just_pressed(_drop_action()):
 		drop_tap_time = Time.get_ticks_msec() / 1000.0
 		_start_fall()
 		return
@@ -189,6 +213,8 @@ func _track(delta: float) -> void:
 		piece_pos.y = _endless_spawn_row()
 	while track_move_timer >= TRACK_STEP:
 		track_move_timer -= TRACK_STEP
+		if mode == Mode.VERSUS:
+			continue  # versus: P2 steers the piece by hand instead
 		var target := int(player.position.x / CELL) - 2
 		var dir := signi(target - piece_pos.x)
 		if dir != 0 and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), true):
@@ -201,16 +227,19 @@ func _start_fall() -> void:
 	piece_state = PieceState.FALLING
 	fall_timer = 0.0
 	# Classic Tetris block out: the stack reaches the spawn area and the
-	# piece has nowhere to start falling — game over in every mode.
+	# piece has nowhere to start falling. In versus that's on P2 — cat wins.
 	if _piece_collides(piece_rot, piece_pos, false):
-		_kill_player()
+		if mode == Mode.VERSUS:
+			_versus_over(1)
+		else:
+			_kill_player()
 		return
 	_resolve_piece_overlap()
 
 
 func _fall(delta: float) -> void:
 	# Double-tap soft drop slams the piece all the way down.
-	if Input.is_action_just_pressed("soft_drop"):
+	if Input.is_action_just_pressed(_drop_action()):
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - drop_tap_time <= DROP_DOUBLE_TAP:
 			drop_tap_time = -1e9
@@ -219,7 +248,7 @@ func _fall(delta: float) -> void:
 		drop_tap_time = now
 	fall_timer += delta
 	var interval := _fall_interval()
-	if Input.is_action_pressed("soft_drop"):
+	if Input.is_action_pressed(_drop_action()):
 		interval /= SOFT_DROP_FACTOR
 	while fall_timer >= interval and playing:
 		fall_timer -= interval
@@ -244,7 +273,7 @@ func _landed(delta: float) -> void:
 		fall_timer = 0.0
 		return
 	# Tapping down locks it in place immediately.
-	if Input.is_action_just_pressed("soft_drop"):
+	if Input.is_action_just_pressed(_drop_action()):
 		_lock_piece()
 		return
 	land_timer += delta
@@ -265,6 +294,50 @@ func shove_piece(dir: int) -> bool:
 		if _resolve_piece_overlap() or not playing:
 			return true
 	return moved
+
+
+## Versus: P2 drives the piece directly — A/D step (with DAS auto-repeat),
+## W/Q rotate, S drop. The drop key itself is handled by the state handlers.
+func _p2_input(delta: float) -> void:
+	if piece_type == "":
+		return
+	if Input.is_action_just_pressed("p2_rot_cw"):
+		_try_rotate(1)
+	if Input.is_action_just_pressed("p2_rot_ccw"):
+		_try_rotate(-1)
+	var axis := int(Input.get_axis("p2_left", "p2_right"))
+	if Input.is_action_just_pressed("p2_left") or Input.is_action_just_pressed("p2_right"):
+		_p2_step(axis)
+		p2_das_timer = P2_DAS_DELAY
+	elif axis != 0:
+		p2_das_timer -= delta
+		if p2_das_timer <= 0.0:
+			p2_das_timer = P2_DAS_REPEAT
+			_p2_step(axis)
+
+
+func _p2_step(dir: int) -> void:
+	if dir == 0 or not playing:
+		return
+	var ignore := piece_state == PieceState.TRACKING
+	if _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), ignore):
+		return
+	piece_pos.x += dir
+	if not ignore:
+		_resolve_piece_overlap()
+
+
+## Versus splits the drop key: the cat keeps ↓ for fast fall, P2 gets S.
+func _drop_action() -> String:
+	return "p2_drop" if mode == Mode.VERSUS else act_drop
+
+
+func _versus_over(winner: int) -> void:
+	if winner == 2:
+		player.die()
+	playing = false
+	EventBus.versus_round_over.emit(winner)
+	queue_redraw()
 
 
 func _hard_drop() -> void:
@@ -336,8 +409,12 @@ func _lock_piece() -> void:
 		cracked.erase(c)
 		if c.y < 0:
 			overflow = true
-	if overflow and mode == Mode.ESCAPE:
-		_kill_player()
+	if overflow and mode != Mode.ENDLESS:
+		# Stack spilled over the top: cat dies in escape, P2 loses in versus.
+		if mode == Mode.VERSUS:
+			_versus_over(1)
+		else:
+			_kill_player()
 		return
 	if not _shove_player_out_of_grid():
 		_kill_player()
@@ -347,7 +424,8 @@ func _lock_piece() -> void:
 	if cleared > 0:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
-		EventBus.lines_changed.emit(total_lines)
+		if not split:
+			EventBus.lines_changed.emit(total_lines)
 		if not _shove_player_out_of_grid():
 			_kill_player()
 			return
@@ -437,16 +515,25 @@ func _spawn_piece() -> void:
 		next_type = _draw_from_bag()
 	piece_type = next_type
 	next_type = _draw_from_bag()
-	EventBus.next_piece_changed.emit(next_type)
+	if not split:
+		EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
-	var spawn_row := 0 if mode == Mode.ESCAPE else _endless_spawn_row()
-	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
+	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
+	if mode == Mode.VERSUS:
+		# Neutral center spawn: P2 steers it from there.
+		piece_pos = Vector2i(COLS / 2 - 2, spawn_row)
+		versus_pieces += 1
+	else:
+		piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
 	track_timer = 0.0
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
 	if _piece_collides(piece_rot, piece_pos, false):
-		_kill_player()
+		if mode == Mode.VERSUS:
+			_versus_over(1)
+		else:
+			_kill_player()
 
 
 func _draw_from_bag() -> String:
@@ -500,6 +587,11 @@ func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 
 
 func _escape() -> void:
+	# Split screen: first escape ends the round for both halves.
+	if split:
+		playing = false
+		finished.emit(true)
+		return
 	level += 1
 	GameState.score += ESCAPE_SCORE * (level - 1)
 	grid.clear()
@@ -536,7 +628,7 @@ func _find_revive_spot() -> Vector2:
 			var x: float = clampf(player.position.x + sx * CELL, half, COLS * CELL - half)
 			for up in range(0, ROWS * 2):
 				var p := Vector2(x, player.position.y - up * CELL)
-				if p.y - half < 0.0 and mode == Mode.ESCAPE:
+				if p.y - half < 0.0 and mode != Mode.ENDLESS:
 					break
 				if p.y + half > ROWS * CELL:
 					continue
@@ -554,7 +646,7 @@ func _erase_cells_around(center: Vector2i, radius: int) -> void:
 ## Clears the 4x4 window where the next piece will spawn, so reviving can
 ## never immediately block out again ([_spawn_piece] would kill on collide).
 func _clear_spawn_window() -> void:
-	var spawn_row := 0 if mode == Mode.ESCAPE else _endless_spawn_row()
+	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
 	var spawn_x := clampi(int(player.position.x / CELL) - 2, 0, COLS - 4)
 	for y in range(spawn_row, spawn_row + 4):
 		for x in range(spawn_x, spawn_x + 4):
@@ -570,16 +662,26 @@ func _erase_cell(c: Vector2i) -> void:
 
 
 func _kill_player() -> void:
+	if mode == Mode.VERSUS:
+		# The cat got crushed or trapped — round to P2.
+		_versus_over(2)
+		return
 	player.die()
 	playing = false
-	EventBus.game_over.emit()
+	if split:
+		finished.emit(false)
+	else:
+		EventBus.game_over.emit()
 	queue_redraw()
 
 
-## Difficulty driver: escape scales with level, endless with height climbed.
+## Difficulty driver: escape scales with level, endless with height climbed,
+## versus with pieces spawned this round (rounds get tenser as they run long).
 func _difficulty() -> int:
 	if mode == Mode.ESCAPE:
 		return level
+	if mode == Mode.VERSUS:
+		return 1 + versus_pieces / VERSUS_RAMP
 	return 1 + best_height / 8
 
 
@@ -631,12 +733,12 @@ func _draw() -> void:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
-	if mode == Mode.ESCAPE:
+	if mode != Mode.ENDLESS:
 		_draw_doors()
 	if piece_type != "":
 		_draw_piece()
 	var border := Color(1, 1, 1, 0.35)
-	if mode == Mode.ESCAPE:
+	if mode != Mode.ENDLESS:
 		# Side walls open at the exit rows: draw them with a gap at the doors.
 		var door_bottom := (DOOR_ROW_BOTTOM + 1) * CELL
 		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, 2.0)
@@ -663,7 +765,7 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 	draw_polygon(PackedVector2Array([
 		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
-	if mode == Mode.ESCAPE:
+	if mode != Mode.ENDLESS:
 		# Warm light shafts slanting in from the two side exits.
 		var y0 := DOOR_ROW_TOP * CELL
 		var y1 := (DOOR_ROW_BOTTOM + 1) * CELL

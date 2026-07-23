@@ -5,6 +5,7 @@ const SAVE_PATH := "user://save.json"
 
 const MODE_ESCAPE := 0
 const MODE_ENDLESS := 1
+const MODE_VERSUS := 2
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — always available / gold, gems — purchasable / height — endless best
@@ -32,6 +33,7 @@ const CATS: Array[Dictionary] = [
 ]
 
 var mode: int = MODE_ESCAPE
+var split: bool = false  # 2-player split screen (escape/endless only), not saved
 var best_height: int = 0
 var best_escape_level: int = 1
 var games_played: int = 0

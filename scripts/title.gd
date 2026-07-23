@@ -13,6 +13,9 @@ const TILE_Y := 780.0
 
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
+@onready var versus_btn: Button = $UI/VersusBtn
+@onready var escape2_btn: Button = $UI/Escape2Btn
+@onready var endless2_btn: Button = $UI/Endless2Btn
 
 var _tiles := {}  # cat id -> Button
 var _currency_label: Label
@@ -24,13 +27,17 @@ var _pending_buy := ""
 func _ready() -> void:
 	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE))
 	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
+	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
+	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE, true))
+	endless2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS, true))
 	_build_currency_display()
 	_build_character_row()
 	_build_toast()
 
 
-func _start(mode: int) -> void:
+func _start(mode: int, split := false) -> void:
 	GameState.mode = mode
+	GameState.split = split
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
@@ -41,6 +48,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				_start(GameState.MODE_ESCAPE)
 			KEY_2, KEY_KP_2:
 				_start(GameState.MODE_ENDLESS)
+			KEY_3, KEY_KP_3:
+				_start(GameState.MODE_VERSUS)
+			KEY_4, KEY_KP_4:
+				_start(GameState.MODE_ESCAPE, true)
+			KEY_5, KEY_KP_5:
+				_start(GameState.MODE_ENDLESS, true)
 
 
 # --- Character select ---------------------------------------------------------
