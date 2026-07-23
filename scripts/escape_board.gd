@@ -316,16 +316,19 @@ func _landed(delta: float) -> void:
 		_lock_piece()
 
 
-## Dash impact from the player slams the piece sideways as far as it can go —
-## all the way to the wall or the nearest locked block. Works while falling
-## and during the landed grace window.
-func shove_piece(dir: int) -> bool:
+## Dash impact from the player shoves the piece sideways up to max_cells
+## (the cat's push stat; default slams to the wall or the nearest locked
+## block). Works while falling and during the landed grace window.
+func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 	if piece_state == PieceState.TRACKING or piece_type == "":
 		return false
 	var moved := false
-	while not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), false):
+	var cells := 0
+	while cells < max_cells \
+			and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), false):
 		piece_pos.x += dir
 		moved = true
+		cells += 1
 		if _resolve_piece_overlap() or not playing:
 			return true
 	return moved

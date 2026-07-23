@@ -58,6 +58,7 @@ var stat_speed := 1.0
 var stat_jump := 1.0
 var stat_dash := 1.0
 var stat_weight := 1.0
+var stat_push := 2  # dash shove power, in cells
 
 @onready var board: EscapeBoard = get_parent()
 
@@ -74,6 +75,7 @@ func _refresh_stats() -> void:
 	stat_jump = stats.get("jump", 1.0)
 	stat_dash = stats.get("dash", 1.0)
 	stat_weight = stats.get("weight", 1.0)
+	stat_push = int(stats.get("push", 2))
 
 
 func respawn(pos: Vector2) -> void:
@@ -170,14 +172,14 @@ func _handle_input(delta: float) -> void:
 func _apply_motion(delta: float) -> void:
 	var hit_h := _move_axis(Vector2(velocity.x * delta, 0.0))
 	if hit_h and dash_timer > 0.0 and velocity.x != 0.0:
-		# Dash impact slams the falling piece sideways to the wall, or smashes
-		# one locked block — either way the player bounces off.
+		# Dash impact shoves the falling piece sideways (push stat = cells),
+		# or smashes one locked block — either way the player bounces off.
 		var dirx := signf(velocity.x)
 		var side := rect()
 		side.position.x += dirx * BREAK_PROBE
 		var probe := side.grow_individual(0.0, -6.0, 0.0, -6.0)
 		if board.piece_hits_rect(probe):
-			board.shove_piece(int(dirx))
+			board.shove_piece(int(dirx), stat_push)
 			dash_timer = 0.0
 			knockback_timer = KNOCKBACK_TIME
 			knockback_vx = -dirx * KNOCKBACK_SPEED / stat_weight

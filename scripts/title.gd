@@ -10,8 +10,9 @@ const INK := Color("2a2230")
 const TILE_SIZE := Vector2(128.0, 168.0)
 const TILE_GAP := 14.0
 const TILE_Y := 780.0
-const POPUP_SIZE := Vector2(620.0, 560.0)
-const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"], ["무게", "weight"]]
+const POPUP_SIZE := Vector2(620.0, 616.0)
+const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
+		["무게", "weight"], ["밀기", "push"]]
 
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
@@ -163,8 +164,11 @@ func _draw_center_text(ci: Control, font: Font, text: String, y: float,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 
-## Maps a stat multiplier (≈0.7–1.3) onto 1–5 display pips; 1.0 = 3 pips.
-func _stat_pips(v: float) -> int:
+## Maps a stat value onto 1–5 display pips. Multipliers (≈0.7–1.3) center on
+## 3 pips at 1.0; the push stat is already a cell count and maps directly.
+func _stat_pips(key: String, v: float) -> int:
+	if key == "push":
+		return clampi(int(v), 1, 5)
 	return clampi(3 + roundi((v - 1.0) * 15.0), 1, 5)
 
 
@@ -312,10 +316,10 @@ func _draw_popup(ci: Control) -> void:
 	# Stat bars.
 	var stats: Dictionary = GameState.cat_stats(cat.id)
 	for i in STAT_ROWS.size():
-		var row_y := 302.0 + i * 42.0
+		var row_y := 302.0 + i * 40.0
 		ci.draw_string(font, Vector2(150.0, row_y + 14.0), STAT_ROWS[i][0],
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.8))
-		var pips := _stat_pips(stats.get(STAT_ROWS[i][1], 1.0))
+		var pips := _stat_pips(STAT_ROWS[i][1], stats.get(STAT_ROWS[i][1], 1.0))
 		for p in 5:
 			var r := Rect2(238.0 + p * 50.0, row_y, 42.0, 16.0)
 			var col := Color(CREAM, 0.95) if p < pips else Color(1, 1, 1, 0.12)
@@ -445,7 +449,7 @@ func _draw_stat_line() -> void:
 	var font := ThemeDB.fallback_font
 	var parts: Array[String] = ["%s · %s" % [cat.name, cat.get("trait", "")]]
 	for entry in STAT_ROWS:
-		var pips := _stat_pips(stats.get(entry[1], 1.0))
+		var pips := _stat_pips(entry[1], stats.get(entry[1], 1.0))
 		parts.append("%s %s%s" % [entry[0], "●".repeat(pips), "○".repeat(5 - pips)])
 	var text := "    ".join(parts)
 	var size := 20

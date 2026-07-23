@@ -125,6 +125,14 @@ func _ready() -> void:
 	_check(not board.shove_piece(1), "tracking piece cannot be shoved")
 	board.piece_state = board.PieceState.FALLING
 
+	# Push stat: max_cells caps how far one dash shoves the piece
+	board.piece_pos = Vector2i(3, 4)
+	_check(board.shove_piece(1, 1), "limited shove moves the piece")
+	_check(board.piece_pos == Vector2i(4, 4), "push power 1 shoves exactly one cell")
+	board.piece_pos = Vector2i(3, 4)
+	_check(board.shove_piece(1, 3), "push power 3 shove moves")
+	_check(board.piece_pos == Vector2i(6, 4), "push power 3 shoves three cells")
+
 	# Landed grace: the piece rests shovable for a moment before locking
 	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)  # O resting on the floor
 	board._fall(1.0)

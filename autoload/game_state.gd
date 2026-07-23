@@ -14,36 +14,37 @@ const MODE_VERSUS := 2
 ##  speed — run speed / jump — jump velocity / dash — dash speed & cooldown
 ##  weight — heavier falls harder when fast-falling and resists knockback,
 ##  lighter floats but gets flung further.
+##  push — dash shove power in cells: 1 shoves the piece exactly one cell.
 const CATS: Array[Dictionary] = [
 	{"id": "cream", "name": "크림", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
 		"unlock": {"type": "free"}, "trait": "밸런스",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0}},
+		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 	{"id": "cheese", "name": "치즈", "body": Color("f5b352"), "ear": Color("e08a3c"),
 		"unlock": {"type": "gold", "amount": 300}, "trait": "헤비급",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3}},
+		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
 	{"id": "calico", "name": "삼색", "body": Color("f2e6d4"), "ear": Color("8a5a33"),
 		"unlock": {"type": "escape", "level": 3}, "trait": "대시왕",
-		"stats": {"speed": 1.04, "jump": 0.97, "dash": 1.18, "weight": 0.95}},
+		"stats": {"speed": 1.04, "jump": 0.97, "dash": 1.18, "weight": 0.95, "push": 4}},
 	{"id": "black", "name": "까망", "body": Color("3a3540"), "ear": Color("26232c"),
 		"ink": Color("f0d060"), "unlock": {"type": "height", "floors": 10},
 		"trait": "질주본능",
-		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9}},
+		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
 	{"id": "gray", "name": "회색", "body": Color("aeb6c2"), "ear": Color("7e8694"),
 		"unlock": {"type": "gold", "amount": 500}, "trait": "묵직점프",
-		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2}},
+		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
 	{"id": "mint", "name": "민트", "body": Color("bfe8d5"), "ear": Color("6fbf9a"),
 		"unlock": {"type": "height", "floors": 30}, "trait": "점프킹",
-		"stats": {"speed": 0.96, "jump": 1.12, "dash": 0.95, "weight": 0.9}},
+		"stats": {"speed": 0.96, "jump": 1.12, "dash": 0.95, "weight": 0.9, "push": 1}},
 	{"id": "pink", "name": "벚꽃", "body": Color("f6cdd8"), "ear": Color("e08ea6"),
 		"unlock": {"type": "gold", "amount": 800}, "trait": "날쌘돌이",
-		"stats": {"speed": 1.08, "jump": 1.06, "dash": 1.0, "weight": 0.8}},
+		"stats": {"speed": 1.08, "jump": 1.06, "dash": 1.0, "weight": 0.8, "push": 2}},
 	{"id": "ghost", "name": "유령", "body": Color(0.93, 0.96, 1.0, 0.6),
 		"ear": Color(0.75, 0.8, 0.95, 0.55), "ink": Color("5a6a8a"),
 		"unlock": {"type": "plays", "count": 20}, "trait": "깃털몸",
-		"stats": {"speed": 1.0, "jump": 1.04, "dash": 1.1, "weight": 0.72}},
+		"stats": {"speed": 1.0, "jump": 1.04, "dash": 1.1, "weight": 0.72, "push": 1}},
 	{"id": "gold", "name": "황금", "body": Color("f7d354"), "ear": Color("c9982a"),
 		"unlock": {"type": "gems", "amount": 20}, "trait": "올라운더",
-		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05}},
+		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05, "push": 3}},
 ]
 
 var mode: int = MODE_ESCAPE
@@ -103,7 +104,7 @@ func get_cat(id: String) -> Dictionary:
 ## Stat multiplier dictionary for a cat (speed / jump / dash / weight).
 func cat_stats(id: String) -> Dictionary:
 	return get_cat(id).get("stats",
-			{"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0})
+			{"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2})
 
 
 ## Skin dictionary consumed by Player.paint_cat.
