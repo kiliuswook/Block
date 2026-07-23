@@ -141,7 +141,7 @@ func _handle_input(delta: float) -> void:
 func _apply_motion(delta: float) -> void:
 	var hit_h := _move_axis(Vector2(velocity.x * delta, 0.0))
 	if hit_h and dash_timer > 0.0 and velocity.x != 0.0:
-		# Dash impact shoves the falling piece a cell sideways, or smashes
+		# Dash impact slams the falling piece sideways to the wall, or smashes
 		# one locked block — either way the player bounces off.
 		var dirx := signf(velocity.x)
 		var side := rect()

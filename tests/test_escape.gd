@@ -111,22 +111,32 @@ func _ready() -> void:
 			"tracking piece is not solid")
 	board.piece_state = board.PieceState.FALLING
 
-	# Dash impact shoves the falling piece one cell sideways
-	player.position = Vector2(8 * c, 500.0)  # out of the piece's way
+	# Dash impact slams the piece sideways all the way to the wall
+	player.position = Vector2(2 * c, 700.0)  # out of the piece's way
 	board.piece_pos = Vector2i(3, 4)
-	_check(board.shove_piece(1), "shove moves the piece right")
-	_check(board.piece_pos == Vector2i(4, 4), "piece shifted one cell right")
-	_check(board.shove_piece(-1), "shove moves the piece left")
-	_check(board.piece_pos == Vector2i(3, 4), "piece shifted back left")
-	board.piece_pos = Vector2i(-1, 4)  # O cells hug the left wall
-	_check(not board.shove_piece(-1), "shove into the wall fails")
+	_check(board.shove_piece(1), "shove pushes the piece right")
+	_check(board.piece_pos == Vector2i(EscapeBoard.COLS - 3, 4), "piece slammed into the right wall")
+	_check(not board.shove_piece(1), "shove into the wall fails")
 	board.grid[Vector2i(3, 4)] = "T"
-	board.piece_pos = Vector2i(0, 4)
-	_check(not board.shove_piece(1), "shove into a locked block fails")
+	_check(board.shove_piece(-1), "shove pushes the piece left")
+	_check(board.piece_pos == Vector2i(3, 4), "piece stops against a locked block")
 	board.grid.clear()
 	board.piece_state = board.PieceState.TRACKING
 	_check(not board.shove_piece(1), "tracking piece cannot be shoved")
 	board.piece_state = board.PieceState.FALLING
+
+	# Landed grace: the piece rests shovable for a moment before locking
+	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)  # O resting on the floor
+	board._fall(1.0)
+	_check(board.piece_state == board.PieceState.LANDED, "piece lands into the grace state")
+	_check(board.grid.is_empty(), "landed piece has not locked yet")
+	_check(board.piece_hits_rect(Rect2(4 * c + 10, (EscapeBoard.ROWS - 1) * c + 10, 10, 10)),
+			"landed piece is still solid")
+	_check(board.shove_piece(-1), "landed piece can still be shoved")
+	_check(board.piece_pos.x == -1, "landed piece slammed into the left wall")
+	board._landed(EscapeBoard.LOCK_GRACE)
+	_check(not board.grid.is_empty(), "grace expiry locks the piece")
+	_check(board.piece_state == board.PieceState.TRACKING, "next piece starts tracking")
 
 	# A falling piece landing on a grounded player kills them
 	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)

@@ -5,7 +5,7 @@ extends Node2D
 ## climbs the stack and escapes through the door at the top. Getting caught
 ## under a falling piece is death. Reuses SHAPES/KICKS/COLORS from Board.
 
-enum PieceState { TRACKING, FALLING }
+enum PieceState { TRACKING, FALLING, LANDED }
 enum Mode { ESCAPE, ENDLESS }
 
 const COLS := 10
@@ -25,13 +25,14 @@ const SOFT_DROP_FACTOR := 4.0
 const DROP_DOUBLE_TAP := 0.3
 const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
+const LOCK_GRACE := 0.7  # landed piece stays shovable this long before locking
 const HEIGHT_SCORE := 10
 const VIEW_BELOW := 620.0  # how far below the camera center the pit stays drawn
 const ENDLESS_SPAWN_AHEAD := 7  # piece spawns this many cells above the camera cell
 const LAVA_START_OFFSET := CELL * 3.0
-const LAVA_SPEED_BASE := 3.2
-const LAVA_SPEED_STEP := 0.8
-const LAVA_SPEED_MAX := 18.0
+const LAVA_SPEED_BASE := 8.0
+const LAVA_SPEED_STEP := 2.0
+const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
 
 var grid := {}  # Vector2i -> piece type
@@ -45,6 +46,7 @@ var piece_state := PieceState.TRACKING
 var track_timer := 0.0
 var track_move_timer := 0.0
 var fall_timer := 0.0
+var land_timer := 0.0
 var level := 1
 var total_lines := 0
 var playing := false
@@ -99,6 +101,8 @@ func _process(delta: float) -> void:
 			_track(delta)
 		PieceState.FALLING:
 			_fall(delta)
+		PieceState.LANDED:
+			_landed(delta)
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
@@ -164,7 +168,7 @@ func rect_blocked_for_player(r: Rect2) -> bool:
 
 
 func piece_hits_rect(r: Rect2) -> bool:
-	if piece_state != PieceState.FALLING or piece_type == "":
+	if piece_state == PieceState.TRACKING or piece_type == "":
 		return false
 	for c in _cells(piece_type, piece_rot, piece_pos):
 		if _cell_rect(c).intersects(r):
@@ -218,22 +222,47 @@ func _fall(delta: float) -> void:
 	while fall_timer >= interval and playing:
 		fall_timer -= interval
 		if _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
-			_lock_piece()
+			_land()
 			return
 		piece_pos.y += 1
 		if _resolve_piece_overlap():
 			return
 
 
-## Dash impact from the player shoves the falling piece one cell sideways.
+## Touched down: hold briefly in a shovable state before locking for real.
+func _land() -> void:
+	piece_state = PieceState.LANDED
+	land_timer = 0.0
+
+
+func _landed(delta: float) -> void:
+	# Shoved off a ledge (or the ground cleared): resume falling.
+	if not _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
+		piece_state = PieceState.FALLING
+		fall_timer = 0.0
+		return
+	# Tapping down locks it in place immediately.
+	if Input.is_action_just_pressed("soft_drop"):
+		_lock_piece()
+		return
+	land_timer += delta
+	if land_timer >= LOCK_GRACE:
+		_lock_piece()
+
+
+## Dash impact from the player slams the piece sideways as far as it can go —
+## all the way to the wall or the nearest locked block. Works while falling
+## and during the landed grace window.
 func shove_piece(dir: int) -> bool:
-	if piece_state != PieceState.FALLING or piece_type == "":
+	if piece_state == PieceState.TRACKING or piece_type == "":
 		return false
-	if _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), false):
-		return false
-	piece_pos.x += dir
-	_resolve_piece_overlap()
-	return true
+	var moved := false
+	while not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), false):
+		piece_pos.x += dir
+		moved = true
+		if _resolve_piece_overlap() or not playing:
+			return true
+	return moved
 
 
 func _hard_drop() -> void:
@@ -242,7 +271,7 @@ func _hard_drop() -> void:
 		if _resolve_piece_overlap():
 			return
 	if playing:
-		_lock_piece()
+		_land()
 
 
 ## The falling piece overlaps the player: drive them straight down with it,
@@ -445,7 +474,7 @@ func _try_rotate(dir: int) -> void:
 		var target: Vector2i = piece_pos + kick
 		if _piece_collides(new_rot, target, ignore_grid):
 			continue
-		if piece_state == PieceState.FALLING:
+		if piece_state != PieceState.TRACKING:
 			# Never let a rotation itself crush the player.
 			var overlaps := false
 			for c in _cells(piece_type, new_rot, target):
@@ -629,14 +658,22 @@ func _draw_lava(w: float) -> void:
 
 func _draw_piece() -> void:
 	var color: Color = Board.COLORS[piece_type]
+	var pulse := 0.0
 	if piece_state == PieceState.TRACKING:
 		var t := track_timer / _track_time()
 		color.a = 0.35 + 0.4 * t
 		if t > 0.7 and fmod(track_timer, 0.3) < 0.15:
 			color.a = 1.0
+	elif piece_state == PieceState.LANDED:
+		# Landed but still shovable: glowing pulse until it locks.
+		pulse = 0.5 + 0.5 * sin(land_timer * 16.0)
+		color = color.lightened(0.18 + 0.18 * pulse)
 	for c in _cells(piece_type, piece_rot, piece_pos):
 		if mode == Mode.ENDLESS or c.y >= 0:
 			_draw_cell(c, color)
+			if piece_state == PieceState.LANDED:
+				draw_rect(_cell_rect(c).grow(-2.0),
+						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
 	if piece_state == PieceState.TRACKING:
 		var remain := ceili(_track_time() - track_timer)
 		var top_left := Vector2(piece_pos) * CELL
