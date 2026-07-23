@@ -8,6 +8,10 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT)
 	await get_tree().process_frame
 	await _capture("res://scenes/title.tscn", OUT + "/title.png")
+	await _capture("res://scenes/title.tscn", OUT + "/title_popup.png",
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
+	await _capture("res://scenes/title.tscn", OUT + "/title_popup_buy.png",
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
 	GameState.mode = GameState.MODE_ESCAPE
 	await _capture("res://scenes/main.tscn", OUT + "/escape.png")
 	GameState.mode = GameState.MODE_ENDLESS

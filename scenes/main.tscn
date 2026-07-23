@@ -1,57 +1,59 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://dvr60grwtcsib"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="Script" path="res://scripts/escape_board.gd" id="2_board"]
-[ext_resource type="Script" path="res://scripts/player.gd" id="3_player"]
-[ext_resource type="Script" path="res://scripts/touch_controls.gd" id="4_touch"]
-[ext_resource type="Script" path="res://scripts/next_preview.gd" id="6_next"]
-[ext_resource type="Script" path="res://scripts/touch_button.gd" id="5_tbtn"]
-[ext_resource type="Script" path="res://scripts/death_popup.gd" id="7_death"]
+[ext_resource type="Script" uid="uid://ccs7f3qbmvc7g" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://blm4emeo7yey0" path="res://scripts/escape_board.gd" id="2_board"]
+[ext_resource type="Script" uid="uid://d2iuamu8auw15" path="res://scripts/player.gd" id="3_player"]
+[ext_resource type="Script" uid="uid://bxb2s800kmeg" path="res://scripts/touch_controls.gd" id="4_touch"]
+[ext_resource type="Script" uid="uid://irvaw0okmwts" path="res://scripts/touch_button.gd" id="5_tbtn"]
+[ext_resource type="Script" uid="uid://elrs02yc6vo0" path="res://scripts/next_preview.gd" id="6_next"]
+[ext_resource type="Script" uid="uid://dbkuf0cvc3c2a" path="res://scripts/death_popup.gd" id="7_death"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1092135668]
 script = ExtResource("1_main")
 
-[node name="Board" type="Node2D" parent="."]
+[node name="Board" type="Node2D" parent="." unique_id=64586578]
 position = Vector2(640, 120)
 script = ExtResource("2_board")
 
-[node name="Player" type="Node2D" parent="Board"]
+[node name="Player" type="Node2D" parent="Board" unique_id=1420977471]
 script = ExtResource("3_player")
 
-[node name="Cam" type="Camera2D" parent="Board"]
-enabled = false
+[node name="Cam" type="Camera2D" parent="Board" unique_id=2144769595]
 position = Vector2(320, 448)
+enabled = false
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=1122657772]
 
-[node name="NextTitle" type="Label" parent="UI"]
+[node name="NextTitle" type="Label" parent="UI" unique_id=835427788]
 offset_left = 1360.0
 offset_top = 44.0
 offset_right = 1540.0
 offset_bottom = 72.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_font_sizes/font_size = 24
 text = "NEXT"
 
-[node name="NextPreview" type="Control" parent="UI"]
+[node name="NextPreview" type="Control" parent="UI" unique_id=900906729]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 1360.0
 offset_top = 80.0
 offset_right = 1512.0
 offset_bottom = 176.0
 script = ExtResource("6_next")
 
-[node name="ScoreTitle" type="Label" parent="UI"]
+[node name="ScoreTitle" type="Label" parent="UI" unique_id=473018131]
 offset_left = 1360.0
 offset_top = 200.0
 offset_right = 1540.0
 offset_bottom = 228.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_font_sizes/font_size = 24
 text = "SCORE"
 
-[node name="ScoreLabel" type="Label" parent="UI"]
+[node name="ScoreLabel" type="Label" parent="UI" unique_id=1024893591]
 offset_left = 1360.0
 offset_top = 228.0
 offset_right = 1590.0
@@ -59,16 +61,16 @@ offset_bottom = 276.0
 theme_override_font_sizes/font_size = 40
 text = "0"
 
-[node name="LevelTitle" type="Label" parent="UI"]
+[node name="LevelTitle" type="Label" parent="UI" unique_id=864869380]
 offset_left = 1360.0
 offset_top = 310.0
 offset_right = 1540.0
 offset_bottom = 338.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_font_sizes/font_size = 24
 text = "LEVEL"
 
-[node name="LevelLabel" type="Label" parent="UI"]
+[node name="LevelLabel" type="Label" parent="UI" unique_id=1709979338]
 offset_left = 1360.0
 offset_top = 338.0
 offset_right = 1590.0
@@ -76,16 +78,16 @@ offset_bottom = 386.0
 theme_override_font_sizes/font_size = 40
 text = "1"
 
-[node name="LinesTitle" type="Label" parent="UI"]
+[node name="LinesTitle" type="Label" parent="UI" unique_id=149236199]
 offset_left = 1360.0
 offset_top = 420.0
 offset_right = 1540.0
 offset_bottom = 448.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_font_sizes/font_size = 24
 text = "LINES"
 
-[node name="LinesLabel" type="Label" parent="UI"]
+[node name="LinesLabel" type="Label" parent="UI" unique_id=1143543474]
 offset_left = 1360.0
 offset_top = 448.0
 offset_right = 1590.0
@@ -93,61 +95,61 @@ offset_bottom = 496.0
 theme_override_font_sizes/font_size = 40
 text = "0"
 
-[node name="HeightTitle" type="Label" parent="UI"]
+[node name="HeightTitle" type="Label" parent="UI" unique_id=1796874328]
 visible = false
 offset_left = 1360.0
 offset_top = 200.0
 offset_right = 1600.0
 offset_bottom = 228.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
+theme_override_font_sizes/font_size = 24
 text = "HEIGHT"
 
-[node name="HeightLabel" type="Label" parent="UI"]
+[node name="HeightLabel" type="Label" parent="UI" unique_id=1914869849]
 visible = false
 offset_left = 1360.0
 offset_top = 228.0
 offset_right = 1720.0
 offset_bottom = 348.0
-theme_override_font_sizes/font_size = 96
 theme_override_colors/font_color = Color(0.956863, 0.890196, 0.784314, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/outline_size = 10
+theme_override_font_sizes/font_size = 96
 text = "0층"
 
-[node name="BestTitle" type="Label" parent="UI"]
+[node name="BestTitle" type="Label" parent="UI" unique_id=1008219458]
 visible = false
 offset_left = 1360.0
 offset_top = 372.0
 offset_right = 1600.0
 offset_bottom = 400.0
-theme_override_font_sizes/font_size = 24
 theme_override_colors/font_color = Color(1, 0.92, 0.65, 0.7)
+theme_override_font_sizes/font_size = 24
 text = "BEST"
 
-[node name="BestLabel" type="Label" parent="UI"]
+[node name="BestLabel" type="Label" parent="UI" unique_id=349222897]
 visible = false
 offset_left = 1360.0
 offset_top = 400.0
 offset_right = 1720.0
 offset_bottom = 452.0
-theme_override_font_sizes/font_size = 44
 theme_override_colors/font_color = Color(1, 0.92, 0.65, 1)
+theme_override_font_sizes/font_size = 44
 text = "0층"
 
-[node name="RecordLabel" type="Label" parent="UI"]
+[node name="RecordLabel" type="Label" parent="UI" unique_id=975859800]
 visible = false
 offset_left = 1360.0
 offset_top = 460.0
 offset_right = 1720.0
 offset_bottom = 496.0
-theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1, 0.85, 0.35, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.8)
 theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 28
 text = "★ NEW RECORD!"
 
-[node name="FlashRect" type="ColorRect" parent="UI"]
+[node name="FlashRect" type="ColorRect" parent="UI" unique_id=1876587177]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
@@ -157,63 +159,79 @@ grow_vertical = 2
 mouse_filter = 2
 color = Color(1, 0.952941, 0.815686, 0)
 
-[node name="MilestoneLabel" type="Label" parent="UI"]
+[node name="MilestoneLabel" type="Label" parent="UI" unique_id=2083863751]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 100
 theme_override_colors/font_color = Color(1, 0.952941, 0.815686, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.08, 0.04, 1)
 theme_override_constants/outline_size = 16
+theme_override_font_sizes/font_size = 100
+text = "10층 돌파!"
 horizontal_alignment = 1
 vertical_alignment = 1
-text = "10층 돌파!"
 
-[node name="GoalLabel" type="Label" parent="UI"]
+[node name="GoalLabel" type="Label" parent="UI" unique_id=2041332583]
 offset_left = 1360.0
 offset_top = 560.0
 offset_right = 1880.0
 offset_bottom = 700.0
-theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
+theme_override_font_sizes/font_size = 20
 text = "블록을 밟고 올라가
 좌우 벽 꼭대기의 출구로 탈출!
 낙하 블록에 깔리면 사망 (부딪히는 건 OK)
 대시로 옆 블록, 점프로 머리 위 블록 파괴!"
 
-[node name="HelpLabel" type="Label" parent="UI"]
+[node name="HelpLabel" type="Label" parent="UI" unique_id=400001218]
 offset_left = 160.0
 offset_top = 1030.0
 offset_right = 1760.0
 offset_bottom = 1060.0
-theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.45)
-horizontal_alignment = 1
+theme_override_font_sizes/font_size = 18
 text = "< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
+horizontal_alignment = 1
 
-[node name="EscapeLabel" type="Label" parent="UI"]
+[node name="EscapeLabel" type="Label" parent="UI" unique_id=2045193657]
 visible = false
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 72
 theme_override_colors/font_color = Color(0.4, 1, 0.6, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 72
+text = "ESCAPE!"
 horizontal_alignment = 1
 vertical_alignment = 1
-text = "ESCAPE!"
 
-[node name="TouchControls" type="CanvasLayer" parent="."]
+[node name="PauseLabel" type="Label" parent="UI" unique_id=586598190]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 64
+text = "PAUSED"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="TouchControls" type="CanvasLayer" parent="." unique_id=2082053148]
 layer = 2
 script = ExtResource("4_touch")
 
-[node name="MenuButton" type="Control" parent="TouchControls"]
+[node name="MenuButton" type="Control" parent="TouchControls" unique_id=744649986]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 40.0
 offset_top = 40.0
 offset_right = 220.0
@@ -223,7 +241,9 @@ action = "to_title"
 label = "타이틀"
 font_size = 28
 
-[node name="LeftButton" type="Control" parent="TouchControls"]
+[node name="LeftButton" type="Control" parent="TouchControls" unique_id=275474246]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 40.0
 offset_top = 830.0
 offset_right = 230.0
@@ -232,7 +252,9 @@ script = ExtResource("5_tbtn")
 action = "move_left"
 label = "◀"
 
-[node name="RightButton" type="Control" parent="TouchControls"]
+[node name="RightButton" type="Control" parent="TouchControls" unique_id=374370632]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 260.0
 offset_top = 830.0
 offset_right = 450.0
@@ -241,7 +263,9 @@ script = ExtResource("5_tbtn")
 action = "move_right"
 label = "▶"
 
-[node name="RotCCWButton" type="Control" parent="TouchControls"]
+[node name="RotCCWButton" type="Control" parent="TouchControls" unique_id=267972645]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 1470.0
 offset_top = 600.0
 offset_right = 1650.0
@@ -251,7 +275,9 @@ action = "rotate_ccw"
 label = "◀ 회전"
 font_size = 36
 
-[node name="RotCWButton" type="Control" parent="TouchControls"]
+[node name="RotCWButton" type="Control" parent="TouchControls" unique_id=1827866527]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 1680.0
 offset_top = 600.0
 offset_right = 1860.0
@@ -261,7 +287,9 @@ action = "rotate_cw"
 label = "회전 ▶"
 font_size = 36
 
-[node name="DropButton" type="Control" parent="TouchControls"]
+[node name="DropButton" type="Control" parent="TouchControls" unique_id=56780192]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 1470.0
 offset_top = 830.0
 offset_right = 1650.0
@@ -270,7 +298,9 @@ script = ExtResource("5_tbtn")
 action = "soft_drop"
 label = "▼"
 
-[node name="JumpButton" type="Control" parent="TouchControls"]
+[node name="JumpButton" type="Control" parent="TouchControls" unique_id=1210188008]
+layout_mode = 3
+anchors_preset = 0
 offset_left = 1680.0
 offset_top = 830.0
 offset_right = 1860.0
@@ -280,27 +310,18 @@ action = "jump"
 label = "점프"
 font_size = 44
 
-[node name="PauseLabel" type="Label" parent="UI"]
-visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_font_sizes/font_size = 64
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 12
-horizontal_alignment = 1
-vertical_alignment = 1
-text = "PAUSED"
-
-[node name="PopupLayer" type="CanvasLayer" parent="."]
+[node name="PopupLayer" type="CanvasLayer" parent="." unique_id=841536777]
 layer = 3
 
-[node name="DeathPopup" type="Control" parent="PopupLayer"]
+[node name="DeathPopup" type="Control" parent="PopupLayer" unique_id=404295301]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 39.0
+offset_top = 41.0
+offset_right = 39.0
+offset_bottom = 41.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("7_death")

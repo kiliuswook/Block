@@ -26,6 +26,7 @@ const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
 const JUMP_VEL := -840.0
+const FEVER_JUMP_FACTOR := sqrt(2.0)  # jump height scales with v² — this doubles it
 const COYOTE := 0.1
 const JUMP_BUFFER := 0.12
 const STEP := 4.0
@@ -52,11 +53,31 @@ var act_jump := "jump"
 var act_drop := "soft_drop"
 var act_dash := "dash"
 var skin_override := ""
+# Per-cat stat multipliers, refreshed from GameState on respawn.
+var stat_speed := 1.0
+var stat_jump := 1.0
+var stat_dash := 1.0
+var stat_weight := 1.0
 
 @onready var board: EscapeBoard = get_parent()
 
 
+func _ready() -> void:
+	_refresh_stats()
+
+
+## Reads the selected (or override) cat's stat multipliers.
+func _refresh_stats() -> void:
+	var skin_id := skin_override if skin_override != "" else GameState.selected_cat
+	var stats: Dictionary = GameState.cat_stats(skin_id)
+	stat_speed = stats.get("speed", 1.0)
+	stat_jump = stats.get("jump", 1.0)
+	stat_dash = stats.get("dash", 1.0)
+	stat_weight = stats.get("weight", 1.0)
+
+
 func respawn(pos: Vector2) -> void:
+	_refresh_stats()
 	position = pos
 	velocity = Vector2.ZERO
 	alive = true
@@ -99,7 +120,7 @@ func _handle_input(delta: float) -> void:
 			if now - last_tap[dir] <= DOUBLE_TAP and dash_cooldown <= 0.0:
 				dash_timer = DASH_TIME
 				dash_dir = dir
-				dash_cooldown = DASH_COOLDOWN
+				dash_cooldown = DASH_COOLDOWN / stat_dash
 			last_tap[dir] = now
 	var axis := Input.get_axis(act_left, act_right)
 	if axis != 0.0:
@@ -108,28 +129,29 @@ func _handle_input(delta: float) -> void:
 	if Input.is_action_just_pressed(act_dash) and dash_cooldown <= 0.0:
 		dash_timer = DASH_TIME
 		dash_dir = int(signf(axis)) if axis != 0.0 else facing
-		dash_cooldown = DASH_COOLDOWN
+		dash_cooldown = DASH_COOLDOWN / stat_dash
 	if knockback_timer > 0.0:
 		knockback_timer -= delta
 		velocity.x = knockback_vx
 	elif dash_timer > 0.0:
 		dash_timer -= delta
-		velocity.x = dash_dir * DASH_SPEED
+		velocity.x = dash_dir * DASH_SPEED * stat_dash
 	else:
-		velocity.x = axis * RUN_SPEED
+		velocity.x = axis * RUN_SPEED * stat_speed
 	if Input.is_action_just_pressed(act_jump):
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
 	coyote_timer = COYOTE if on_floor else maxf(coyote_timer - delta, 0.0)
 	wall_dir = _wall_contact()
+	var jump_vel := JUMP_VEL * stat_jump * (FEVER_JUMP_FACTOR if board.fever_active else 1.0)
 	if jump_buffer > 0.0 and coyote_timer > 0.0:
-		velocity.y = JUMP_VEL
+		velocity.y = jump_vel
 		jump_buffer = 0.0
 		coyote_timer = 0.0
 	elif jump_buffer > 0.0 and not on_floor and wall_dir != 0 and wall_jumps_left > 0:
 		# Wall jump: leap up and away from the wall, once per airtime.
-		velocity.y = JUMP_VEL
+		velocity.y = jump_vel
 		knockback_timer = WALL_JUMP_TIME
 		knockback_vx = -wall_dir * WALL_JUMP_PUSH
 		wall_jumps_left -= 1
@@ -138,7 +160,7 @@ func _handle_input(delta: float) -> void:
 	var g := GRAVITY
 	var fast_fall := Input.is_action_pressed(act_drop)
 	if velocity.y > 0.0 and fast_fall:
-		g *= FAST_FALL_FACTOR
+		g *= FAST_FALL_FACTOR * stat_weight
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
@@ -158,11 +180,11 @@ func _apply_motion(delta: float) -> void:
 			board.shove_piece(int(dirx))
 			dash_timer = 0.0
 			knockback_timer = KNOCKBACK_TIME
-			knockback_vx = -dirx * KNOCKBACK_SPEED
+			knockback_vx = -dirx * KNOCKBACK_SPEED / stat_weight
 		elif board.break_cell_in_rect(probe):
 			dash_timer = 0.0
 			knockback_timer = KNOCKBACK_TIME
-			knockback_vx = -dirx * KNOCKBACK_SPEED
+			knockback_vx = -dirx * KNOCKBACK_SPEED / stat_weight
 	var hit_v := _move_axis(Vector2(0.0, velocity.y * delta))
 	if hit_v:
 		if velocity.y > 0.0:
@@ -179,6 +201,18 @@ func _apply_motion(delta: float) -> void:
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
 		on_floor = velocity.y >= 0.0 and board.rect_blocked_for_player(feet)
+		# Fever: the falling piece is a one-way platform — pass through from
+		# below, land on top.
+		if not on_floor and board.fever_active and velocity.y >= 0.0:
+			var top := board.fever_platform_top(rect(), maxf(velocity.y * delta, 4.0) + 8.0)
+			if top < INF:
+				var snapped := Rect2(position.x - SIZE / 2.0, top - SIZE, SIZE, SIZE)
+				if not board.rect_blocked_for_player(snapped):
+					position.y = top - SIZE / 2.0
+					if velocity.y > 300.0:
+						squash_timer = SQUASH_TIME
+					velocity.y = 0.0
+					on_floor = true
 		if on_floor:
 			wall_jumps_left = 1
 
@@ -222,6 +256,11 @@ func _draw() -> void:
 	var skin_id := skin_override if skin_override != "" else GameState.selected_cat
 	var skin: Dictionary = GameState.cat_skin(skin_id)
 	var trail: Color = skin.get("body", BODY_COLOR)
+	if board and board.fever_active and alive:
+		# Fever aura: pulsing golden glow around the invincible cat.
+		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
+		draw_rect(body.grow(10.0 + 4.0 * pulse), Color(1.0, 0.85, 0.35, 0.16 + 0.1 * pulse))
+		draw_rect(body.grow(4.0), Color(1.0, 0.93, 0.6, 0.22))
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color(trail, 0.22))
 		for i in range(1, 4):

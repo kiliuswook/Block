@@ -39,6 +39,11 @@ const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
 const LAVA_REVIVE_GAP := CELL * 5.0  # revive pushes the lava this far below the feet
 const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
+const FEVER_TIME := 10.0
+const FEVER_PER_LINE := 0.25  # gauge charge per cleared line (full at 4 lines)
+const FEVER_PER_PIECE := 0.03  # small trickle charge for every locked piece
+const FEVER_FALL_INTERVAL := 0.05  # fever: near-instant fall steps
+const FEVER_LOCK_GRACE := 0.2  # fever: quick lock so the next piece follows
 const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
 const P2_DAS_REPEAT := 0.06
 const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
@@ -67,6 +72,11 @@ var lava_y := 0.0
 var lava_phase := 0.0
 var p2_das_timer := 0.0
 var versus_pieces := 0
+# Fever (endless only): line clears charge the gauge; at full charge the cat
+# goes invincible with double jumps while pieces rain down at full speed.
+var fever_gauge := 0.0
+var fever_active := false
+var fever_timer := 0.0
 # Split screen: one board per player — global EventBus signals are muted and
 # the piece is driven by this board's own action set instead of the defaults.
 var split := false
@@ -92,6 +102,9 @@ func start_game() -> void:
 	p2_das_timer = 0.0
 	lava_y = ROWS * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
+	fever_gauge = 0.0
+	fever_active = false
+	fever_timer = 0.0
 	is_paused = false
 	GameState.reset()
 	if cam:
@@ -112,6 +125,13 @@ func start_game() -> void:
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
+	if fever_active:
+		fever_timer -= delta
+		if fever_timer <= 0.0:
+			fever_active = false
+			# Blocks turn solid again — pop the cat out if it was inside one.
+			if not _shove_player_out_of_grid():
+				_erase_cells_around(Vector2i((player.position / CELL).floor()), 1)
 	if mode == Mode.VERSUS:
 		_p2_input(delta)
 	else:
@@ -164,13 +184,7 @@ func _update_endless(delta: float) -> void:
 
 
 func rect_hits_solid(r: Rect2) -> bool:
-	if r.position.x < 0.0 or r.end.x > COLS * CELL:
-		# Escape/versus: the side walls open at the top rows — one exit each.
-		if not (mode != Mode.ENDLESS and _rect_in_side_door(r)):
-			return true
-	if r.end.y > ROWS * CELL:
-		return true
-	if mode != Mode.ENDLESS and r.position.y < 0.0:
+	if _rect_hits_bounds(r):
 		return true
 	var x0 := int(floor(r.position.x / CELL))
 	var x1 := int(floor((r.end.x - 0.01) / CELL))
@@ -183,13 +197,30 @@ func rect_hits_solid(r: Rect2) -> bool:
 	return false
 
 
+## Walls, floor and (outside endless) ceiling — the pit boundary alone.
+func _rect_hits_bounds(r: Rect2) -> bool:
+	if r.position.x < 0.0 or r.end.x > COLS * CELL:
+		# Escape/versus: the side walls open at the top rows — one exit each.
+		if not (mode != Mode.ENDLESS and _rect_in_side_door(r)):
+			return true
+	if r.end.y > ROWS * CELL:
+		return true
+	if mode != Mode.ENDLESS and r.position.y < 0.0:
+		return true
+	return false
+
+
 func _rect_in_side_door(r: Rect2) -> bool:
 	return r.position.y >= DOOR_ROW_TOP * CELL and r.end.y <= (DOOR_ROW_BOTTOM + 1) * CELL
 
 
 ## What the player collides with: locked grid, walls, and the falling piece.
 ## The falling piece is a solid body — the player can never pass through it.
+## Fever changes the rules: only the pit boundary stays solid — locked blocks
+## and the falling piece become one-way platforms (see [fever_platform_top]).
 func rect_blocked_for_player(r: Rect2) -> bool:
+	if fever_active:
+		return _rect_hits_bounds(r)
 	return rect_hits_solid(r) or piece_hits_rect(r)
 
 
@@ -229,11 +260,15 @@ func _start_fall() -> void:
 	# Classic Tetris block out: the stack reaches the spawn area and the
 	# piece has nowhere to start falling. In versus that's on P2 — cat wins.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if mode == Mode.VERSUS:
+		if fever_active:
+			for c in _cells(piece_type, piece_rot, piece_pos):
+				_erase_cell(c)
+		elif mode == Mode.VERSUS:
 			_versus_over(1)
+			return
 		else:
 			_kill_player()
-		return
+			return
 	_resolve_piece_overlap()
 
 
@@ -277,7 +312,7 @@ func _landed(delta: float) -> void:
 		_lock_piece()
 		return
 	land_timer += delta
-	if land_timer >= LOCK_GRACE:
+	if land_timer >= (FEVER_LOCK_GRACE if fever_active else LOCK_GRACE):
 		_lock_piece()
 
 
@@ -352,6 +387,8 @@ func _hard_drop() -> void:
 ## The falling piece overlaps the player: drive them straight down with it,
 ## sideways only as a last resort. Death only when truly pinned — crushed.
 func _resolve_piece_overlap() -> bool:
+	if fever_active:
+		return false  # invincible: the piece passes straight through the cat
 	var pr := player.rect().grow(-CRUSH_MARGIN)
 	var cell_rects: Array = []
 	var overlapping: Array = []
@@ -416,18 +453,18 @@ func _lock_piece() -> void:
 		else:
 			_kill_player()
 		return
-	if not _shove_player_out_of_grid():
-		_kill_player()
+	if not _free_player_from_grid():
 		return
 	GameState.score += 10 * level
+	_add_fever(FEVER_PER_PIECE)
 	var cleared := _clear_lines()
 	if cleared > 0:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
+		_add_fever(cleared * FEVER_PER_LINE)
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
-		if not _shove_player_out_of_grid():
-			_kill_player()
+		if not _free_player_from_grid():
 			return
 	_spawn_piece()
 
@@ -463,6 +500,18 @@ func _clear_lines() -> int:
 	grid = new_grid
 	cracked = new_cracked
 	return full_rows.size()
+
+
+## Buried by a lock/line shift with nowhere to nudge to: normally death, but
+## a fever cat is invincible — blocks are one-way, so being inside them is
+## fine and it can simply jump out.
+func _free_player_from_grid() -> bool:
+	if fever_active:
+		return true
+	if _shove_player_out_of_grid():
+		return true
+	_kill_player()
+	return false
 
 
 ## The player ended up inside locked cells (piece lock or line shift):
@@ -519,7 +568,10 @@ func _spawn_piece() -> void:
 		EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
-	if mode == Mode.VERSUS:
+	if fever_active:
+		# Fever pieces don't chase the cat: random column, instant drop.
+		piece_pos = Vector2i(randi_range(0, COLS - 4), spawn_row)
+	elif mode == Mode.VERSUS:
 		# Neutral center spawn: P2 steers it from there.
 		piece_pos = Vector2i(COLS / 2 - 2, spawn_row)
 		versus_pieces += 1
@@ -530,10 +582,15 @@ func _spawn_piece() -> void:
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if mode == Mode.VERSUS:
+		if fever_active:
+			for c in _cells(piece_type, piece_rot, piece_pos):
+				_erase_cell(c)
+		elif mode == Mode.VERSUS:
 			_versus_over(1)
 		else:
 			_kill_player()
+	if fever_active and playing:
+		_start_fall()
 
 
 func _draw_from_bag() -> String:
@@ -690,11 +747,70 @@ func _track_time() -> float:
 
 
 func _fall_interval() -> float:
+	if fever_active:
+		return FEVER_FALL_INTERVAL
 	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
 func _lava_speed() -> float:
 	return minf(LAVA_SPEED_BASE + (_difficulty() - 1) * LAVA_SPEED_STEP, LAVA_SPEED_MAX)
+
+
+# --- Fever time (endless) -----------------------------------------------------
+
+
+## Test hotkey: F fills the gauge instantly and kicks off fever (endless only).
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode == KEY_F and playing and not is_paused:
+		_add_fever(1.0)
+
+
+func _add_fever(amount: float) -> void:
+	if mode != Mode.ENDLESS or fever_active:
+		return
+	fever_gauge = clampf(fever_gauge + amount, 0.0, 1.0)
+	if fever_gauge >= 1.0:
+		_start_fever()
+
+
+func _start_fever() -> void:
+	fever_active = true
+	fever_timer = FEVER_TIME
+	fever_gauge = 0.0
+	# The hovering piece joins the downpour right away, from a random column.
+	if piece_state == PieceState.TRACKING and piece_type != "":
+		piece_pos.x = randi_range(0, COLS - 4)
+		_start_fall()
+
+
+## One-way platforms during fever: blocks are intangible from below, but
+## their exposed tops can still be stood on — both the falling piece and the
+## locked grid. Highest top the player's feet can rest on (within
+## [feet - 10, feet + tol]), or INF when none.
+func fever_platform_top(r: Rect2, tol: float) -> float:
+	var best := INF
+	if piece_state != PieceState.TRACKING and piece_type != "":
+		for c in _cells(piece_type, piece_rot, piece_pos):
+			best = minf(best, _platform_top_of(_cell_rect(c), r, tol))
+	# Locked grid: only exposed surfaces count (no landing inside the stack).
+	var x0 := int(floor((r.position.x + 6.0) / CELL))
+	var x1 := int(floor((r.end.x - 6.0) / CELL))
+	var y0 := int(ceil((r.end.y - 10.0) / CELL))
+	var y1 := int(floor((r.end.y + tol) / CELL))
+	for y in range(y0, y1 + 1):
+		for x in range(x0, x1 + 1):
+			if grid.has(Vector2i(x, y)) and not grid.has(Vector2i(x, y - 1)):
+				best = minf(best, _platform_top_of(_cell_rect(Vector2i(x, y)), r, tol))
+	return best
+
+
+func _platform_top_of(rect: Rect2, r: Rect2, tol: float) -> float:
+	if rect.position.x < r.end.x - 6.0 and rect.end.x > r.position.x + 6.0:
+		var top: float = rect.position.y
+		if top >= r.end.y - 10.0 and top <= r.end.y + tol:
+			return top
+	return INF
 
 
 func _spawn_point() -> Vector2:
@@ -750,6 +866,7 @@ func _draw() -> void:
 		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), border, 2.0)
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
 		_draw_lava(w)
+		_draw_fever(w)
 
 
 ## Pit backdrop: daylight seeps in from above, darkness pools below. In
@@ -855,8 +972,33 @@ func _draw_crack(c: Vector2i) -> void:
 	]), col, 2.0)
 
 
+## Fever gauge/timer bar, anchored to the camera so it stays on screen in
+## both single and split-viewport play.
+func _draw_fever(w: float) -> void:
+	var cam_y := cam.position.y if cam else ROWS * CELL / 2.0
+	var bar := Rect2(CELL * 0.5, cam_y + 470.0, w - CELL, 16.0)
+	draw_rect(bar, Color(0, 0, 0, 0.45))
+	if fever_active:
+		var t := fever_timer / FEVER_TIME
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * t, bar.size.y)), Color("ffd27a"))
+		if fmod(lava_phase, 0.3) < 0.2:
+			draw_string(ThemeDB.fallback_font, Vector2(w / 2.0 - 130.0, cam_y - 380.0),
+					"FEVER!!", HORIZONTAL_ALIGNMENT_LEFT, -1, 64, Color(1.0, 0.85, 0.35))
+	elif fever_gauge > 0.0:
+		var fill := Color("e8935a")
+		if fever_gauge >= 0.75:
+			fill = fill.lerp(Color("ffd27a"), 0.5 + 0.5 * sin(lava_phase * 8.0))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * fever_gauge, bar.size.y)), fill)
+	draw_rect(bar, Color(1, 1, 1, 0.35), false, 2.0)
+	draw_string(ThemeDB.fallback_font, Vector2(bar.position.x, bar.position.y - 8.0),
+			"FEVER", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.95, 0.82, 0.75))
+
+
 func _draw_cell(c: Vector2i, color: Color) -> void:
-	var p := Vector2(c) * CELL
+	_draw_block(Vector2(c) * CELL, color)
+
+
+func _draw_block(p: Vector2, color: Color) -> void:
 	var a := color.a
 	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), color)
 	# Light always comes from above: bright top face, shaded bottom.

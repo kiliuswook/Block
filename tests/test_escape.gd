@@ -139,6 +139,9 @@ func _ready() -> void:
 	_check(board.piece_state == board.PieceState.TRACKING, "next piece starts tracking")
 
 	# A falling piece landing on a grounded player kills them
+	board.piece_type = "O"  # fixed shape: the random next piece may shove instead
+	board.piece_rot = 0
+	board.piece_state = board.PieceState.FALLING
 	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)
 	player.position = board._spawn_point()
 	board._resolve_piece_overlap()
@@ -227,6 +230,69 @@ func _ready() -> void:
 	_check(p2.alive, "lava-killed player revives")
 	_check(b2.lava_y >= p2.position.y + Player.SIZE / 2.0 + c,
 			"revive pushes the lava back down")
+
+	# --- Fever time (endless only) ---
+	board.mode = board.Mode.ESCAPE
+	board._add_fever(1.0)
+	_check(not board.fever_active and board.fever_gauge == 0.0,
+			"escape mode never charges fever")
+	b2.playing = true
+	b2.fever_gauge = 0.0  # earlier lock tests already trickled some charge in
+	b2._add_fever(0.5)
+	_check(b2.fever_gauge == 0.5 and not b2.fever_active, "line clears charge the gauge")
+	b2._add_fever(0.5)
+	_check(b2.fever_active, "full gauge triggers fever")
+	_check(b2.fever_gauge == 0.0, "fever spends the gauge")
+	b2._add_fever(1.0)
+	_check(b2.fever_gauge == 0.0, "no recharging during fever")
+	# Normal piece flow keeps running during fever — no tracking, instant drop
+	_check(b2.piece_state == b2.PieceState.FALLING, "fever drops the piece immediately")
+	_check(b2._fall_interval() == EscapeBoard.FEVER_FALL_INTERVAL, "fever pieces fall fast")
+	b2._spawn_piece()
+	_check(b2.piece_state == b2.PieceState.FALLING, "fever spawns skip tracking entirely")
+	# The falling piece is intangible to the cat (pass through)...
+	b2.grid.clear()
+	b2.piece_type = "O"
+	b2.piece_rot = 0
+	b2.piece_state = b2.PieceState.FALLING
+	b2.piece_pos = Vector2i(3, 7)  # O cells at x 4..5, y 7..8
+	var inside := Rect2(4 * c + 10, 7 * c + 10, 10, 10)
+	_check(b2.piece_hits_rect(inside), "piece cell occupies the probe")
+	_check(not b2.rect_blocked_for_player(inside), "fever: cat passes through the piece")
+	# ...but its top is a one-way platform the cat can stand on
+	var feet_r := Rect2(4 * c - 25.0, 7 * c - 50.0, 50.0, 50.0)
+	_check(b2.fever_platform_top(feet_r, 12.0) == 7.0 * c, "piece top supports the cat")
+	var below_r := Rect2(4 * c - 25.0, 9 * c + 10.0, 50.0, 50.0)
+	_check(b2.fever_platform_top(below_r, 12.0) == INF, "no support from below")
+	# Overlap never crushes an invincible cat
+	p2.alive = true
+	p2.position = Vector2(4 * c + c / 2.0, 8 * c)
+	_check(not b2._resolve_piece_overlap(), "fever: overlap resolves as pass-through")
+	_check(p2.alive, "fever: falling piece cannot crush the cat")
+	# Locked blocks are one-way during fever: pass through, land on exposed tops
+	b2.piece_state = b2.PieceState.TRACKING  # park the piece for grid-only checks
+	for x in range(2, 8):
+		for y in range(5, 12):
+			b2.grid[Vector2i(x, y)] = "T"
+	p2.position = Vector2(4 * c + c / 2.0, 8 * c)
+	_check(b2._free_player_from_grid(), "fever: burial does not kill")
+	_check(p2.alive and b2.playing, "fever: cat survives inside the stack")
+	_check(not b2.rect_blocked_for_player(p2.rect()), "fever: locked blocks are pass-through")
+	var stack_feet := Rect2(4 * c + 7.0, 5 * c - 50.0, 50.0, 50.0)
+	_check(b2.fever_platform_top(stack_feet, 12.0) == 5.0 * c, "fever: stack surface is standable")
+	var inner_feet := Rect2(4 * c + 7.0, 8 * c - 50.0, 50.0, 50.0)
+	_check(b2.fever_platform_top(inner_feet, 12.0) == INF, "fever: no landing inside the stack")
+	b2.grid.clear()
+	# Fever runs out after its duration
+	b2.fever_timer = 0.01
+	b2._process(0.05)
+	_check(not b2.fever_active, "fever expires after its duration")
+	b2.piece_state = b2.PieceState.TRACKING
+	b2._lock_piece()
+	_check(is_equal_approx(b2.fever_gauge, EscapeBoard.FEVER_PER_PIECE),
+			"locking a piece trickle-charges the gauge")
+	b2.grid.clear()
+	b2.fever_gauge = 0.0
 
 	# Crushed under blocks: the revive blast clears the cells around the cat
 	for x in range(3, 8):

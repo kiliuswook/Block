@@ -97,16 +97,6 @@ theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
 text = "P1 고양이는 탈출, P2 블록은 뭉개기 — 한 키보드 대결!"
 
-[node name="CharTitle" type="Label" parent="UI"]
-offset_left = 460.0
-offset_top = 726.0
-offset_right = 1460.0
-offset_bottom = 760.0
-theme_override_font_sizes/font_size = 24
-theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 0.85)
-horizontal_alignment = 1
-text = "캐릭터 선택"
-
 [node name="HintLabel" type="Label" parent="UI"]
 offset_left = 460.0
 offset_top = 1000.0
