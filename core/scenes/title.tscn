@@ -33,7 +33,7 @@ offset_top = 380.0
 offset_right = 1210.0
 offset_bottom = 452.0
 theme_override_font_sizes/font_size = 34
-text = "1.  탈출 모드"
+text = "1.  스토리 모드"
 
 [node name="EscapeDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -43,7 +43,7 @@ offset_bottom = 484.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "블록을 밟고 올라가 좌우 벽 위의 탈출구로!"
+text = "스테이지를 깨며 배우는 고양이의 탈출 이야기 — 튜토리얼부터 차근차근!"
 
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0

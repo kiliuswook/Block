@@ -1,15 +1,19 @@
 class_name EscapeBoard
 extends Node2D
-## Escape mode: a tetromino tracks the player's column at the top of the
+## Story mode pit: a tetromino tracks the player's column at the top of the
 ## field, free-falls after a countdown, and locks into the grid. The player
 ## climbs the stack and escapes through the door at the top. Getting caught
 ## under a falling piece is death. Reuses SHAPES/KICKS/COLORS from Board.
+## In story mode (single player) the run walks through StoryStages: each
+## stage has a tutorial goal (escape / lines / shoves / survive) and the exit
+## doors stay locked until the goal is met. Split screen reuses this board as
+## a plain escape race with no stage logic.
 
 ## Split screen: this board's round result (true = this player escaped/won).
 signal finished(win: bool)
 
 enum PieceState { TRACKING, FALLING, LANDED }
-enum Mode { ESCAPE, ENDLESS, VERSUS }
+enum Mode { STORY, ENDLESS, VERSUS }
 
 const COLS := 10
 const ROWS := 14
@@ -65,7 +69,7 @@ var total_lines := 0
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
-var mode := Mode.ESCAPE
+var mode := Mode.STORY
 var best_height := 0
 var drop_tap_time := -1e9
 var lava_y := 0.0
@@ -83,6 +87,14 @@ var split := false
 var act_rot_cw := "rotate_cw"
 var act_rot_ccw := "rotate_ccw"
 var act_drop := "soft_drop"
+# Story mode: the active stage config and its goal/door state.
+var stage := {}
+var door_left := true
+var door_right := true
+var door_row := DOOR_ROW_TOP  # top row of the 2-row exit (story stages move it)
+var goal_done := true  # true once the doors are open (escape goals start true)
+var goal_count := 0
+var survive_time := 0.0
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -106,20 +118,65 @@ func start_game() -> void:
 	fever_active = false
 	fever_timer = 0.0
 	is_paused = false
+	stage = {}
+	door_left = true
+	door_right = true
+	door_row = DOOR_ROW_TOP
+	goal_done = true
 	GameState.reset()
 	if cam:
 		cam.enabled = mode == Mode.ENDLESS
 		cam.position = Vector2(COLS * CELL / 2.0, ROWS * CELL / 2.0)
 		cam.reset_smoothing()
+	if _story():
+		# Resume from the next uncleared stage; a finished story replays from 1.
+		level = GameState.story_stage % StoryStages.TOTAL + 1
+		_apply_stage()
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	playing = true
 	if not split:
 		EventBus.game_started.emit()
 		EventBus.lines_changed.emit(0)
-		EventBus.level_changed.emit(1)
+		EventBus.level_changed.emit(level)
 		EventBus.height_changed.emit(0)
 	queue_redraw()
+
+
+## Story stage logic runs only in single-player story mode; the split-screen
+## escape race shares this board but keeps the plain always-open-doors rules.
+func _story() -> bool:
+	return mode == Mode.STORY and not split
+
+
+func _goal_type() -> String:
+	return str(stage.get("goal", {}).get("type", "escape"))
+
+
+## Loads the current stage (level) config: goal, doors, prefilled grid.
+func _apply_stage() -> void:
+	stage = StoryStages.get_stage(level)
+	goal_count = 0
+	survive_time = 0.0
+	goal_done = _goal_type() == "escape"
+	door_row = clampi(int(stage.get("door_row", 0)), 0, ROWS - 2)
+	_set_doors(goal_done)
+	grid.clear()
+	cracked.clear()
+	var pf: Dictionary = stage.get("prefill_cells", {})
+	for c: Vector2i in pf:
+		grid[c] = pf[c]
+	bag.clear()
+	next_type = ""
+	EventBus.story_stage_started.emit(level)
+	EventBus.story_progress_changed.emit(
+			StoryStages.progress_text(stage, 0, goal_done))
+
+
+func _set_doors(open: bool) -> void:
+	var side := str(stage.get("door", "both"))
+	door_left = open and side != "right"
+	door_right = open and side != "left"
 
 
 func _process(delta: float) -> void:
@@ -139,16 +196,26 @@ func _process(delta: float) -> void:
 			_try_rotate(1)
 		if Input.is_action_just_pressed(act_rot_ccw):
 			_try_rotate(-1)
-	match piece_state:
-		PieceState.TRACKING:
-			_track(delta)
-		PieceState.FALLING:
-			_fall(delta)
-		PieceState.LANDED:
-			_landed(delta)
+	if piece_type != "":  # no-piece tutorial stages skip the piece machine
+		match piece_state:
+			PieceState.TRACKING:
+				_track(delta)
+			PieceState.FALLING:
+				_fall(delta)
+			PieceState.LANDED:
+				_landed(delta)
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+	if _story() and playing and not goal_done and _goal_type() == "survive":
+		var prev := int(survive_time)
+		survive_time += delta
+		if int(survive_time) != prev:
+			goal_count = int(survive_time)
+			EventBus.story_progress_changed.emit(
+					StoryStages.progress_text(stage, goal_count, false))
+		if survive_time >= float(stage.goal.time):
+			_story_goal_done()
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
 	elif playing and (player.position.x < -CELL * 0.6
@@ -201,11 +268,15 @@ func rect_hits_solid(r: Rect2) -> bool:
 
 
 ## Walls, floor and (outside endless) ceiling — the pit boundary alone.
+## The side walls open at the top rows (one exit each), but only while that
+## door is unlocked — story goals keep them shut until the goal is met.
 func _rect_hits_bounds(r: Rect2) -> bool:
-	if r.position.x < 0.0 or r.end.x > COLS * CELL:
-		# Escape/versus: the side walls open at the top rows — one exit each.
-		if not (mode != Mode.ENDLESS and _rect_in_side_door(r)):
-			return true
+	if r.position.x < 0.0 \
+			and not (mode != Mode.ENDLESS and door_left and _rect_in_side_door(r)):
+		return true
+	if r.end.x > COLS * CELL \
+			and not (mode != Mode.ENDLESS and door_right and _rect_in_side_door(r)):
+		return true
 	if r.end.y > ROWS * CELL:
 		return true
 	if mode != Mode.ENDLESS and r.position.y < 0.0:
@@ -214,7 +285,7 @@ func _rect_hits_bounds(r: Rect2) -> bool:
 
 
 func _rect_in_side_door(r: Rect2) -> bool:
-	return r.position.y >= DOOR_ROW_TOP * CELL and r.end.y <= (DOOR_ROW_BOTTOM + 1) * CELL
+	return r.position.y >= door_row * CELL and r.end.y <= (door_row + 2) * CELL
 
 
 ## What the player collides with: locked grid, walls, and the falling piece.
@@ -333,7 +404,10 @@ func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 		moved = true
 		cells += 1
 		if _resolve_piece_overlap() or not playing:
+			_story_add_progress("shoves", 1)
 			return true
+	if moved:
+		_story_add_progress("shoves", 1)
 	return moved
 
 
@@ -468,11 +542,37 @@ func _lock_piece() -> void:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
 		_add_fever(cleared * FEVER_PER_LINE)
+		_story_add_progress("lines", cleared)
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
 		if not _free_player_from_grid():
 			return
 	_spawn_piece()
+
+
+# --- Story goals ----------------------------------------------------------------
+
+
+## Counts progress toward the stage goal (lines cleared / pieces shoved).
+func _story_add_progress(kind: String, amount: int) -> void:
+	if not _story() or goal_done or _goal_type() != kind:
+		return
+	goal_count += amount
+	if goal_count >= int(stage.goal.count):
+		_story_goal_done()
+	else:
+		EventBus.story_progress_changed.emit(
+				StoryStages.progress_text(stage, goal_count, false))
+
+
+## Goal met: unlock the stage's doors and tell the HUD.
+func _story_goal_done() -> void:
+	goal_done = true
+	_set_doors(true)
+	EventBus.story_doors_opened.emit()
+	EventBus.story_progress_changed.emit(
+			StoryStages.progress_text(stage, goal_count, true))
+	queue_redraw()
 
 
 func _clear_lines() -> int:
@@ -559,6 +659,7 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		grid.erase(best)
 		break_fx.append([best, 0.0])
 		GameState.score += BREAK_SCORE
+		_story_add_progress("breaks", 1)
 	else:
 		cracked[best] = true
 	queue_redraw()
@@ -566,6 +667,13 @@ func break_cell_in_rect(r: Rect2) -> bool:
 
 
 func _spawn_piece() -> void:
+	# Movement-tutorial stages: no tetromino at all.
+	if _story() and stage.get("no_pieces", false):
+		piece_type = ""
+		next_type = ""
+		if not split:
+			EventBus.next_piece_changed.emit("")
+		return
 	if next_type == "":
 		next_type = _draw_from_bag()
 	piece_type = next_type
@@ -601,7 +709,11 @@ func _spawn_piece() -> void:
 
 func _draw_from_bag() -> String:
 	if bag.is_empty():
-		bag = Board.PIECES.duplicate()
+		# Early story stages restrict the bag to a couple of simple pieces.
+		if _story() and stage.has("pieces"):
+			bag = (stage.pieces as Array).duplicate()
+		else:
+			bag = Board.PIECES.duplicate()
 		bag.shuffle()
 	return bag.pop_back()
 
@@ -654,6 +766,22 @@ func _escape() -> void:
 	if split:
 		playing = false
 		finished.emit(true)
+		return
+	if _story():
+		GameState.story_clear(level)
+		GameState.score += ESCAPE_SCORE * level
+		if level >= StoryStages.TOTAL:
+			# Final stage cleared — the story run ends here.
+			playing = false
+			EventBus.story_completed.emit()
+			queue_redraw()
+			return
+		level += 1
+		_apply_stage()
+		player.respawn(_spawn_point())
+		_spawn_piece()
+		EventBus.level_changed.emit(level)
+		EventBus.player_escaped.emit(level)
 		return
 	level += 1
 	GameState.score += ESCAPE_SCORE * (level - 1)
@@ -738,10 +866,10 @@ func _kill_player() -> void:
 	queue_redraw()
 
 
-## Difficulty driver: escape scales with level, endless with height climbed,
+## Difficulty driver: story scales with stage, endless with height climbed,
 ## versus with pieces spawned this round (rounds get tenser as they run long).
 func _difficulty() -> int:
-	if mode == Mode.ESCAPE:
+	if mode == Mode.STORY:
 		return level
 	if mode == Mode.VERSUS:
 		return 1 + versus_pieces / VERSUS_RAMP
@@ -749,12 +877,16 @@ func _difficulty() -> int:
 
 
 func _track_time() -> float:
+	if _story() and stage.has("track_time"):
+		return float(stage.track_time)
 	return maxf(TRACK_TIME_BASE - (_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
 
 
 func _fall_interval() -> float:
 	if fever_active:
 		return FEVER_FALL_INTERVAL
+	if _story() and stage.has("fall_interval"):
+		return float(stage.fall_interval)
 	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
@@ -820,7 +952,10 @@ func _platform_top_of(rect: Rect2, r: Rect2, tol: float) -> float:
 
 
 func _spawn_point() -> Vector2:
-	return Vector2(COLS * CELL / 2.0, ROWS * CELL - Player.SIZE / 2.0)
+	var col := COLS / 2.0
+	if _story():
+		col = float(stage.get("spawn_col", col))
+	return Vector2(col * CELL, ROWS * CELL - Player.SIZE / 2.0)
 
 
 func _cells(type: String, rot: int, pos: Vector2i) -> Array:
@@ -862,10 +997,13 @@ func _draw() -> void:
 	var border := Color(1, 1, 1, 0.35)
 	if mode != Mode.ENDLESS:
 		# Side walls open at the exit rows: draw them with a gap at the doors.
-		var door_bottom := (DOOR_ROW_BOTTOM + 1) * CELL
+		var door_top := door_row * CELL
+		var door_bottom := (door_row + 2) * CELL
 		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, 2.0)
-		draw_line(Vector2(-2, door_bottom), Vector2(-2, h + 2), border, 2.0)
-		draw_line(Vector2(w + 2, door_bottom), Vector2(w + 2, h + 2), border, 2.0)
+		for wx in [-2.0, w + 2.0]:
+			if door_top > 0.0:
+				draw_line(Vector2(wx, -2), Vector2(wx, door_top), border, 2.0)
+			draw_line(Vector2(wx, door_bottom), Vector2(wx, h + 2), border, 2.0)
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
 	else:
 		draw_line(Vector2(-2, top), Vector2(-2, h + 2), border, 2.0)
@@ -889,35 +1027,54 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
 	if mode != Mode.ENDLESS:
-		# Warm light shafts slanting in from the two side exits.
-		var y0 := DOOR_ROW_TOP * CELL
-		var y1 := (DOOR_ROW_BOTTOM + 1) * CELL
+		# Warm light shafts slanting in — only from doors that are open.
+		var y0 := door_row * CELL
+		var y1 := (door_row + 2) * CELL
+		var yt := minf(y1 + h * 0.45, h)
 		var warm := Color(1.0, 0.95, 0.82, 0.1)
 		var faded := Color(1.0, 0.95, 0.82, 0.0)
-		draw_polygon(PackedVector2Array([
-			Vector2(0, y0), Vector2(0, y1), Vector2(w * 0.55, h * 0.7),
-		]), PackedColorArray([warm, warm, faded]))
-		draw_polygon(PackedVector2Array([
-			Vector2(w, y0), Vector2(w, y1), Vector2(w * 0.45, h * 0.7),
-		]), PackedColorArray([warm, warm, faded]))
+		if door_left:
+			draw_polygon(PackedVector2Array([
+				Vector2(0, y0), Vector2(0, y1), Vector2(w * 0.55, yt),
+			]), PackedColorArray([warm, warm, faded]))
+		if door_right:
+			draw_polygon(PackedVector2Array([
+				Vector2(w, y0), Vector2(w, y1), Vector2(w * 0.45, yt),
+			]), PackedColorArray([warm, warm, faded]))
 
 
-## One exit tunnel in each side wall, at the top rows.
+## One exit tunnel in each side wall, at the top rows. Locked doors (story
+## goals not yet met) draw as a dark slab with a padlock instead of the glow.
 func _draw_doors() -> void:
 	var w := COLS * CELL
-	var door_h := (DOOR_ROW_BOTTOM - DOOR_ROW_TOP + 1) * CELL
-	var y := DOOR_ROW_TOP * CELL
+	var door_h := 2 * CELL
+	var y := door_row * CELL
 	var glow := Color(1.0, 0.95, 0.82, 0.18)
 	var frame := Color(1.0, 0.95, 0.82, 0.75)
 	var font := ThemeDB.fallback_font
-	for door in [Rect2(-CELL, y, CELL, door_h), Rect2(w, y, CELL, door_h)]:
-		draw_rect(door, glow)
-		draw_rect(door, frame, false, 2.0)
 	var mid_y := y + door_h / 2.0 + 9.0
-	draw_string(font, Vector2(CELL * 0.25, mid_y), "← ESC",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
-	draw_string(font, Vector2(w - CELL * 1.55, mid_y), "ESC →",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
+	for entry in [[Rect2(-CELL, y, CELL, door_h), door_left],
+			[Rect2(w, y, CELL, door_h), door_right]]:
+		var door: Rect2 = entry[0]
+		if entry[1]:
+			draw_rect(door, glow)
+			draw_rect(door, frame, false, 2.0)
+		else:
+			draw_rect(door, Color(0.09, 0.09, 0.13, 0.95))
+			draw_rect(door, Color(1, 1, 1, 0.22), false, 2.0)
+			_draw_lock(door.get_center())
+	if door_left:
+		draw_string(font, Vector2(CELL * 0.25, mid_y), "← ESC",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
+	if door_right:
+		draw_string(font, Vector2(w - CELL * 1.55, mid_y), "ESC →",
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
+
+
+func _draw_lock(at: Vector2) -> void:
+	var col := Color(1.0, 0.9, 0.6, 0.85)
+	draw_rect(Rect2(at + Vector2(-10.0, -3.0), Vector2(20.0, 16.0)), col)
+	draw_arc(at + Vector2(0.0, -4.0), 7.0, PI, TAU, 10, col, 3.5)
 
 
 ## Rising lava: hot glowing surface with a slow wave, cooling to dark below.

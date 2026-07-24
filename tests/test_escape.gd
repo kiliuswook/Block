@@ -6,6 +6,12 @@ var failures := 0
 
 
 func _ready() -> void:
+	# Park the story on its final stage: escape goal, top doors, full bag,
+	# no prefill — the neutral config the mechanical tests below assume.
+	# (Restored, along with the save file, at the end of the run.)
+	var saved_story: int = GameState.story_stage
+	GameState.mode = GameState.MODE_STORY
+	GameState.story_stage = StoryStages.TOTAL - 1
 	var board: Node2D = load("res://core/scripts/escape_board.gd").new()
 	var player: Node2D = load("res://core/scripts/player.gd").new()
 	player.name = "Player"
@@ -42,12 +48,6 @@ func _ready() -> void:
 	_check(board._clear_lines() == 1, "full row clears")
 	_check(board.grid.has(Vector2i(0, EscapeBoard.ROWS - 1)), "cell above shifted down")
 	board.grid.clear()
-
-	# Escape resets the field and levels up
-	board._escape()
-	_check(board.level == 2, "escape increases level")
-	_check(board.grid.is_empty(), "escape clears the field")
-	_check(player.alive, "player alive after escape")
 
 	# Two-stage breaking: first hit cracks, second destroys — one block at a time
 	var probe := Rect2(4 * c + 30, 10 * c + 30, 10, 10)
@@ -194,7 +194,7 @@ func _ready() -> void:
 	b2.lava_y = p2.position.y  # lava reaches the player's feet
 	b2._update_endless(0.016)
 	_check(not p2.alive, "touching lava is death")
-	GameState.mode = GameState.MODE_ESCAPE
+	GameState.mode = GameState.MODE_STORY
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
 	var b3: Node2D = load("res://core/scripts/escape_board.gd").new()
@@ -225,7 +225,7 @@ func _ready() -> void:
 			b4.grid[Vector2i(x, y)] = "O"
 	b4._spawn_piece()
 	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
-	GameState.mode = GameState.MODE_ESCAPE
+	GameState.mode = GameState.MODE_STORY
 
 	# --- Revive ("이어서 하기") ---
 	# Escape block-out: revive reopens the spawn window and resumes play
@@ -243,10 +243,10 @@ func _ready() -> void:
 			"revive pushes the lava back down")
 
 	# --- Fever time (endless only) ---
-	board.mode = board.Mode.ESCAPE
+	board.mode = board.Mode.STORY
 	board._add_fever(1.0)
 	_check(not board.fever_active and board.fever_gauge == 0.0,
-			"escape mode never charges fever")
+			"story mode never charges fever")
 	b2.playing = true
 	b2.fever_gauge = 0.0  # earlier lock tests already trickled some charge in
 	b2._add_fever(0.5)
@@ -313,6 +313,140 @@ func _ready() -> void:
 	board.revive_player()
 	_check(player.alive and board.playing, "crushed player revives")
 	_check(not board.rect_hits_solid(player.rect()), "revive blast frees the crushed cat")
+
+	# --- Story mode stages ---
+	# Stage 1: movement tutorial — prefilled stairs, no pieces, doors open
+	GameState.story_stage = 0
+	var s1: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp1: Node2D = load("res://core/scripts/player.gd").new()
+	sp1.name = "Player"
+	s1.add_child(sp1)
+	add_child(s1)
+	s1.start_game()
+	_check(s1.level == 1, "story starts at stage 1")
+	_check(s1.piece_type == "", "stage 1 spawns no pieces")
+	_check(not s1.grid.is_empty(), "stage 1 prefills the staircase")
+	_check(not s1.rect_hits_solid(Rect2(-30, c, 10, 10)), "stage 1 left door is open")
+	s1._escape()
+	_check(s1.level == 2, "escape advances to the next stage")
+	_check(s1.playing, "the run continues into the next stage")
+	_check(GameState.story_stage == 1, "stage clear is recorded")
+	_check(s1.piece_type == "O", "stage 2 restricts the piece bag")
+	# Stage 2 lowers the exit: the top wall is closed, rows 10-11 are the door
+	_check(s1.rect_hits_solid(Rect2(-30, c, 10, 10)), "lowered door: top wall is solid")
+	_check(not s1.rect_hits_solid(Rect2(-30, 10 * c + 10, 10, 10)),
+			"lowered door: mid-wall exit is open")
+
+	# Stage 5: shove goal — ground doors locked until one shove opens them
+	GameState.story_stage = 4
+	var s5: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp5: Node2D = load("res://core/scripts/player.gd").new()
+	sp5.name = "Player"
+	s5.add_child(sp5)
+	add_child(s5)
+	s5.start_game()
+	_check(s5.level == 5, "story resumes from the next uncleared stage")
+	_check(not s5.goal_done, "goal stage starts locked")
+	_check(s5.rect_hits_solid(Rect2(-30, 12 * c + 10, 10, 10)),
+			"locked ground door is solid")
+	s5.piece_type = "O"
+	s5.piece_rot = 0
+	s5.piece_state = s5.PieceState.FALLING
+	s5.piece_pos = Vector2i(3, 4)
+	sp5.position = Vector2(2 * c, 700.0)  # clear of the piece's path
+	s5.shove_piece(1)
+	_check(s5.goal_done, "one shove completes the stage 5 goal")
+	_check(not s5.rect_hits_solid(Rect2(-30, 12 * c + 10, 10, 10)),
+			"ground door opens once the goal is met")
+
+	# Stage 4: break goal counts destroyed blocks
+	GameState.story_stage = 3
+	var s4: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp4: Node2D = load("res://core/scripts/player.gd").new()
+	sp4.name = "Player"
+	s4.add_child(sp4)
+	add_child(s4)
+	s4.start_game()
+	_check(s4.piece_type == "", "break stage spawns no pieces")
+	_check(s4.grid.has(Vector2i(6, 12)), "break stage prefills the wall")
+	_check(not s4.goal_done, "break stage starts locked")
+	var wall_probe := Rect2(6 * c + 30, 12 * c + 30, 10, 10)
+	s4.break_cell_in_rect(wall_probe)  # crack
+	s4.break_cell_in_rect(wall_probe)  # destroy
+	_check(s4.goal_count == 1, "destroying a block counts toward the goal")
+	s4._story_add_progress("breaks", 1)
+	_check(s4.goal_done, "reaching the break count opens the doors")
+
+	# Line goal counts cleared lines the same way
+	GameState.story_stage = 5
+	var s6: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp6: Node2D = load("res://core/scripts/player.gd").new()
+	sp6.name = "Player"
+	s6.add_child(sp6)
+	add_child(s6)
+	s6.start_game()
+	_check(not s6.grid.is_empty(), "stage 6 prefills the line gaps")
+	_check(not s6.goal_done, "stage 6 starts locked")
+	s6._story_add_progress("lines", 1)
+	_check(s6.goal_done, "the cleared line opens the doors")
+
+	# Survive goal ticks with _process time
+	GameState.story_stage = 6
+	var s7: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp7: Node2D = load("res://core/scripts/player.gd").new()
+	sp7.name = "Player"
+	s7.add_child(sp7)
+	add_child(s7)
+	s7.start_game()
+	_check(not s7.goal_done, "survive stage starts locked")
+	s7._process(21.0)
+	_check(s7.goal_done, "surviving the full time opens the doors")
+
+	# Stage 19: only the right door opens, up at rows 2-3
+	GameState.story_stage = 18
+	var s19: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp19: Node2D = load("res://core/scripts/player.gd").new()
+	sp19.name = "Player"
+	s19.add_child(sp19)
+	add_child(s19)
+	s19.start_game()
+	_check(s19.rect_hits_solid(Rect2(-30, 2 * c + 10, 10, 10)),
+			"stage 19 left door stays shut")
+	_check(not s19.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, 2 * c + 10, 10, 10)),
+			"stage 19 right door is open")
+
+	# Generated stages cover the long tail up to the finale
+	var gen: Dictionary = StoryStages.get_stage(37)
+	_check(gen.has("goal") and gen.has("hint"), "generated stages have goal and hint")
+	var late: Dictionary = StoryStages.get_stage(100)
+	var early_gen: Dictionary = StoryStages.get_stage(25)
+	_check(float(late.track_time) < float(early_gen.track_time),
+			"generated stages speed up with the stage number")
+
+	# Clearing the final stage completes the story
+	GameState.story_stage = StoryStages.TOTAL - 1
+	var s12: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp12: Node2D = load("res://core/scripts/player.gd").new()
+	sp12.name = "Player"
+	s12.add_child(sp12)
+	add_child(s12)
+	s12.start_game()
+	_check(s12.level == StoryStages.TOTAL, "final stage loads")
+	s12._escape()
+	_check(not s12.playing, "final stage clear ends the run")
+	_check(GameState.story_stage == StoryStages.TOTAL, "story completion is recorded")
+	GameState.story_stage = StoryStages.TOTAL
+	var s13: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var sp13: Node2D = load("res://core/scripts/player.gd").new()
+	sp13.name = "Player"
+	s13.add_child(sp13)
+	add_child(s13)
+	s13.start_game()
+	_check(s13.level == 1, "a finished story replays from stage 1")
+
+	# Restore the real save the story tests overwrote
+	GameState.story_stage = saved_story
+	GameState.save_game()
 
 	if failures == 0:
 		print("ALL TESTS PASSED")

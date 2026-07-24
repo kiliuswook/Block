@@ -33,6 +33,15 @@ var height := 0
 var record_broken := false
 var height_tween: Tween
 var record_tween: Tween
+# Story mode: full-screen stage intro / completion overlay (built in code).
+var story_intro: Control
+var intro_mode := "stage"  # "stage" resumes play on dismiss, "complete" → title
+var intro_clear: Label
+var intro_stage: Label
+var intro_name: Label
+var intro_hint: Label
+var intro_prompt: Label
+var stage_header := ""
 # Rewards already paid out this run — a revived player only earns the delta.
 var gold_awarded := 0
 var gems_awarded := 0
@@ -84,6 +93,13 @@ P2 블록: 고양이를 깔아뭉개면 승리
 꼭대기까지 쌓아버리면 P2 패배!" % VERSUS_TARGET
 		help_label.text = "P1(고양이)  < > 이동 (더블탭: 대시)   ^ 점프   v 빠른 낙하        P2(블록)  A/D 이동   Q/E 회전   S 낙하 (더블탭: 슬램, 착지 후: 고정)        R 새 대결   ESC 타이틀"
 		_build_versus_tally()
+	if GameState.mode == GameState.MODE_STORY and not GameState.split:
+		EventBus.story_stage_started.connect(_on_story_stage)
+		EventBus.story_progress_changed.connect(_on_story_progress)
+		EventBus.story_doors_opened.connect(_on_story_doors_opened)
+		EventBus.story_completed.connect(_on_story_completed)
+		_build_story_intro()
+		_layout_story_goal_label()
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
 	boards = [board]
@@ -161,6 +177,12 @@ func _show_milestone(floors: int) -> void:
 	milestone_label.text = "%d층 돌파!" % floors
 	if floors % 50 == 0:
 		milestone_label.text = "대기록! %d층 돌파!!" % floors
+	_pop_milestone()
+	_screen_flash(0.22 if floors % 50 == 0 else 0.14)
+
+
+## Slam-in/hold/fade animation for whatever text milestone_label holds.
+func _pop_milestone() -> void:
 	milestone_label.visible = true
 	milestone_label.modulate = Color(1, 1, 1, 0)
 	milestone_label.scale = Vector2(2.2, 2.2)
@@ -172,7 +194,6 @@ func _show_milestone(floors: int) -> void:
 	tw.chain().tween_interval(0.7)
 	tw.chain().tween_property(milestone_label, "modulate:a", 0.0, 0.35)
 	tw.chain().tween_callback(func() -> void: milestone_label.visible = false)
-	_screen_flash(0.22 if floors % 50 == 0 else 0.14)
 
 
 func _screen_flash(strength: float) -> void:
@@ -208,7 +229,7 @@ func _on_game_over() -> void:
 		was_record = GameState.record_height(height)
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
 	else:
-		stats = "LEVEL %d      SCORE %d" % [board.level, GameState.score]
+		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 	var earned := _award_run_rewards(was_record)
 	# Let the death sink in for a beat before the popup slides up.
 	var tw := create_tween()
@@ -422,11 +443,134 @@ func _to_title() -> void:
 
 
 func _on_escaped(new_level: int) -> void:
+	if story_intro:
+		# Story: the next stage's intro is already up — stamp the clear line on it.
+		intro_clear.text = "STAGE %d 클리어!" % (new_level - 1)
+		_screen_flash(0.2)
+		return
 	escape_label.text = "ESCAPE!\nLEVEL %d" % new_level
 	escape_label.visible = true
 	var tw := create_tween()
 	tw.tween_interval(1.2)
 	tw.tween_callback(func() -> void: escape_label.visible = false)
+
+
+# --- Story mode UI --------------------------------------------------------------
+
+
+## Story HUD goal readout: portrait (mobile) screens tuck it top-center;
+## landscape keeps the scene's side-panel placement.
+func _layout_story_goal_label() -> void:
+	var vp := get_viewport_rect().size
+	goal_label.visible = true
+	if vp.y > vp.x:
+		goal_label.position = Vector2(240.0, 20.0)
+		goal_label.size = Vector2(vp.x - 480.0, 170.0)
+		goal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		goal_label.add_theme_font_size_override("font_size", 24)
+		goal_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+		goal_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+		goal_label.add_theme_constant_override("outline_size", 6)
+
+
+## Full-screen stage intro / story-complete overlay, viewport-relative so the
+## same code serves the landscape and portrait layouts.
+func _build_story_intro() -> void:
+	var vp := get_viewport_rect().size
+	story_intro = Control.new()
+	story_intro.set_anchors_preset(Control.PRESET_FULL_RECT)
+	story_intro.visible = false
+	$UI.add_child(story_intro)
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.68)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	story_intro.add_child(dim)
+	intro_clear = _intro_label(vp, vp.y * 0.17, 40, GOLD)
+	intro_stage = _intro_label(vp, vp.y * 0.24, 92, CREAM)
+	intro_name = _intro_label(vp, vp.y * 0.36, 46, Color.WHITE)
+	intro_hint = _intro_label(vp, vp.y * 0.46, 27, Color(1, 1, 1, 0.9))
+	# Portrait keeps the prompt above the touch-control zone.
+	var prompt_y := vp.y * (0.62 if vp.y > vp.x else 0.8)
+	intro_prompt = _intro_label(vp, prompt_y, 24, Color(CREAM, 0.8))
+
+
+func _intro_label(vp: Vector2, y: float, font_size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.position = Vector2(40.0, y)
+	l.size = Vector2(vp.x - 80.0, 60.0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", 10)
+	story_intro.add_child(l)
+	return l
+
+
+func _on_story_stage(stage_num: int) -> void:
+	var stage := StoryStages.get_stage(stage_num)
+	stage_header = "STAGE %d — %s" % [stage_num, stage.name]
+	goal_label.text = stage_header
+	intro_mode = "stage"
+	intro_clear.text = ""
+	intro_stage.text = "STAGE %d" % stage_num
+	intro_name.text = str(stage.name)
+	var hint := str(stage.get("hint", ""))
+	if $TouchControls.visible:
+		hint = str(stage.get("hint_touch", hint))
+	intro_hint.text = hint
+	intro_prompt.text = "탭 또는 아무 키나 눌러 시작!"
+	story_intro.visible = true
+	board.is_paused = true
+
+
+func _hide_story_intro() -> void:
+	if story_intro == null or not story_intro.visible:
+		return
+	story_intro.visible = false
+	if intro_mode == "complete":
+		_to_title()
+	else:
+		board.is_paused = false
+
+
+func _on_story_progress(text: String) -> void:
+	goal_label.text = "%s\n%s" % [stage_header, text]
+
+
+func _on_story_doors_opened() -> void:
+	milestone_label.text = "출구가 열렸다!"
+	_pop_milestone()
+	_screen_flash(0.18)
+
+
+func _on_story_completed() -> void:
+	var earned := _award_run_rewards(false)
+	intro_mode = "complete"
+	intro_clear.text = "모든 스테이지 클리어"
+	intro_stage.text = "스토리 완주!"
+	intro_name.text = "축하해냥! 이제 무한의 계단에 도전해보자"
+	intro_hint.text = "SCORE %d" % GameState.score \
+			+ ("\n%s" % earned if earned != "" else "")
+	intro_prompt.text = "탭 또는 아무 키 → 타이틀로"
+	story_intro.visible = true
+	_screen_flash(0.3)
+
+
+## Any key / click / touch dismisses the story overlay (Esc keeps its
+## return-to-title role and passes through).
+func _input(event: InputEvent) -> void:
+	if story_intro == null or not story_intro.visible:
+		return
+	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) \
+			or (event is InputEventMouseButton and event.pressed) \
+			or (event is InputEventScreenTouch and event.pressed)
+	if not pressed:
+		return
+	if event is InputEventKey and event.physical_keycode == KEY_ESCAPE:
+		return
+	_hide_story_intro()
+	get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -435,6 +579,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("restart"):
 		_restart()
 	elif event.is_action_pressed("pause") and round_active \
+			and (story_intro == null or not story_intro.visible) \
 			and boards.any(func(b: EscapeBoard) -> bool: return b.playing):
 		var paused: bool = not board.is_paused
 		for b in boards:

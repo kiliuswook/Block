@@ -13,8 +13,19 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
-	GameState.mode = GameState.MODE_ESCAPE
-	await _capture("res://core/scenes/main.tscn", OUT + "/escape.png")
+	var saved_story: int = GameState.story_stage
+	GameState.mode = GameState.MODE_STORY
+	GameState.story_stage = 0
+	await _capture("res://core/scenes/main.tscn", OUT + "/story_intro.png")
+	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage1.png",
+			func(inst: Node) -> void: inst._hide_story_intro())
+	GameState.story_stage = 1
+	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage2.png",
+			func(inst: Node) -> void: inst._hide_story_intro())
+	GameState.story_stage = 5
+	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage6.png",
+			func(inst: Node) -> void: inst._hide_story_intro())
+	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
@@ -22,7 +33,7 @@ func _ready() -> void:
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_hud.png",
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
 	GameState.split = true
-	GameState.mode = GameState.MODE_ESCAPE
+	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_escape.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_endless.png")
@@ -42,9 +53,15 @@ func _ready() -> void:
 	get_window().content_scale_size = Vector2i(1080, 1920)
 	GameState.split = false
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
-	GameState.mode = GameState.MODE_ESCAPE
-	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_escape.png",
+	GameState.mode = GameState.MODE_STORY
+	GameState.story_stage = 0
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_stage1.png",
+			func(inst: Node) -> void:
+				inst.get_node("TouchControls").visible = true
+				inst._hide_story_intro())
+	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)

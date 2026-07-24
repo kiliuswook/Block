@@ -3,13 +3,13 @@ extends Node
 
 const SAVE_PATH := "user://save.json"
 
-const MODE_ESCAPE := 0
+const MODE_STORY := 0
 const MODE_ENDLESS := 1
 const MODE_VERSUS := 2
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — always available / gold, gems — purchasable / height — endless best
-##  escape — escape-mode best level / plays — total games played.
+##  story — story-mode stage cleared / plays — total games played.
 ## Per-cat stat multipliers (1.0 = baseline cream):
 ##  speed — run speed / jump — jump velocity / dash — dash speed & cooldown
 ##  weight — heavier falls harder when fast-falling and resists knockback,
@@ -23,7 +23,7 @@ const CATS: Array[Dictionary] = [
 		"unlock": {"type": "gold", "amount": 300}, "trait": "헤비급",
 		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
 	{"id": "calico", "name": "삼색", "body": Color("f2e6d4"), "ear": Color("8a5a33"),
-		"unlock": {"type": "escape", "level": 3}, "trait": "대시왕",
+		"unlock": {"type": "story", "stage": 3}, "trait": "대시왕",
 		"stats": {"speed": 1.04, "jump": 0.97, "dash": 1.18, "weight": 0.95, "push": 4}},
 	{"id": "black", "name": "까망", "body": Color("3a3540"), "ear": Color("26232c"),
 		"ink": Color("f0d060"), "unlock": {"type": "height", "floors": 10},
@@ -47,10 +47,10 @@ const CATS: Array[Dictionary] = [
 		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05, "push": 3}},
 ]
 
-var mode: int = MODE_ESCAPE
-var split: bool = false  # 2-player split screen (escape/endless only), not saved
+var mode: int = MODE_STORY
+var split: bool = false  # 2-player split screen (escape race/endless only), not saved
 var best_height: int = 0
-var best_escape_level: int = 1
+var story_stage: int = 0  # highest story stage cleared
 var games_played: int = 0
 var gold: int = 0
 var gems: int = 0
@@ -66,16 +66,16 @@ var score: int = 0:
 func _ready() -> void:
 	load_game()
 	EventBus.game_started.connect(func() -> void: games_played += 1)
-	EventBus.player_escaped.connect(_on_escaped)
 
 
 func reset() -> void:
 	score = 0
 
 
-func _on_escaped(new_level: int) -> void:
-	if new_level > best_escape_level:
-		best_escape_level = new_level
+## Records a cleared story stage (progress only ever moves forward).
+func story_clear(stage_num: int) -> void:
+	if stage_num > story_stage:
+		story_stage = stage_num
 		save_game()
 
 
@@ -125,8 +125,8 @@ func is_unlocked(id: String) -> bool:
 			return id in purchased
 		"height":
 			return best_height >= int(u.floors)
-		"escape":
-			return best_escape_level >= int(u.level)
+		"story":
+			return story_stage >= int(u.stage)
 		"plays":
 			return games_played >= int(u.count)
 	return false
@@ -158,7 +158,7 @@ func save_game() -> void:
 	var data := {
 		"score": score,
 		"best_height": best_height,
-		"best_escape_level": best_escape_level,
+		"story_stage": story_stage,
 		"games_played": games_played,
 		"gold": gold,
 		"gems": gems,
@@ -180,7 +180,7 @@ func load_game() -> void:
 	if data is Dictionary:
 		score = int(data.get("score", 0))
 		best_height = int(data.get("best_height", 0))
-		best_escape_level = int(data.get("best_escape_level", 1))
+		story_stage = int(data.get("story_stage", 0))
 		games_played = int(data.get("games_played", 0))
 		gold = int(data.get("gold", 0))
 		gems = int(data.get("gems", 0))

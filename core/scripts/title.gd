@@ -42,15 +42,26 @@ func _ready() -> void:
 	preload("res://core/scripts/boot.gd").dev_platform = ""
 	vw = get_viewport_rect().size.x
 	vh = get_viewport_rect().size.y
-	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE))
+	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY))
 	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
 	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
-	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE, true))
+	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY, true))
 	endless2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS, true))
+	_refresh_story_desc()
 	_build_currency_display()
 	_build_character_row()
 	_build_popup()
 	_build_toast()
+
+
+## Story button subtitle mirrors the saved progress.
+func _refresh_story_desc() -> void:
+	var total := StoryStages.TOTAL
+	var desc: Label = $UI/EscapeDesc
+	if GameState.story_stage >= total:
+		desc.text = "전 스테이지 클리어! 처음부터 다시 도전할 수 있다"
+	elif GameState.story_stage > 0:
+		desc.text = "이어서 도전  —  STAGE %d / %d" % [GameState.story_stage + 1, total]
 
 
 func _start(mode: int, split := false) -> void:
@@ -69,13 +80,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_1, KEY_KP_1:
-				_start(GameState.MODE_ESCAPE)
+				_start(GameState.MODE_STORY)
 			KEY_2, KEY_KP_2:
 				_start(GameState.MODE_ENDLESS)
 			KEY_3, KEY_KP_3:
 				_start(GameState.MODE_VERSUS)
 			KEY_4, KEY_KP_4:
-				_start(GameState.MODE_ESCAPE, true)
+				_start(GameState.MODE_STORY, true)
 			KEY_5, KEY_KP_5:
 				_start(GameState.MODE_ENDLESS, true)
 
@@ -161,8 +172,8 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 			"height":
 				_draw_center_text(ci, font, "무한 %d층" % u.floors, 144.0, 16,
 						Color(1, 1, 1, 0.55))
-			"escape":
-				_draw_center_text(ci, font, "탈출 LV%d" % u.level, 144.0, 16,
+			"story":
+				_draw_center_text(ci, font, "스토리 %d스테이지" % u.stage, 144.0, 16,
 						Color(1, 1, 1, 0.55))
 			"plays":
 				_draw_center_text(ci, font, "%d판 플레이" % u.count, 144.0, 16,
@@ -359,9 +370,9 @@ func _draw_popup(ci: Control) -> void:
 			"height":
 				status = "무한의 계단 %d층 도달 시 해금  (최고 %d층)" \
 						% [u.floors, GameState.best_height]
-			"escape":
-				status = "탈출 모드 LV%d 도달 시 해금  (최고 LV%d)" \
-						% [u.level, GameState.best_escape_level]
+			"story":
+				status = "스토리 %d스테이지 클리어 시 해금  (현재 %d스테이지)" \
+						% [u.stage, GameState.story_stage]
 			"plays":
 				status = "총 %d판 플레이 시 해금  (현재 %d판)" \
 						% [u.count, GameState.games_played]
