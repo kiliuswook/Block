@@ -6,8 +6,8 @@ var failures := 0
 
 
 func _ready() -> void:
-	var board: Node2D = load("res://scripts/escape_board.gd").new()
-	var player: Node2D = load("res://scripts/player.gd").new()
+	var board: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var player: Node2D = load("res://core/scripts/player.gd").new()
 	player.name = "Player"
 	board.add_child(player)
 	add_child(board)
@@ -158,8 +158,8 @@ func _ready() -> void:
 
 	# --- Endless (infinite stairs) mode ---
 	GameState.mode = GameState.MODE_ENDLESS
-	var b2: Node2D = load("res://scripts/escape_board.gd").new()
-	var p2: Node2D = load("res://scripts/player.gd").new()
+	var b2: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p2: Node2D = load("res://core/scripts/player.gd").new()
 	p2.name = "Player"
 	b2.add_child(p2)
 	var cam2 := Camera2D.new()
@@ -194,8 +194,8 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_ESCAPE
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
-	var b3: Node2D = load("res://scripts/escape_board.gd").new()
-	var p3: Node2D = load("res://scripts/player.gd").new()
+	var b3: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p3: Node2D = load("res://core/scripts/player.gd").new()
 	p3.name = "Player"
 	b3.add_child(p3)
 	add_child(b3)
@@ -207,8 +207,8 @@ func _ready() -> void:
 	_check(not b3.playing, "escape: piece spawning inside the stack ends the game")
 
 	GameState.mode = GameState.MODE_ENDLESS
-	var b4: Node2D = load("res://scripts/escape_board.gd").new()
-	var p4: Node2D = load("res://scripts/player.gd").new()
+	var b4: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p4: Node2D = load("res://core/scripts/player.gd").new()
 	p4.name = "Player"
 	b4.add_child(p4)
 	var cam4 := Camera2D.new()

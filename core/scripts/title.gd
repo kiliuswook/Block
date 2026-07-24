@@ -46,7 +46,7 @@ func _ready() -> void:
 func _start(mode: int, split := false) -> void:
 	GameState.mode = mode
 	GameState.split = split
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	get_tree().change_scene_to_file("res://core/scenes/main.tscn")
 
 
 func _unhandled_input(event: InputEvent) -> void:

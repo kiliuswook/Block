@@ -12,14 +12,15 @@ config_version=5
 
 config/name="Cat-Tris"
 config/version="0.1.0"
-run/main_scene="res://scenes/title.tscn"
+run/main_scene="res://core/scenes/title.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
-EventBus="*res://autoload/event_bus.gd"
-GameState="*res://autoload/game_state.gd"
+EventBus="*res://core/autoload/event_bus.gd"
+GameState="*res://core/autoload/game_state.gd"
+Platform="*res://platform/platform.gd"
 
 [display]
 
@@ -29,7 +30,7 @@ window/stretch/mode="canvas_items"
 
 [gui]
 
-theme/custom_font="res://assets/fonts/NotoSansKR-Regular.otf"
+theme/custom_font="res://shared/assets/fonts/NotoSansKR-Regular.otf"
 
 [input]
 

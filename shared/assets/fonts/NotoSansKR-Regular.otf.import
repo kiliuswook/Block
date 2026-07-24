@@ -3,12 +3,12 @@
 importer="font_data_dynamic"
 type="FontFile"
 uid="uid://bue8x5tspsiy5"
-path="res://.godot/imported/NotoSansKR-Regular.otf-4ae8f7324dc2aeada04fca31f5caeaa7.fontdata"
+path="res://.godot/imported/NotoSansKR-Regular.otf-511679e3535af796b39f5b8e3097a021.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/NotoSansKR-Regular.otf"
-dest_files=["res://.godot/imported/NotoSansKR-Regular.otf-4ae8f7324dc2aeada04fca31f5caeaa7.fontdata"]
+source_file="res://shared/assets/fonts/NotoSansKR-Regular.otf"
+dest_files=["res://.godot/imported/NotoSansKR-Regular.otf-511679e3535af796b39f5b8e3097a021.fontdata"]
 
 [params]
 

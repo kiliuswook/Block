@@ -6,7 +6,7 @@ const CREAM := Color(0.956863, 0.890196, 0.784314)
 const GOLD := Color(1.0, 0.85, 0.35)
 const VERSUS_TARGET := 3  # first to this many round wins takes the match
 
-const BOARD_SCENE := preload("res://scenes/board.tscn")
+const BOARD_SCENE := preload("res://core/scenes/board.tscn")
 const HALF_W := 960.0  # split screen: width of each player's viewport
 
 @onready var board: EscapeBoard = $Board
@@ -418,7 +418,7 @@ func _restart() -> void:
 
 
 func _to_title() -> void:
-	get_tree().change_scene_to_file("res://scenes/title.tscn")
+	get_tree().change_scene_to_file("res://core/scenes/title.tscn")
 
 
 func _on_escaped(new_level: int) -> void:

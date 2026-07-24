@@ -6,7 +6,7 @@ var failures := 0
 
 
 func _ready() -> void:
-	var board: Node2D = load("res://scripts/board.gd").new()
+	var board: Node2D = load("res://core/scripts/board.gd").new()
 	add_child(board)
 	board.start_game()
 

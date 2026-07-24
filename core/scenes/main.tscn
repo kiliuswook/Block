@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://dvr60grwtcsib"]
 
-[ext_resource type="Script" uid="uid://ccs7f3qbmvc7g" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="Script" uid="uid://blm4emeo7yey0" path="res://scripts/escape_board.gd" id="2_board"]
-[ext_resource type="Script" uid="uid://d2iuamu8auw15" path="res://scripts/player.gd" id="3_player"]
-[ext_resource type="Script" uid="uid://bxb2s800kmeg" path="res://scripts/touch_controls.gd" id="4_touch"]
-[ext_resource type="Script" uid="uid://irvaw0okmwts" path="res://scripts/touch_button.gd" id="5_tbtn"]
-[ext_resource type="Script" uid="uid://elrs02yc6vo0" path="res://scripts/next_preview.gd" id="6_next"]
-[ext_resource type="Script" uid="uid://dbkuf0cvc3c2a" path="res://scripts/death_popup.gd" id="7_death"]
+[ext_resource type="Script" uid="uid://ccs7f3qbmvc7g" path="res://core/scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://blm4emeo7yey0" path="res://core/scripts/escape_board.gd" id="2_board"]
+[ext_resource type="Script" uid="uid://d2iuamu8auw15" path="res://core/scripts/player.gd" id="3_player"]
+[ext_resource type="Script" uid="uid://bxb2s800kmeg" path="res://core/scripts/touch_controls.gd" id="4_touch"]
+[ext_resource type="Script" uid="uid://irvaw0okmwts" path="res://core/scripts/touch_button.gd" id="5_tbtn"]
+[ext_resource type="Script" uid="uid://elrs02yc6vo0" path="res://core/scripts/next_preview.gd" id="6_next"]
+[ext_resource type="Script" uid="uid://dbkuf0cvc3c2a" path="res://core/scripts/death_popup.gd" id="7_death"]
 
 [node name="Main" type="Node2D" unique_id=1092135668]
 script = ExtResource("1_main")
