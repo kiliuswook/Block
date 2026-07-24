@@ -144,7 +144,11 @@ func _handle_input(delta: float) -> void:
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
-	coyote_timer = COYOTE if on_floor else maxf(coyote_timer - delta, 0.0)
+	# Fever: blocks are one-way, so the cat can end up buried inside the
+	# stack (or fall into a covered-over hole). While submerged it can jump
+	# repeatedly and sinks slowly, so it always swims up and out.
+	var submerged: bool = board.fever_active and board.rect_hits_solid(rect())
+	coyote_timer = COYOTE if on_floor or submerged else maxf(coyote_timer - delta, 0.0)
 	wall_dir = _wall_contact()
 	var jump_vel := JUMP_VEL * stat_jump * (FEVER_JUMP_FACTOR if board.fever_active else 1.0)
 	if jump_buffer > 0.0 and coyote_timer > 0.0:
@@ -164,6 +168,9 @@ func _handle_input(delta: float) -> void:
 	if velocity.y > 0.0 and fast_fall:
 		g *= FAST_FALL_FACTOR * stat_weight
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
+	if submerged:
+		# Sinking slowly inside the stack keeps each fever jump a net gain.
+		velocity.y = minf(velocity.y, WALL_SLIDE_SPEED)
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
 		velocity.y = WALL_SLIDE_SPEED

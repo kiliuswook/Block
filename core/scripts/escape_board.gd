@@ -46,8 +46,9 @@ const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
 const FEVER_TIME := 10.0
 const FEVER_PER_LINE := 0.25  # gauge charge per cleared line (full at 4 lines)
 const FEVER_PER_PIECE := 0.03  # small trickle charge for every locked piece
-const FEVER_FALL_INTERVAL := 0.05  # fever: near-instant fall steps
-const FEVER_LOCK_GRACE := 0.2  # fever: quick lock so the next piece follows
+const FEVER_FALL_INTERVAL := 0.025  # fever: near-instant fall steps
+const FEVER_LOCK_GRACE := 0.07  # fever: quick lock so the next piece follows
+const FEVER_SPAWN_TRIES := 3  # fever spawn: candidate columns, deepest one wins
 const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
 const P2_DAS_REPEAT := 0.06
 const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
@@ -77,7 +78,8 @@ var lava_phase := 0.0
 var p2_das_timer := 0.0
 var versus_pieces := 0
 # Fever (endless only): line clears charge the gauge; at full charge the cat
-# goes invincible with double jumps while pieces rain down at full speed.
+# goes invincible with double-height jumps while pieces rain down at full
+# speed; buried cats swim up through the one-way stack (see player.gd).
 var fever_gauge := 0.0
 var fever_active := false
 var fever_timer := 0.0
@@ -683,8 +685,9 @@ func _spawn_piece() -> void:
 	piece_rot = 0
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
 	if fever_active:
-		# Fever pieces don't chase the cat: random column, instant drop.
-		piece_pos = Vector2i(randi_range(0, COLS - 4), spawn_row)
+		# Fever pieces don't chase the cat: rain over the whole pit width,
+		# leaning toward the lowest part of the stack (see [_fever_spawn_x]).
+		piece_pos = Vector2i(_fever_spawn_x(), spawn_row)
 	elif mode == Mode.VERSUS:
 		# Neutral center spawn: P2 steers it from there.
 		piece_pos = Vector2i(COLS / 2 - 2, spawn_row)
@@ -918,8 +921,44 @@ func _start_fever() -> void:
 	fever_gauge = 0.0
 	# The hovering piece joins the downpour right away, from a random column.
 	if piece_state == PieceState.TRACKING and piece_type != "":
-		piece_pos.x = randi_range(0, COLS - 4)
+		piece_pos.x = _fever_spawn_x()
 		_start_fall()
+
+
+## Fever spawn column. The old uniform randi over [0, COLS-4] had two flaws:
+## most shapes only cover x offsets 0..2, so the rightmost columns almost
+## never got blocks, and pure i.i.d. rolls cluster into one-sided towers.
+## Instead: span the true footprint of the piece across the full pit width,
+## roll a few candidates and keep the one over the lowest stack surface —
+## still reads as random rain, but fills valleys and stays climbable.
+func _fever_spawn_x() -> int:
+	var min_dx := 3
+	var max_dx := 0
+	for c: Vector2i in Board.SHAPES[piece_type][0]:
+		min_dx = mini(min_dx, c.x)
+		max_dx = maxi(max_dx, c.x)
+	var lo := -min_dx
+	var hi := COLS - 1 - max_dx
+	var best_x := randi_range(lo, hi)
+	var best_top := _surface_row(best_x + min_dx, best_x + max_dx)
+	for i in range(FEVER_SPAWN_TRIES - 1):
+		var x := randi_range(lo, hi)
+		var top := _surface_row(x + min_dx, x + max_dx)
+		if top > best_top:  # larger y = deeper valley
+			best_x = x
+			best_top = top
+	return best_x
+
+
+## Highest occupied row (smallest y) across columns [x0, x1]; the pit floor
+## row when those columns are empty. Endless rows go negative as the stack
+## climbs, so "deepest" means the largest value returned here.
+func _surface_row(x0: int, x1: int) -> int:
+	var top := ROWS
+	for c: Vector2i in grid:
+		if c.x >= x0 and c.x <= x1:
+			top = mini(top, c.y)
+	return top
 
 
 ## One-way platforms during fever: blocks are intangible from below, but
