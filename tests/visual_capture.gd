@@ -12,6 +12,7 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
+	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
 	GameState.mode = GameState.MODE_ESCAPE
 	await _capture("res://core/scenes/main.tscn", OUT + "/escape.png")
 	GameState.mode = GameState.MODE_ENDLESS
@@ -36,6 +37,17 @@ func _ready() -> void:
 				inst.get_node("Board")._kill_player()
 				inst.get_node("PopupLayer/DeathPopup").open(
 						"도달 높이 23층      최고 기록 41층", true))
+	# --- 모바일(세로 1080×1920) 레이아웃 ---
+	get_window().size = Vector2i(540, 960)
+	get_window().content_scale_size = Vector2i(1080, 1920)
+	GameState.split = false
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
+	GameState.mode = GameState.MODE_ESCAPE
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_escape.png",
+			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	GameState.mode = GameState.MODE_ENDLESS
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
+			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	get_tree().quit()
 
 

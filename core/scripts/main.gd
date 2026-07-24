@@ -146,7 +146,7 @@ func _spawn_floor_popup(delta_floors: int) -> void:
 	pop.add_theme_color_override("font_color", CREAM)
 	pop.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	pop.add_theme_constant_override("outline_size", 8)
-	pop.position = Vector2(1580.0, 250.0)
+	pop.position = height_label.position + Vector2(height_label.size.x + 20.0, 20.0)
 	height_label.get_parent().add_child(pop)
 	var tw := create_tween()
 	tw.set_parallel(true)
@@ -418,7 +418,7 @@ func _restart() -> void:
 
 
 func _to_title() -> void:
-	get_tree().change_scene_to_file("res://core/scenes/title.tscn")
+	get_tree().change_scene_to_file("res://core/scenes/boot.tscn")
 
 
 func _on_escaped(new_level: int) -> void:

@@ -1,0 +1,136 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://core/scenes/main.tscn" id="1_base"]
+
+[node name="Main" instance=ExtResource("1_base")]
+
+[node name="Board" parent="."]
+position = Vector2(220, 200)
+
+[node name="NextTitle" parent="UI"]
+offset_left = 40.0
+offset_top = 140.0
+offset_right = 220.0
+offset_bottom = 168.0
+
+[node name="NextPreview" parent="UI"]
+offset_left = 40.0
+offset_top = 176.0
+offset_right = 192.0
+offset_bottom = 272.0
+
+[node name="ScoreTitle" parent="UI"]
+offset_left = 880.0
+offset_top = 340.0
+offset_right = 1060.0
+offset_bottom = 368.0
+
+[node name="ScoreLabel" parent="UI"]
+offset_left = 880.0
+offset_top = 368.0
+offset_right = 1070.0
+offset_bottom = 416.0
+
+[node name="LevelTitle" parent="UI"]
+offset_left = 880.0
+offset_top = 440.0
+offset_right = 1060.0
+offset_bottom = 468.0
+
+[node name="LevelLabel" parent="UI"]
+offset_left = 880.0
+offset_top = 468.0
+offset_right = 1070.0
+offset_bottom = 516.0
+
+[node name="LinesTitle" parent="UI"]
+offset_left = 880.0
+offset_top = 540.0
+offset_right = 1060.0
+offset_bottom = 568.0
+
+[node name="LinesLabel" parent="UI"]
+offset_left = 880.0
+offset_top = 568.0
+offset_right = 1070.0
+offset_bottom = 616.0
+
+[node name="HeightTitle" parent="UI"]
+offset_left = 360.0
+offset_top = 4.0
+offset_right = 720.0
+offset_bottom = 28.0
+horizontal_alignment = 1
+
+[node name="HeightLabel" parent="UI"]
+offset_left = 360.0
+offset_top = 30.0
+offset_right = 720.0
+offset_bottom = 150.0
+horizontal_alignment = 1
+
+[node name="BestTitle" parent="UI"]
+offset_left = 880.0
+offset_top = 40.0
+offset_right = 1060.0
+offset_bottom = 68.0
+
+[node name="BestLabel" parent="UI"]
+offset_left = 880.0
+offset_top = 68.0
+offset_right = 1060.0
+offset_bottom = 120.0
+
+[node name="RecordLabel" parent="UI"]
+offset_left = 830.0
+offset_top = 130.0
+offset_right = 1070.0
+offset_bottom = 166.0
+
+[node name="GoalLabel" parent="UI"]
+visible = false
+
+[node name="HelpLabel" parent="UI"]
+visible = false
+
+[node name="MenuButton" parent="TouchControls"]
+offset_left = 40.0
+offset_top = 40.0
+offset_right = 220.0
+offset_bottom = 110.0
+
+[node name="LeftButton" parent="TouchControls"]
+offset_left = 30.0
+offset_top = 1620.0
+offset_right = 250.0
+offset_bottom = 1860.0
+
+[node name="RightButton" parent="TouchControls"]
+offset_left = 280.0
+offset_top = 1620.0
+offset_right = 500.0
+offset_bottom = 1860.0
+
+[node name="RotCCWButton" parent="TouchControls"]
+offset_left = 560.0
+offset_top = 1450.0
+offset_right = 780.0
+offset_bottom = 1590.0
+
+[node name="RotCWButton" parent="TouchControls"]
+offset_left = 810.0
+offset_top = 1450.0
+offset_right = 1030.0
+offset_bottom = 1590.0
+
+[node name="DropButton" parent="TouchControls"]
+offset_left = 560.0
+offset_top = 1620.0
+offset_right = 780.0
+offset_bottom = 1860.0
+
+[node name="JumpButton" parent="TouchControls"]
+offset_left = 810.0
+offset_top = 1620.0
+offset_right = 1030.0
+offset_bottom = 1860.0

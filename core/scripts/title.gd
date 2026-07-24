@@ -9,7 +9,6 @@ const INK := Color("2a2230")
 
 const TILE_SIZE := Vector2(128.0, 168.0)
 const TILE_GAP := 14.0
-const TILE_Y := 780.0
 const POPUP_SIZE := Vector2(620.0, 616.0)
 const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 		["무게", "weight"], ["밀기", "push"]]
@@ -19,6 +18,13 @@ const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 @onready var versus_btn: Button = $UI/VersusBtn
 @onready var escape2_btn: Button = $UI/Escape2Btn
 @onready var endless2_btn: Button = $UI/Endless2Btn
+
+# 레이아웃은 뷰포트 크기 기준으로 계산 — 모바일(세로 1080×1920)도 같은 코드를 쓴다.
+var vw := 1920.0
+var vh := 1080.0
+var tile_y := 780.0  # 캐릭터 타일 첫 줄 y (_build_character_row에서 계산)
+var max_tiles_per_row := 99  # 모바일 타이틀이 줄바꿈을 위해 줄인다
+var main_scene := "res://core/scenes/main.tscn"  # 플랫폼 타이틀이 교체 가능
 
 var _tiles := {}  # cat id -> Button
 var _currency_label: Label
@@ -32,6 +38,8 @@ var _popup_cat: Dictionary = {}
 
 
 func _ready() -> void:
+	vw = get_viewport_rect().size.x
+	vh = get_viewport_rect().size.y
 	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE))
 	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
 	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
@@ -46,7 +54,7 @@ func _ready() -> void:
 func _start(mode: int, split := false) -> void:
 	GameState.mode = mode
 	GameState.split = split
-	get_tree().change_scene_to_file("res://core/scenes/main.tscn")
+	get_tree().change_scene_to_file(main_scene)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -75,15 +83,21 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_character_row() -> void:
 	var ui: CanvasLayer = $UI
-	var total := GameState.CATS.size() * TILE_SIZE.x \
-			+ (GameState.CATS.size() - 1) * TILE_GAP
-	var x := (1920.0 - total) / 2.0
-	for cat in GameState.CATS:
-		var tile := _make_tile(cat)
-		tile.position = Vector2(x, TILE_Y)
-		ui.add_child(tile)
-		_tiles[cat.id] = tile
-		x += TILE_SIZE.x + TILE_GAP
+	# 화면 폭에 맞춰 줄바꿈: 가로(1920)는 9칸 한 줄, 세로(1080)는 여러 줄.
+	var fit := maxi(1, int((vw - 60.0 + TILE_GAP) / (TILE_SIZE.x + TILE_GAP)))
+	var per_row := mini(mini(fit, max_tiles_per_row), GameState.CATS.size())
+	var rows := ceili(GameState.CATS.size() / float(per_row))
+	tile_y = vh - 300.0 - (rows - 1) * (TILE_SIZE.y + TILE_GAP)
+	for r in rows:
+		var chunk: Array = GameState.CATS.slice(r * per_row, (r + 1) * per_row)
+		var total := chunk.size() * TILE_SIZE.x + (chunk.size() - 1) * TILE_GAP
+		var x := (vw - total) / 2.0
+		for cat in chunk:
+			var tile := _make_tile(cat)
+			tile.position = Vector2(x, tile_y + r * (TILE_SIZE.y + TILE_GAP))
+			ui.add_child(tile)
+			_tiles[cat.id] = tile
+			x += TILE_SIZE.x + TILE_GAP
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -200,7 +214,7 @@ func _build_popup() -> void:
 	dim.pressed.connect(_close_popup)
 	_popup.add_child(dim)
 	var panel := Control.new()
-	panel.position = (Vector2(1920.0, 1080.0) - POPUP_SIZE) / 2.0
+	panel.position = (Vector2(vw, vh) - POPUP_SIZE) / 2.0
 	panel.size = POPUP_SIZE
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_popup.add_child(panel)
@@ -366,7 +380,7 @@ func _refresh_tiles() -> void:
 
 func _build_currency_display() -> void:
 	_currency_label = Label.new()
-	_currency_label.position = Vector2(1420.0, 40.0)
+	_currency_label.position = Vector2(vw - 500.0, 40.0)
 	_currency_label.size = Vector2(440.0, 40.0)
 	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_currency_label.add_theme_font_size_override("font_size", 30)
@@ -383,7 +397,7 @@ func _refresh_currency() -> void:
 
 func _build_toast() -> void:
 	_toast = Label.new()
-	_toast.position = Vector2(460.0, 955.0)
+	_toast.position = Vector2((vw - 1000.0) / 2.0, vh - 125.0)
 	_toast.size = Vector2(1000.0, 40.0)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.add_theme_font_size_override("font_size", 24)
@@ -423,21 +437,22 @@ func _draw() -> void:
 		Vector2(vp.x * 0.32, 0), Vector2(vp.x * 0.68, 0),
 		Vector2(vp.x * 0.78, vp.y), Vector2(vp.x * 0.22, vp.y),
 	]), PackedColorArray([warm, warm, faded, faded]))
-	# Decorative tetromino scatter.
+	# Decorative tetromino scatter (viewport-relative so portrait works too).
 	var decos := [
-		["T", Vector2(280, 260)], ["L", Vector2(1460, 220)], ["S", Vector2(200, 560)],
-		["I", Vector2(1520, 560)], ["Z", Vector2(120, 380)], ["J", Vector2(1700, 400)],
+		["T", Vector2(0.146, 0.241)], ["L", Vector2(0.760, 0.204)],
+		["S", Vector2(0.104, 0.519)], ["I", Vector2(0.792, 0.519)],
+		["Z", Vector2(0.063, 0.352)], ["J", Vector2(0.885, 0.370)],
 	]
 	for d in decos:
 		var color: Color = Board.COLORS[d[0]]
 		color.a = 0.5
 		for c in Board.SHAPES[d[0]][0]:
-			var p: Vector2 = d[1] + Vector2(c) * 44.0
+			var p := Vector2(d[1].x * vp.x, d[1].y * vp.y) + Vector2(c) * 44.0
 			draw_rect(Rect2(p, Vector2(42.0, 42.0)), color)
 			draw_rect(Rect2(p, Vector2(42.0, 42.0)),
 					Color(1.0, 0.96, 0.84, 0.18), false, 2.0)
 	# The cube cat perched above the title, wearing the selected skin.
-	Player.paint_cat(self, Vector2(960, 100), 96.0, 0.0, true, false,
+	Player.paint_cat(self, Vector2(vw / 2.0, 100), 96.0, 0.0, true, false,
 			GameState.cat_skin(GameState.selected_cat))
 	_draw_stat_line()
 
@@ -452,7 +467,11 @@ func _draw_stat_line() -> void:
 		var pips := _stat_pips(entry[1], stats.get(entry[1], 1.0))
 		parts.append("%s %s%s" % [entry[0], "●".repeat(pips), "○".repeat(5 - pips)])
 	var text := "    ".join(parts)
+	# 화면 폭에 넘치면 폰트를 줄여서 한 줄에 맞춘다 (세로 화면 대응).
 	var size := 20
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	draw_string(font, Vector2((1920.0 - w) / 2.0, TILE_Y - 26.0), text,
+	while w > vw - 40.0 and size > 12:
+		size -= 1
+		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(font, Vector2((vw - w) / 2.0, tile_y - 26.0), text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 0.85))
