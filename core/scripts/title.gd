@@ -38,6 +38,8 @@ var _popup_cat: Dictionary = {}
 
 
 func _ready() -> void:
+	# 이 타이틀이 뜬 플랫폼을 개발용 상태로 기록 (플랫폼 타이틀은 super 후 덮어씀).
+	preload("res://core/scripts/boot.gd").dev_platform = ""
 	vw = get_viewport_rect().size.x
 	vh = get_viewport_rect().size.y
 	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_ESCAPE))

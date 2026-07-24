@@ -179,13 +179,16 @@ func _ready() -> void:
 	_check(b2.rect_hits_solid(Rect2(1 * c + 30, -5 * c + 30, 10, 10)), "negative-row cell is solid")
 	cam2.position = Vector2(320, 448)
 	p2.position = Vector2(320, 200)
+	# The camera sits above the player by 1/6 of the viewport height, keeping
+	# the cat at ~1/3 from the screen bottom with open space above.
+	var cam_off: float = b2.get_viewport_rect().size.y / 6.0
 	b2._update_endless(0.016)
-	_check(cam2.position.y == 200.0, "camera follows the player up")
+	_check(cam2.position.y == 200.0 - cam_off, "camera follows the player up")
 	_check(b2.best_height > 0, "height is tracked")
 	var lava_before: float = b2.lava_y
 	p2.position = Vector2(320, 400)
 	b2._update_endless(0.016)
-	_check(cam2.position.y == 400.0, "camera follows the player back down")
+	_check(cam2.position.y == 400.0 - cam_off, "camera follows the player back down")
 	_check(p2.alive, "falling down a hole is not death by itself")
 	_check(b2.lava_y < lava_before, "lava rises over time")
 	b2.lava_y = p2.position.y  # lava reaches the player's feet

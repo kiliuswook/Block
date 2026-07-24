@@ -36,7 +36,7 @@ const LAVA_START_OFFSET := CELL * 3.0
 const LAVA_SPEED_BASE := 8.0
 const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
-const LAVA_MAX_GAP := 980.0  # lava never trails the camera by more than this
+const LAVA_MAX_GAP := 980.0  # lava never trails the player by more than this
 const LAVA_REVIVE_GAP := CELL * 5.0  # revive pushes the lava this far below the feet
 const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
 const FEVER_TIME := 10.0
@@ -165,12 +165,15 @@ func _update_endless(delta: float) -> void:
 		return
 	# Camera follows the player both ways: rises with the climb, and scrolls
 	# back down when they drop into a hole. Never sinks past the start view.
-	cam.position.y = minf(player.position.y, ROWS * CELL / 2.0)
-	# Lava creeps up from below; it also keeps pace with the camera so a
+	# The player sits at ~1/3 from the screen bottom (not centered) so the
+	# climbing space above stays wide open.
+	var cam_offset := get_viewport_rect().size.y / 6.0
+	cam.position.y = minf(player.position.y - cam_offset, ROWS * CELL / 2.0)
+	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
 	lava_phase += delta
 	lava_y -= _lava_speed() * delta
-	lava_y = minf(lava_y, cam.position.y + LAVA_MAX_GAP)
+	lava_y = minf(lava_y, player.position.y + LAVA_MAX_GAP)
 	var feet := player.position.y + Player.SIZE / 2.0
 	if feet > lava_y:
 		_kill_player()

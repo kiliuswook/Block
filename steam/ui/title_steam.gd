@@ -5,6 +5,7 @@ extends "res://core/scripts/title.gd"
 
 func _ready() -> void:
 	super()
+	preload("res://core/scripts/boot.gd").dev_platform = "steam"  # 타이틀 복귀 시에도 유지
 	$UI/HintLabel.text = "버튼 클릭  또는  1 ~ 5 키로 선택   (4 · 5 = 화면 분할 2인,  Esc = 종료)"
 	_add_quit_button()
 

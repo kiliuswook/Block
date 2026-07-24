@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://core/scenes/main.tscn" id="1_base"]
+[ext_resource type="Script" path="res://mobile/ui/touch_controls_mobile.gd" id="2_touch"]
 
 [node name="Main" instance=ExtResource("1_base")]
 
@@ -91,7 +92,15 @@ offset_bottom = 166.0
 visible = false
 
 [node name="HelpLabel" parent="UI"]
-visible = false
+offset_left = 40.0
+offset_top = 1330.0
+offset_right = 1040.0
+offset_bottom = 1370.0
+theme_override_font_sizes/font_size = 22
+text = "빈 곳을 탭하면 블록 회전   (왼쪽 = 반시계 · 오른쪽 = 시계)"
+
+[node name="TouchControls" parent="."]
+script = ExtResource("2_touch")
 
 [node name="MenuButton" parent="TouchControls"]
 offset_left = 40.0
@@ -100,37 +109,32 @@ offset_right = 220.0
 offset_bottom = 110.0
 
 [node name="LeftButton" parent="TouchControls"]
-offset_left = 30.0
-offset_top = 1620.0
-offset_right = 250.0
-offset_bottom = 1860.0
+offset_left = 180.0
+offset_top = 1650.0
+offset_right = 400.0
+offset_bottom = 1870.0
 
 [node name="RightButton" parent="TouchControls"]
-offset_left = 280.0
-offset_top = 1620.0
-offset_right = 500.0
-offset_bottom = 1860.0
+offset_left = 680.0
+offset_top = 1650.0
+offset_right = 900.0
+offset_bottom = 1870.0
 
 [node name="RotCCWButton" parent="TouchControls"]
-offset_left = 560.0
-offset_top = 1450.0
-offset_right = 780.0
-offset_bottom = 1590.0
+visible = false
 
 [node name="RotCWButton" parent="TouchControls"]
-offset_left = 810.0
-offset_top = 1450.0
-offset_right = 1030.0
-offset_bottom = 1590.0
+visible = false
 
 [node name="DropButton" parent="TouchControls"]
-offset_left = 560.0
-offset_top = 1620.0
-offset_right = 780.0
-offset_bottom = 1860.0
+offset_left = 430.0
+offset_top = 1650.0
+offset_right = 650.0
+offset_bottom = 1870.0
 
 [node name="JumpButton" parent="TouchControls"]
-offset_left = 810.0
-offset_top = 1620.0
-offset_right = 1030.0
-offset_bottom = 1860.0
+offset_left = 430.0
+offset_top = 1400.0
+offset_right = 650.0
+offset_bottom = 1620.0
+label = "▲"

@@ -3,10 +3,18 @@ extends "res://core/scripts/title.gd"
 ## 한 키보드가 필요한 2P 모드(대전·화면 분할)는 모바일에 없다.
 
 
+const BootScript := preload("res://core/scripts/boot.gd")
+
+
 func _ready() -> void:
+	# F6로 이 씬을 직접 실행해도 세로 창이 되도록 (boot을 거치면 이미 세로 상태)
+	if not OS.has_feature("mobile") \
+			and get_window().content_scale_size.x > get_window().content_scale_size.y:
+		BootScript.apply_mobile_dev_window(get_window())
 	max_tiles_per_row = 5  # 캐릭터 타일을 5+4 두 줄로
 	main_scene = "res://mobile/ui/main_mobile.tscn"
 	super()
+	BootScript.dev_platform = "mobile"  # 타이틀 복귀 시에도 모바일 유지
 	for n in ["VersusBtn", "VersusDesc", "Escape2Btn", "Endless2Btn"]:
 		get_node("UI/" + n).visible = false
 	_place($UI/TitleLabel, 40.0, 230.0, 1000.0, 160.0)
