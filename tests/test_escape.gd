@@ -242,6 +242,23 @@ func _ready() -> void:
 	_check(b2.lava_y >= p2.position.y + Player.SIZE / 2.0 + c,
 			"revive pushes the lava back down")
 
+	# Endless revive: the blast wipes the whole stack, and a rescue bar
+	# floats above the lava so the cat lands on it instead of falling back in
+	b2.grid[Vector2i(2, 5)] = "T"
+	b2.grid[Vector2i(7, -3)] = "L"
+	b2.revive_player()
+	_check(not b2.grid.has(Vector2i(2, 5)) and not b2.grid.has(Vector2i(7, -3)),
+			"endless revive blasts the whole stack")
+	var plat_row := int(floor(b2.lava_y / c)) - EscapeBoard.REVIVE_PLATFORM_GAP
+	var plat_cells := 0
+	for x in range(EscapeBoard.COLS):
+		if b2.grid.has(Vector2i(x, plat_row)):
+			plat_cells += 1
+	_check(plat_cells == EscapeBoard.COLS - 1, "rescue bar spans the row with one edge gap")
+	_check(b2._clear_lines() == 0, "rescue bar never counts as a clearable line")
+	_check(plat_row * c > p2.position.y, "rescue bar sits below the revived cat")
+	b2.grid.clear()
+
 	# --- Fever time (endless only) ---
 	board.mode = board.Mode.STORY
 	board._add_fever(1.0)
