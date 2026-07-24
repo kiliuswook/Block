@@ -46,6 +46,9 @@ const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
 const REVIVE_PLATFORM_GAP := 3  # revive platform floats this many cells above the lava
 const REVIVE_FX_RADIUS := 16.0  # revive blast: cells beyond this erase without FX (off-screen)
 const REVIVE_FX_WAVE := 0.018  # revive blast ripple: FX delay per cell of distance from the cat
+const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
+const GOLD_PER_CLEAR := [0, 2, 5, 10, 20]  # endless: gold paid on the spot per clear size
+const GOLD_FX_TIME := 1.0
 const FEVER_TIME := 10.0
 const FEVER_PER_LINE := 0.25  # gauge charge per cleared line (full at 4 lines)
 const FEVER_PER_PIECE := 0.03  # small trickle charge for every locked piece
@@ -73,6 +76,7 @@ var total_lines := 0
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
+var gold_fx: Array = []  # [pos: Vector2, age: float, amount: int] — floating "+N G" popup
 var mode := Mode.STORY
 var best_height := 0
 var drop_tap_time := -1e9
@@ -119,6 +123,7 @@ func start_game() -> void:
 	p2_das_timer = 0.0
 	lava_y = ROWS * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
+	gold_fx.clear()
 	fever_gauge = 0.0
 	fever_active = false
 	fever_timer = 0.0
@@ -212,6 +217,9 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+	for fx in gold_fx:
+		fx[1] += delta
+	gold_fx = gold_fx.filter(func(fx: Array) -> bool: return fx[1] < GOLD_FX_TIME)
 	if _story() and playing and not goal_done and _goal_type() == "survive":
 		var prev := int(survive_time)
 		survive_time += delta
@@ -547,12 +555,26 @@ func _lock_piece() -> void:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
 		_add_fever(cleared * FEVER_PER_LINE)
+		if mode == Mode.ENDLESS:
+			_endless_line_reward(cleared)
 		_story_add_progress("lines", cleared)
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
 		if not _free_player_from_grid():
 			return
 	_spawn_piece()
+
+
+## Endless: line clears fight the lava — every clear shoves it back down
+## (scaling steeply with multi-line clears) and pays gold on the spot.
+## Height itself is never lost: _clear_lines leaves gaps instead of collapsing.
+func _endless_line_reward(cleared: int) -> void:
+	lava_y += LAVA_PUSH[cleared] * CELL
+	if split:
+		return  # split race: shared wallet would double-pay across two boards
+	var g: int = GOLD_PER_CLEAR[cleared]
+	GameState.add_currency(g, 0)
+	gold_fx.append([Vector2(player.position.x, player.position.y - CELL), 0.0, g])
 
 
 # --- Story goals ----------------------------------------------------------------
@@ -595,16 +617,22 @@ func _clear_lines() -> int:
 			full_rows.append(y)
 	if full_rows.is_empty():
 		return 0
+	# Endless keeps the stack floating: cleared rows become open gaps instead of
+	# dropping everything above, so a clear never costs the climb its height.
+	var collapse := mode != Mode.ENDLESS
 	var new_grid := {}
 	var new_cracked := {}
 	for c in grid:
 		if c.y in full_rows:
+			break_fx.append([c, 0.0])
 			continue
-		var shift := 0
-		for fy in full_rows:
-			if c.y < fy:
-				shift += 1
-		var dest := Vector2i(c.x, c.y + shift)
+		var dest: Vector2i = c
+		if collapse:
+			var shift := 0
+			for fy in full_rows:
+				if c.y < fy:
+					shift += 1
+			dest = Vector2i(c.x, c.y + shift)
 		new_grid[dest] = grid[c]
 		if cracked.has(c):
 			new_cracked[dest] = true
@@ -1091,6 +1119,7 @@ func _draw() -> void:
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
 		_draw_lava(w)
 		_draw_fever(w)
+		_draw_gold_fx()
 
 
 ## Pit backdrop: daylight seeps in from above, darkness pools below. In
@@ -1217,6 +1246,18 @@ func _draw_crack(c: Vector2i) -> void:
 
 ## Fever gauge/timer bar, anchored to the camera so it stays on screen in
 ## both single and split-viewport play.
+## Floating "+N G" popup over the cat when an endless line clear pays out.
+func _draw_gold_fx() -> void:
+	var font := ThemeDB.fallback_font
+	for fx in gold_fx:
+		var t: float = fx[1] / GOLD_FX_TIME
+		var pos: Vector2 = fx[0] + Vector2(-90.0, -CELL * t)
+		var col := Color("f7d354")
+		col.a = 1.0 - t * t
+		draw_string(font, pos, "+%d G" % fx[2],
+				HORIZONTAL_ALIGNMENT_CENTER, 180.0, 30, col)
+
+
 func _draw_fever(w: float) -> void:
 	var cam_y := cam.position.y if cam else ROWS * CELL / 2.0
 	var bar := Rect2(CELL * 0.5, cam_y + 470.0, w - CELL, 16.0)

@@ -194,6 +194,30 @@ func _ready() -> void:
 	b2.lava_y = p2.position.y  # lava reaches the player's feet
 	b2._update_endless(0.016)
 	_check(not p2.alive, "touching lava is death")
+
+	# Endless line clears: the stack stays floating (no collapse), the lava is
+	# shoved back down, and gold is paid on the spot.
+	b2.grid.clear()
+	b2.cracked.clear()
+	for x in range(EscapeBoard.COLS):
+		b2.grid[Vector2i(x, 6)] = "O"
+	b2.grid[Vector2i(4, 5)] = "T"
+	b2.cracked[Vector2i(4, 5)] = true
+	b2.lava_y = 2000.0
+	var gold_before: int = GameState.gold
+	var lava_pushed_from: float = b2.lava_y
+	var endless_cleared: int = b2._clear_lines()
+	_check(endless_cleared == 1, "endless full row clears")
+	_check(not b2.grid.has(Vector2i(0, 6)), "cleared row is gone")
+	_check(b2.grid.has(Vector2i(4, 5)), "endless clear leaves the stack floating")
+	_check(b2.cracked.has(Vector2i(4, 5)), "endless clear keeps the crack in place")
+	b2._endless_line_reward(endless_cleared)
+	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
+	_check(GameState.gold == gold_before + EscapeBoard.GOLD_PER_CLEAR[1],
+			"line clear pays gold on the spot")
+	b2.grid.clear()
+	b2.cracked.clear()
+	b2.lava_y = p2.position.y  # restore the lava-death state for the revive tests
 	GameState.mode = GameState.MODE_STORY
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
