@@ -11,8 +11,9 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	# 팝업이 닫혀 있을 때 Esc는 게임 종료 (팝업이 열려 있으면 base가 닫기로 처리).
-	if (_popup == null or not _popup.visible) and event is InputEventKey \
+	# 팝업/설정이 닫혀 있을 때 Esc는 게임 종료 (열려 있으면 base가 닫기로 처리).
+	if not _settings_open() and (_popup == null or not _popup.visible) \
+			and event is InputEventKey \
 			and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		get_tree().quit()
 		return

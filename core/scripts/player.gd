@@ -123,6 +123,7 @@ func _handle_input(delta: float) -> void:
 				dash_timer = DASH_TIME
 				dash_dir = dir
 				dash_cooldown = DASH_COOLDOWN / stat_dash
+				Sfx.play("dash")
 			last_tap[dir] = now
 	var axis := Input.get_axis(act_left, act_right)
 	if axis != 0.0:
@@ -132,6 +133,7 @@ func _handle_input(delta: float) -> void:
 		dash_timer = DASH_TIME
 		dash_dir = int(signf(axis)) if axis != 0.0 else facing
 		dash_cooldown = DASH_COOLDOWN / stat_dash
+		Sfx.play("dash")
 	if knockback_timer > 0.0:
 		knockback_timer -= delta
 		velocity.x = knockback_vx
@@ -155,6 +157,7 @@ func _handle_input(delta: float) -> void:
 		velocity.y = jump_vel
 		jump_buffer = 0.0
 		coyote_timer = 0.0
+		Sfx.play("jump")
 	elif jump_buffer > 0.0 and not on_floor and wall_dir != 0 and wall_jumps_left > 0:
 		# Wall jump: leap up and away from the wall, once per airtime.
 		velocity.y = jump_vel
@@ -163,6 +166,7 @@ func _handle_input(delta: float) -> void:
 		wall_jumps_left -= 1
 		jump_buffer = 0.0
 		dash_timer = 0.0
+		Sfx.play("walljump")
 	var g := GRAVITY
 	var fast_fall := Input.is_action_pressed(act_drop)
 	if velocity.y > 0.0 and fast_fall:
@@ -199,6 +203,7 @@ func _apply_motion(delta: float) -> void:
 		if velocity.y > 0.0:
 			if not on_floor and velocity.y > 300.0:
 				squash_timer = SQUASH_TIME
+				Sfx.play("land")
 			on_floor = true
 			wall_jumps_left = 1
 		elif velocity.y < 0.0:
@@ -220,6 +225,7 @@ func _apply_motion(delta: float) -> void:
 					position.y = top - SIZE / 2.0
 					if velocity.y > 300.0:
 						squash_timer = SQUASH_TIME
+						Sfx.play("land")
 					velocity.y = 0.0
 					on_floor = true
 		if on_floor:

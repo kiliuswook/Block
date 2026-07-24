@@ -143,6 +143,7 @@ func _spacer(h: float) -> Control:
 func _make_button(label: String, primary: bool) -> Button:
 	var b := Button.new()
 	b.text = label
+	b.pressed.connect(func() -> void: Sfx.play("click"))
 	b.custom_minimum_size = Vector2(420.0, 68.0)
 	b.add_theme_font_size_override("font_size", 30)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())

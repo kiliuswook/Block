@@ -56,6 +56,10 @@ var gold: int = 0
 var gems: int = 0
 var selected_cat: String = "cream"
 var purchased: Array = []  # ids of cats bought with gold/gems
+# Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
+var vol_master: float = 1.0
+var vol_bgm: float = 0.8
+var vol_sfx: float = 1.0
 
 var score: int = 0:
 	set(value):
@@ -164,6 +168,9 @@ func save_game() -> void:
 		"gems": gems,
 		"selected_cat": selected_cat,
 		"purchased": purchased,
+		"vol_master": vol_master,
+		"vol_bgm": vol_bgm,
+		"vol_sfx": vol_sfx,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -188,5 +195,8 @@ func load_game() -> void:
 		var bought: Variant = data.get("purchased", [])
 		if bought is Array:
 			purchased = bought
+		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
+		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)
+		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
 		if not is_unlocked(selected_cat):
 			selected_cat = "cream"

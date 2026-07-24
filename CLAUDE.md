@@ -28,7 +28,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - `core/` — 두 플랫폼이 공유하는 게임 본체
   - `core/scenes/` — 씬 파일 (.tscn). 메인 씬: `core/scenes/main.tscn`
   - `core/scripts/` — 씬에 붙는 스크립트 (.gd)
-  - `core/autoload/` — 싱글톤 (EventBus, GameState)
+  - `core/autoload/` — 싱글톤 (EventBus, GameState, Sfx)
 - `shared/assets/` — 공용 리소스 (이미지, 사운드, 폰트)
 - `platform/` — 플랫폼 추상화: `platform.gd`(autoload `Platform`, 피처 태그로 구현체 선택) + `platform_base.gd`(no-op 기본 구현, `PlatformBase`)
 - 시작 씬은 `core/scenes/boot.tscn` — 피처 태그로 플랫폼 타이틀에 라우팅. 개발 시 플랫폼 강제: ① 에디터에서 `tests/run_mobile.tscn`/`run_steam.tscn` 열고 **F6** (권장 — 세로 창·복귀까지 유지) ② 커맨드라인 `--mobile`/`--steam` 인자(`--` 구분자 유무 무관) ③ 모바일 씬(title_mobile/main_mobile) 직접 F6도 자동 보정. 강제 상태는 `boot.gd`의 `dev_platform` static이 세션 동안 유지: 스팀 `steam/ui/title_steam.tscn`, 모바일 `mobile/ui/title_mobile.tscn`, 그 외 `core/scenes/title.tscn`. 타이틀 복귀도 boot 경유(`main.gd`). 플랫폼 타이틀은 core 타이틀 씬을 상속(+스크립트 `extends "res://core/scripts/title.gd"`)
@@ -53,6 +53,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - 클래식 테트리스 로직은 `core/scripts/board.gd`에 유지 (SRS 회전+월킥, 7-bag 등) — escape_board가 SHAPES/KICKS/COLORS 상수를 재사용
 - UI 배선/재시작/일시정지: `core/scripts/main.gd`
 - 렌더링은 텍스처 없이 `_draw()`로 직접 그림
+- 사운드도 에셋 파일 없이 전부 코드 합성: `core/autoload/sfx.gd`(autoload `Sfx`)가 시작 시 SFX를, 첫 재생 시 BGM 루프("title"/"game")를 렌더. `Sfx.play("이름")`/`Sfx.play_bgm()` 호출. 버스는 Master/BGM/SFX(런타임 생성), 볼륨은 `GameState.vol_*`(save.json)에 저장, UI는 `core/scripts/settings_panel.gd`(타이틀 ⚙ 버튼 + 인게임 일시정지 메뉴 겸용)
 - 아트 규칙(Cat-Tris): 빛은 항상 위에서(블록 윗면만 하이라이트), 가장 따뜻한 것 = 플레이어(크림 #f4e3c8), 가장 밝은 것 = 출구의 빛(#fff3d0). 무한의 계단은 높이 오를수록 배경이 밝아짐. 큐브 고양이 렌더는 `Player.paint_cat()` 정적 함수 — 타이틀 등 어디서든 재사용
 - 캐릭터/재화: 스킨 9종·해금 조건(골드/보석/무한 높이/스토리 스테이지/플레이 수)·골드/보석 지갑은 `GameState`(CATS 상수, save.json 저장), 선택 UI는 타이틀(`core/scripts/title.gd`), 보상 지급은 `main.gd._award_run_rewards()` — 스킨 색은 `paint_cat()`의 `skin` 파라미터로 전달
 - 씬 스크린샷 캡처: `& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn` → `.tmp_shots/`에 저장

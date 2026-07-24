@@ -12,6 +12,8 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
+			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
 	var saved_story: int = GameState.story_stage
 	GameState.mode = GameState.MODE_STORY
@@ -32,6 +34,9 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_hud.png",
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
+	await _capture("res://core/scenes/main.tscn", OUT + "/pause_settings.png",
+			func(inst: Node) -> void:
+				inst.settings_panel.open("일시정지", "계속하기"))
 	GameState.split = true
 	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_escape.png")
@@ -53,6 +58,8 @@ func _ready() -> void:
 	get_window().content_scale_size = Vector2i(1080, 1920)
 	GameState.split = false
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
+			func(inst: Node) -> void: inst._settings.open())
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

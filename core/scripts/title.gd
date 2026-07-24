@@ -7,6 +7,7 @@ const GOLD_COL := Color(1.0, 0.85, 0.35)
 const GEM_COL := Color(0.55, 0.85, 1.0)
 const INK := Color("2a2230")
 
+const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const TILE_SIZE := Vector2(128.0, 168.0)
 const TILE_GAP := 14.0
 const POPUP_SIZE := Vector2(620.0, 616.0)
@@ -35,6 +36,7 @@ var _popup_face: Control
 var _popup_action: Button
 var _popup_close: Button
 var _popup_cat: Dictionary = {}
+var _settings: Control
 
 
 func _ready() -> void:
@@ -52,6 +54,8 @@ func _ready() -> void:
 	_build_character_row()
 	_build_popup()
 	_build_toast()
+	_build_settings()
+	Sfx.play_bgm("title")
 
 
 ## Story button subtitle mirrors the saved progress.
@@ -65,12 +69,38 @@ func _refresh_story_desc() -> void:
 
 
 func _start(mode: int, split := false) -> void:
+	Sfx.play("click")
 	GameState.mode = mode
 	GameState.split = split
 	get_tree().change_scene_to_file(main_scene)
 
 
+## 설정 버튼(좌상단) + 볼륨 설정 패널.
+func _build_settings() -> void:
+	var b := Button.new()
+	b.text = "⚙ 설정"
+	b.position = Vector2(30.0, 30.0)
+	b.size = Vector2(150.0, 56.0)
+	b.add_theme_font_size_override("font_size", 24)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_settings.open())
+	$UI.add_child(b)
+	_settings = SETTINGS_PANEL.new()
+	$UI.add_child(_settings)
+
+
+func _settings_open() -> bool:
+	return _settings != null and _settings.visible
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _settings_open():
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_settings.close()
+		return
 	if _popup and _popup.visible:
 		# The popup swallows mode hotkeys; Esc closes it.
 		if event is InputEventKey and event.pressed \
@@ -206,6 +236,7 @@ func _draw_lock(ci: Control, at: Vector2) -> void:
 
 
 func _on_tile_pressed(cat: Dictionary) -> void:
+	Sfx.play("click")
 	_open_popup(cat)
 
 
@@ -298,6 +329,7 @@ func _close_popup() -> void:
 func _on_popup_action() -> void:
 	var cat := _popup_cat
 	if GameState.is_unlocked(cat.id):
+		Sfx.play("click")
 		GameState.select_cat(cat.id)
 		_refresh_tiles()
 		_close_popup()
@@ -305,10 +337,12 @@ func _on_popup_action() -> void:
 	var u: Dictionary = cat.unlock
 	var wallet: int = GameState.gold if u.type == "gold" else GameState.gems
 	if wallet < int(u.amount):
+		Sfx.play("error")
 		_show_toast("골드가 부족해요!" if u.type == "gold" else "보석이 부족해요!",
 				Color(1.0, 0.55, 0.5))
 		return
 	if GameState.try_buy(cat.id):
+		Sfx.play("buy")
 		GameState.select_cat(cat.id)
 		_show_toast("%s 냥이 영입 완료!" % cat.name, CREAM)
 		_refresh_currency()

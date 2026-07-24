@@ -418,9 +418,11 @@ func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 		cells += 1
 		if _resolve_piece_overlap() or not playing:
 			_story_add_progress("shoves", 1)
+			Sfx.play("shove")
 			return true
 	if moved:
 		_story_add_progress("shoves", 1)
+		Sfx.play("shove")
 	return moved
 
 
@@ -461,6 +463,7 @@ func _drop_action() -> String:
 
 
 func _versus_over(winner: int) -> void:
+	Sfx.play("escape" if winner == 1 else "death")
 	if winner == 2:
 		player.die()
 	playing = false
@@ -548,6 +551,8 @@ func _lock_piece() -> void:
 		return
 	if not _free_player_from_grid():
 		return
+	if not fever_active:  # fever locks a piece every ~0.1s — too spammy to click
+		Sfx.play("lock")
 	GameState.score += 10 * level
 	_add_fever(FEVER_PER_PIECE)
 	var cleared := _clear_lines()
@@ -555,6 +560,7 @@ func _lock_piece() -> void:
 		total_lines += cleared
 		GameState.score += LINE_SCORES[cleared] * level
 		_add_fever(cleared * FEVER_PER_LINE)
+		Sfx.play("clear", 1.0 + 0.07 * (cleared - 1))
 		if mode == Mode.ENDLESS:
 			_endless_line_reward(cleared)
 		_story_add_progress("lines", cleared)
@@ -575,6 +581,7 @@ func _endless_line_reward(cleared: int) -> void:
 	var g: int = GOLD_PER_CLEAR[cleared]
 	GameState.add_currency(g, 0)
 	gold_fx.append([Vector2(player.position.x, player.position.y - CELL), 0.0, g])
+	Sfx.play("gold")
 
 
 # --- Story goals ----------------------------------------------------------------
@@ -596,6 +603,7 @@ func _story_add_progress(kind: String, amount: int) -> void:
 func _story_goal_done() -> void:
 	goal_done = true
 	_set_doors(true)
+	Sfx.play("door")
 	EventBus.story_doors_opened.emit()
 	EventBus.story_progress_changed.emit(
 			StoryStages.progress_text(stage, goal_count, true))
@@ -693,8 +701,10 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		break_fx.append([best, 0.0])
 		GameState.score += BREAK_SCORE
 		_story_add_progress("breaks", 1)
+		Sfx.play("break")
 	else:
 		cracked[best] = true
+		Sfx.play("crack")
 	queue_redraw()
 	return true
 
@@ -796,6 +806,7 @@ func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 
 
 func _escape() -> void:
+	Sfx.play("escape")
 	# Split screen: first escape ends the round for both halves.
 	if split:
 		playing = false
@@ -847,6 +858,7 @@ func revive_player() -> void:
 	is_paused = false
 	_clear_spawn_window()
 	_spawn_piece()
+	Sfx.play("revive")
 	queue_redraw()
 
 
@@ -927,6 +939,7 @@ func _kill_player() -> void:
 		# The cat got crushed or trapped — round to P2.
 		_versus_over(2)
 		return
+	Sfx.play("death")
 	player.die()
 	playing = false
 	if split:
@@ -986,6 +999,7 @@ func _start_fever() -> void:
 	fever_active = true
 	fever_timer = FEVER_TIME
 	fever_gauge = 0.0
+	Sfx.play("fever")
 	# The hovering piece joins the downpour right away, from a random column.
 	if piece_state == PieceState.TRACKING and piece_type != "":
 		piece_pos.x = _fever_spawn_x()

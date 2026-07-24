@@ -7,6 +7,7 @@ const GOLD := Color(1.0, 0.85, 0.35)
 const VERSUS_TARGET := 3  # first to this many round wins takes the match
 
 const BOARD_SCENE := preload("res://core/scenes/board.tscn")
+const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const HALF_W := 960.0  # split screen: width of each player's viewport
 
 @onready var board: EscapeBoard = $Board
@@ -52,6 +53,7 @@ var match_over := false
 var boards: Array = []  # every active board: [board] normally, two in split
 var split_labels: Array = []
 var round_active := true
+var settings_panel: Control  # doubles as the pause menu (volume sliders)
 
 
 func _ready() -> void:
@@ -104,6 +106,10 @@ P2 블록: 고양이를 깔아뭉개면 승리
 		_layout_story_goal_label()
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
+	settings_panel = SETTINGS_PANEL.new()
+	settings_panel.closed.connect(_on_settings_closed)
+	$PopupLayer.add_child(settings_panel)
+	Sfx.play_bgm("game")
 	boards = [board]
 	if GameState.split:
 		_build_split()
@@ -179,6 +185,7 @@ func _show_milestone(floors: int) -> void:
 	milestone_label.text = "%d층 돌파!" % floors
 	if floors % 50 == 0:
 		milestone_label.text = "대기록! %d층 돌파!!" % floors
+	Sfx.play("milestone")
 	_pop_milestone()
 	_screen_flash(0.22 if floors % 50 == 0 else 0.14)
 
@@ -208,6 +215,7 @@ func _screen_flash(strength: float) -> void:
 
 ## First time the run passes the all-time best: gold pulse until game over.
 func _show_new_record() -> void:
+	Sfx.play("record")
 	record_label.visible = true
 	best_label.modulate = GOLD
 	record_label.scale = Vector2(1.8, 1.8)
@@ -430,6 +438,7 @@ func _on_revive() -> void:
 func _restart() -> void:
 	death_popup.close()
 	pause_label.visible = false
+	settings_panel.visible = false  # bypass close(): _start_boards resets pause
 	escape_label.visible = false
 	if GameState.mode == GameState.MODE_VERSUS or GameState.split:
 		p1_wins = 0
@@ -547,6 +556,7 @@ func _on_story_doors_opened() -> void:
 
 
 func _on_story_completed() -> void:
+	Sfx.play("record")
 	var earned := _award_run_rewards(false)
 	intro_mode = "complete"
 	intro_clear.text = "모든 스테이지 클리어"
@@ -583,7 +593,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("pause") and round_active \
 			and (story_intro == null or not story_intro.visible) \
 			and boards.any(func(b: EscapeBoard) -> bool: return b.playing):
-		var paused: bool = not board.is_paused
-		for b in boards:
-			b.is_paused = paused
-		pause_label.visible = paused
+		if board.is_paused:
+			settings_panel.close()  # closed signal resumes the boards
+		else:
+			for b in boards:
+				b.is_paused = true
+			Sfx.play("pause")
+			settings_panel.open("일시정지", "계속하기")
+
+
+## The pause menu (settings panel) closed: resume play.
+func _on_settings_closed() -> void:
+	for b in boards:
+		b.is_paused = false
+	Sfx.play("pause")
