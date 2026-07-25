@@ -12,8 +12,16 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
+	# Max-affection looks (stage 3): aura, eye sparkles, floating heart.
+	var saved_aff: Dictionary = GameState.affection.duplicate()
+	GameState.affection = {"black": 25}
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_aff.png",
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
+	GameState.affection = saved_aff
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_shop.png",
+			func(inst: Node) -> void: inst._open_shop())
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
 	var saved_story: int = GameState.story_stage
 	GameState.mode = GameState.MODE_STORY
@@ -52,7 +60,16 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst.get_node("Board")._kill_player()
 				inst.get_node("PopupLayer/DeathPopup").open(
-						"도달 높이 23층      최고 기록 41층", true))
+						"도달 높이 23층      최고 기록 41층", true,
+						"획득   +87 G   +1 ◆", 2, true, false))
+	GameState.mode = GameState.MODE_STORY
+	await _capture("res://core/scenes/main.tscn", OUT + "/death_popup_skip.png",
+			func(inst: Node) -> void:
+				inst._hide_story_intro()
+				inst.get_node("Board")._kill_player()
+				inst.get_node("PopupLayer/DeathPopup").open(
+						"STAGE 7      SCORE 4200", false, "", 1, false, true))
+	GameState.mode = GameState.MODE_ENDLESS
 	# --- 모바일(세로 1080×1920) 레이아웃 ---
 	get_window().size = Vector2i(540, 960)
 	get_window().content_scale_size = Vector2i(1080, 1920)
@@ -60,6 +77,8 @@ func _ready() -> void:
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_shop.png",
+			func(inst: Node) -> void: inst._open_shop())
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

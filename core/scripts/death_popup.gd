@@ -6,6 +6,7 @@ extends Control
 signal continue_pressed
 signal restart_pressed
 signal title_pressed
+signal skip_pressed  # story: give up and buy past this stage with gems
 
 const CREAM := Color("f4e3c8")
 const GOLD := Color(1.0, 0.85, 0.35)
@@ -15,6 +16,12 @@ var _panel: PanelContainer
 var _record_label: Label
 var _stats_label: Label
 var _reward_label: Label
+var _cont: Button
+var _hint: Label
+var _boost_label: Label
+var _boost_row: HBoxContainer
+var _boost_chips := {}  # boost id -> Button
+var _skip_btn: Button
 
 
 func _ready() -> void:
@@ -90,17 +97,16 @@ func _ready() -> void:
 
 	v.add_child(_spacer(10.0))
 
-	var cont := _make_button("이어서 하기", true)
-	cont.pressed.connect(func() -> void: continue_pressed.emit())
-	v.add_child(cont)
+	_cont = _make_button("이어서 하기", true)
+	_cont.pressed.connect(func() -> void: continue_pressed.emit())
+	v.add_child(_cont)
 
-	# Revive currency hint — no real economy yet, so it's free for now.
-	var hint := Label.new()
-	hint.text = "◆ 부활 젤리 1개 사용  (준비 중 · 지금은 무료!)"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 18)
-	hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
-	v.add_child(hint)
+	# Revive jelly price line — open() fills in the cost for this death.
+	_hint = Label.new()
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.add_theme_font_size_override("font_size", 18)
+	_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
+	v.add_child(_hint)
 
 	v.add_child(_spacer(6.0))
 
@@ -108,16 +114,64 @@ func _ready() -> void:
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	v.add_child(restart)
 
+	# One-tap boost rebuy for the next endless run (hidden in story mode).
+	_boost_label = Label.new()
+	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boost_label.add_theme_font_size_override("font_size", 17)
+	_boost_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
+	v.add_child(_boost_label)
+	_boost_row = HBoxContainer.new()
+	_boost_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_boost_row.add_theme_constant_override("separation", 10)
+	v.add_child(_boost_row)
+	for b: Dictionary in GameState.BOOSTS:
+		var chip := Button.new()
+		chip.custom_minimum_size = Vector2(150.0, 60.0)
+		chip.add_theme_font_size_override("font_size", 17)
+		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		chip.pressed.connect(_on_boost_chip.bind(b))
+		_boost_row.add_child(chip)
+		_boost_chips[b.id] = chip
+
+	# Story: after enough failures a paid skip past the stage appears.
+	_skip_btn = _make_button("", false)
+	_skip_btn.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
+	_skip_btn.pressed.connect(func() -> void: skip_pressed.emit())
+	v.add_child(_skip_btn)
+
 	var to_title := _make_button("타이틀로 나가기", false)
 	to_title.pressed.connect(func() -> void: title_pressed.emit())
 	v.add_child(to_title)
 
 
-func open(stats: String, new_record: bool, earned := "") -> void:
+## revive_cost: gems this revive costs (0 = free). show_boosts: endless-only
+## next-run boost chips. show_skip: story skip offer after repeated failures.
+func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
+		show_boosts := false, show_skip := false) -> void:
 	_stats_label.text = stats
 	_record_label.visible = new_record
 	_reward_label.text = earned
 	_reward_label.visible = earned != ""
+	if revive_cost <= 0:
+		_hint.text = "◆ 부활 젤리  ·  이번엔 무료!"
+		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
+		_cont.disabled = false
+	elif GameState.gems >= revive_cost:
+		_hint.text = "◆ 부활 젤리 %d개 사용  (보유 ◆ %d)" % [revive_cost, GameState.gems]
+		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
+		_cont.disabled = false
+	else:
+		_hint.text = "부활에 ◆ %d 필요  (보유 ◆ %d — 부족)" % [revive_cost, GameState.gems]
+		_hint.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
+		_cont.disabled = true
+	_boost_label.visible = show_boosts
+	_boost_row.visible = show_boosts
+	if show_boosts:
+		_refresh_boosts()
+	_skip_btn.visible = show_skip
+	if show_skip:
+		_skip_btn.text = "◆ %d  이 스테이지 건너뛰기" % GameState.SKIP_COST
+		_skip_btn.disabled = GameState.gems < GameState.SKIP_COST
 	visible = true
 	_panel.modulate.a = 0.0
 	await get_tree().process_frame
@@ -132,6 +186,34 @@ func open(stats: String, new_record: bool, earned := "") -> void:
 
 func close() -> void:
 	visible = false
+
+
+func _on_boost_chip(boost: Dictionary) -> void:
+	if not GameState.toggle_boost(str(boost.id)):
+		Sfx.play("error")
+		return
+	Sfx.play("buy" if boost.id in GameState.pending_boosts else "click")
+	_refresh_boosts()
+
+
+func _refresh_boosts() -> void:
+	_boost_label.text = "다음 판 부스트  (보유 %d G)" % GameState.gold
+	for b: Dictionary in GameState.BOOSTS:
+		var chip: Button = _boost_chips[b.id]
+		var pending: bool = b.id in GameState.pending_boosts
+		chip.text = "%s%s  %dG" % ["✓ " if pending else "", b.name, b.price]
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(10)
+		sb.bg_color = Color(CREAM, 0.18) if pending else Color(1, 1, 1, 0.06)
+		sb.set_border_width_all(2)
+		sb.border_color = CREAM if pending else Color(1, 1, 1, 0.22)
+		chip.add_theme_stylebox_override("normal", sb)
+		var hover: StyleBoxFlat = sb.duplicate()
+		hover.bg_color = Color(CREAM, 0.26) if pending else Color(1, 1, 1, 0.12)
+		chip.add_theme_stylebox_override("hover", hover)
+		chip.add_theme_stylebox_override("pressed", sb)
+		chip.add_theme_color_override("font_color",
+				CREAM if pending else Color(1, 1, 1, 0.85))
 
 
 func _spacer(h: float) -> Control:

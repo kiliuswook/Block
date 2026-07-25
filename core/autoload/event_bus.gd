@@ -15,3 +15,4 @@ signal story_stage_started(stage_num: int)
 signal story_progress_changed(text: String)
 signal story_doors_opened
 signal story_completed
+signal story_reward(gold: int, gems: int)  # first-clear payout for a story stage

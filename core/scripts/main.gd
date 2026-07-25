@@ -46,6 +46,13 @@ var stage_header := ""
 # Rewards already paid out this run — a revived player only earns the delta.
 var gold_awarded := 0
 var gems_awarded := 0
+# Revive jelly pricing: endless — first free, then 2/3/4... gems per run;
+# story — one free per stage, then 1 gem.
+var revives_used := 0
+var story_revived := {}  # story stage -> true once its free revive is spent
+# Story skip offer: consecutive deaths on the same stage unlock a paid skip.
+var fail_stage := 0
+var stage_fails := 0
 var p1_wins := 0
 var p2_wins := 0
 var versus_tally: Label
@@ -67,6 +74,8 @@ func _ready() -> void:
 	death_popup.continue_pressed.connect(_on_revive)
 	death_popup.restart_pressed.connect(_restart)
 	death_popup.title_pressed.connect(_to_title)
+	death_popup.skip_pressed.connect(_on_story_skip)
+	EventBus.story_reward.connect(_on_story_reward)
 	EventBus.versus_round_over.connect(_on_versus_round)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var versus := GameState.mode == GameState.MODE_VERSUS
@@ -122,6 +131,8 @@ func _on_game_started() -> void:
 	record_broken = false
 	gold_awarded = 0
 	gems_awarded = 0
+	revives_used = 0
+	story_revived = {}
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
@@ -235,18 +246,35 @@ func _show_new_record() -> void:
 func _on_game_over() -> void:
 	var was_record := false
 	var stats := ""
-	if GameState.mode == GameState.MODE_ENDLESS:
+	var endless := GameState.mode == GameState.MODE_ENDLESS
+	if endless:
 		was_record = GameState.record_height(height)
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
+		# Track consecutive deaths on the same stage for the skip offer.
+		if board.level == fail_stage:
+			stage_fails += 1
+		else:
+			fail_stage = board.level
+			stage_fails = 1
 	var earned := _award_run_rewards(was_record)
+	var cost := _revive_cost()
+	var show_skip: bool = not endless and stage_fails >= 3 \
+			and GameState.story_stage < StoryStages.TOTAL
 	# Let the death sink in for a beat before the popup slides up.
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record, earned))
+			death_popup.open(stats, was_record, earned, cost, endless, show_skip))
+
+
+## Gems the next revive costs right now (0 = free).
+func _revive_cost() -> int:
+	if GameState.mode == GameState.MODE_ENDLESS:
+		return 0 if revives_used == 0 else revives_used + 1
+	return 1 if story_revived.has(board.level) else 0
 
 
 ## Pays out gold/gems for the whole run so far (minus what a previous death in
@@ -255,7 +283,7 @@ func _award_run_rewards(was_record: bool) -> String:
 	var run_gold := 0
 	var run_gems := 0
 	if GameState.mode == GameState.MODE_ENDLESS:
-		run_gold = height * 3
+		run_gold = int(height * 3 * board.gold_mult)  # lucky jelly boost applies
 		run_gems = mini(height / 30, 3)
 	else:
 		run_gold = GameState.score / 20
@@ -268,10 +296,16 @@ func _award_run_rewards(was_record: bool) -> String:
 	gems_awarded = maxi(run_gems, gems_awarded)
 	if earn_gold <= 0 and earn_gems <= 0:
 		return ""
+	# First rewarded run of the day pays double gold.
+	var daily := earn_gold > 0 and GameState.claim_daily_bonus()
+	if daily:
+		earn_gold *= 2
 	GameState.add_currency(earn_gold, earn_gems)
 	var line := "획득   +%d G" % earn_gold
 	if earn_gems > 0:
 		line += "   +%d ◆" % earn_gems
+	if daily:
+		line = "오늘 첫 판 2배!   " + line
 	return line
 
 
@@ -430,9 +464,54 @@ func _duel_round(winner: int, who: String) -> void:
 
 
 func _on_revive() -> void:
+	var cost := _revive_cost()
+	if cost > 0 and not GameState.spend_gems(cost):
+		Sfx.play("error")
+		return
+	if GameState.mode == GameState.MODE_ENDLESS:
+		revives_used += 1
+	else:
+		story_revived[board.level] = true
 	death_popup.close()
 	board.revive_player()
 	_screen_flash(0.25)
+
+
+## Paid story skip: mark the stage passed and restart into the next one.
+func _on_story_skip() -> void:
+	if not GameState.spend_gems(GameState.SKIP_COST):
+		Sfx.play("error")
+		return
+	Sfx.play("buy")
+	GameState.story_skip(board.level)
+	stage_fails = 0
+	fail_stage = 0
+	_restart()
+
+
+## Floating banner for a first-clear story payout.
+func _on_story_reward(reward_gold: int, reward_gems: int) -> void:
+	var text := "첫 클리어 보상  +%d G" % reward_gold
+	if reward_gems > 0:
+		text += "   +%d ◆" % reward_gems
+	var vp := get_viewport_rect().size
+	var pop := Label.new()
+	pop.text = text
+	pop.position = Vector2(0.0, vp.y * 0.30)
+	pop.size = Vector2(vp.x, 50.0)
+	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pop.add_theme_font_size_override("font_size", 34)
+	pop.add_theme_color_override("font_color", GOLD)
+	pop.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	pop.add_theme_constant_override("outline_size", 8)
+	$UI.add_child(pop)
+	Sfx.play("gold")
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(pop, "position:y", pop.position.y - 70.0, 1.4) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(pop, "modulate:a", 0.0, 0.6).set_delay(0.9)
+	tw.chain().tween_callback(pop.queue_free)
 
 
 func _restart() -> void:

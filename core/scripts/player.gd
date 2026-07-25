@@ -309,6 +309,11 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	var body_col: Color = skin.get("body", BODY_COLOR) if cat_alive else DEAD_BODY_COLOR
 	var ear_col: Color = skin.get("ear", EAR_COLOR) if cat_alive else DEAD_EAR_COLOR
 	var ink_col: Color = skin.get("ink", INK_COLOR)
+	var aff := int(skin.get("aff", 1))  # affection looks stage 1..3
+	if cat_alive and aff >= 3:
+		# Max affection: a soft warm aura glows behind the whole cat.
+		ci.draw_circle(center, s * 0.80, Color(1.0, 0.95, 0.8, 0.10))
+		ci.draw_circle(center, s * 0.67, Color(1.0, 0.94, 0.78, 0.13))
 	# Protruding ears (behind the body).
 	for sg in [-1.0, 1.0]:
 		ci.draw_colored_polygon(PackedVector2Array([
@@ -349,6 +354,23 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			ci.draw_arc(mc + Vector2(s * 0.045, 0.0), s * 0.05, 0.3, PI - 0.3, 8, mouth_col, s * 0.035)
 		ci.draw_circle(center + Vector2(-s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
 		ci.draw_circle(center + Vector2(s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
+		if aff >= 2:
+			# Loved cats: rosier cheeks and a sparkle in each eye.
+			for sg in [-1.0, 1.0]:
+				ci.draw_circle(center + Vector2(sg * s * 0.30, s * 0.09), s * 0.07,
+						Color(0.94, 0.5, 0.52, 0.3))
+				ci.draw_circle(center + Vector2(sg * ex + look + er * 0.35, ey - er * 0.35),
+						er * 0.34, Color(1, 1, 1, 0.92))
+		if aff >= 3:
+			# Max affection: a little heart floats by the ear.
+			var hc := Color(0.95, 0.5, 0.6, 0.95)
+			var hp := center + Vector2(s * 0.48, -half - s * 0.22)
+			ci.draw_circle(hp + Vector2(-s * 0.035, 0.0), s * 0.048, hc)
+			ci.draw_circle(hp + Vector2(s * 0.035, 0.0), s * 0.048, hc)
+			ci.draw_colored_polygon(PackedVector2Array([
+				hp + Vector2(-s * 0.078, s * 0.018), hp + Vector2(s * 0.078, s * 0.018),
+				hp + Vector2(0.0, s * 0.105),
+			]), hc)
 	else:
 		for sg in [-1.0, 1.0]:
 			var c := center + Vector2(sg * ex, ey)
@@ -363,3 +385,115 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 				center + Vector2(sg * s * 0.52, s * 0.01), wh_col, wh_w)
 		ci.draw_line(center + Vector2(sg * s * 0.34, s * 0.13),
 				center + Vector2(sg * s * 0.52, s * 0.12), wh_col, wh_w)
+	for acc in skin.get("acc", []):
+		paint_acc(ci, center, s, acc)
+
+
+## Draws one procedural accessory (see GameState.ACCESSORIES) on the cube cat.
+## acc: {"kind": String, "col": Color, "col2": Color}.
+static func paint_acc(ci: CanvasItem, center: Vector2, s: float, acc: Dictionary) -> void:
+	var half := s / 2.0
+	var col: Color = acc.get("col", Color.WHITE)
+	var col2: Color = acc.get("col2", col.darkened(0.3))
+	match str(acc.get("kind", "")):
+		"beanie":
+			# Knit band across the head top with a pompom.
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.36, -half - s * 0.13),
+					Vector2(s * 0.72, s * 0.16)), col)
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.36, -half - s * 0.02),
+					Vector2(s * 0.72, s * 0.06)), col2)
+			ci.draw_circle(center + Vector2(0.0, -half - s * 0.17), s * 0.08, col2)
+		"leaf":
+			var base := center + Vector2(0.0, -half - s * 0.02)
+			ci.draw_line(base, base + Vector2(0.0, -s * 0.14), col2, s * 0.035)
+			ci.draw_circle(base + Vector2(-s * 0.07, -s * 0.17), s * 0.07, col)
+			ci.draw_circle(base + Vector2(s * 0.07, -s * 0.17), s * 0.07, col)
+		"ribbon":
+			var knot := center + Vector2(s * 0.30, -half - s * 0.04)
+			for sg in [-1.0, 1.0]:
+				ci.draw_colored_polygon(PackedVector2Array([
+					knot, knot + Vector2(sg * s * 0.16, -s * 0.10),
+					knot + Vector2(sg * s * 0.16, s * 0.08),
+				]), col)
+			ci.draw_circle(knot, s * 0.05, col2)
+		"flower":
+			var at := center + Vector2(-s * 0.28, -half - s * 0.03)
+			for i in range(5):
+				var a := TAU * i / 5.0
+				ci.draw_circle(at + Vector2.from_angle(a) * s * 0.07, s * 0.055, col)
+			ci.draw_circle(at, s * 0.05, col2)
+		"wizard":
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.34, -half - s * 0.06),
+					Vector2(s * 0.68, s * 0.07)), col2)
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(-s * 0.24, -half - s * 0.04),
+				center + Vector2(s * 0.24, -half - s * 0.04),
+				center + Vector2(s * 0.04, -half - s * 0.42),
+			]), col)
+			ci.draw_circle(center + Vector2(s * 0.05, -half - s * 0.40), s * 0.045, col2)
+		"tophat":
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.38, -half - s * 0.05),
+					Vector2(s * 0.76, s * 0.07)), col)
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.24, -half - s * 0.33),
+					Vector2(s * 0.48, s * 0.29)), col)
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.24, -half - s * 0.13),
+					Vector2(s * 0.48, s * 0.07)), col2)
+		"crown":
+			var base_y := -half - s * 0.02
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(-s * 0.26, base_y),
+				center + Vector2(-s * 0.26, base_y - s * 0.20),
+				center + Vector2(-s * 0.13, base_y - s * 0.08),
+				center + Vector2(0.0, base_y - s * 0.24),
+				center + Vector2(s * 0.13, base_y - s * 0.08),
+				center + Vector2(s * 0.26, base_y - s * 0.20),
+				center + Vector2(s * 0.26, base_y),
+			]), col)
+			ci.draw_circle(center + Vector2(0.0, base_y - s * 0.05), s * 0.045, col2)
+		"halo":
+			var at := center + Vector2(0.0, -half - s * 0.26)
+			ci.draw_arc(at, s * 0.20, 0.0, TAU, 24, Color(col2, 0.35), s * 0.09)
+			ci.draw_arc(at, s * 0.20, 0.0, TAU, 24, col, s * 0.045)
+		"bell":
+			ci.draw_rect(Rect2(center + Vector2(-half + s * 0.06, half - s * 0.10),
+					Vector2(s - s * 0.12, s * 0.07)), col)
+			var bell := center + Vector2(0.0, half - s * 0.01)
+			ci.draw_circle(bell, s * 0.08, col2)
+			ci.draw_line(bell + Vector2(0.0, s * 0.02), bell + Vector2(0.0, s * 0.08),
+					Color(col2, 1.0).darkened(0.45), s * 0.03)
+		"scarf":
+			ci.draw_rect(Rect2(center + Vector2(-half + s * 0.04, half - s * 0.16),
+					Vector2(s - s * 0.08, s * 0.14)), col)
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.26, half - s * 0.04),
+					Vector2(s * 0.14, s * 0.22)), col2)
+		"bowtie":
+			var knot := center + Vector2(0.0, half - s * 0.07)
+			for sg in [-1.0, 1.0]:
+				ci.draw_colored_polygon(PackedVector2Array([
+					knot, knot + Vector2(sg * s * 0.17, -s * 0.09),
+					knot + Vector2(sg * s * 0.17, s * 0.09),
+				]), col)
+			ci.draw_circle(knot, s * 0.05, col2)
+		"bandana":
+			ci.draw_rect(Rect2(center + Vector2(-s * 0.30, half - s * 0.12),
+					Vector2(s * 0.60, s * 0.07)), col)
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(-s * 0.20, half - s * 0.06),
+				center + Vector2(s * 0.20, half - s * 0.06),
+				center + Vector2(0.0, half + s * 0.16),
+			]), col)
+			ci.draw_circle(center + Vector2(0.0, half + s * 0.01), s * 0.025, col2)
+		"goldchain":
+			ci.draw_arc(center + Vector2(0.0, half - s * 0.20), s * 0.34,
+					0.5, PI - 0.5, 14, col, s * 0.05)
+			ci.draw_circle(center + Vector2(0.0, half + s * 0.10), s * 0.07, col)
+			ci.draw_circle(center + Vector2(0.0, half + s * 0.10), s * 0.035, col2)
+		"gemchain":
+			ci.draw_arc(center + Vector2(0.0, half - s * 0.20), s * 0.34,
+					0.5, PI - 0.5, 14, col, s * 0.035)
+			for i in [-1, 0, 1]:
+				var at := center + Vector2(i * s * 0.14, half + s * 0.06 - absi(i) * s * 0.035)
+				ci.draw_colored_polygon(PackedVector2Array([
+					at + Vector2(0.0, -s * 0.05), at + Vector2(s * 0.045, 0.0),
+					at + Vector2(0.0, s * 0.05), at + Vector2(-s * 0.045, 0.0),
+				]), col2)

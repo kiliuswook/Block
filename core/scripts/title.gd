@@ -10,7 +10,8 @@ const INK := Color("2a2230")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const TILE_SIZE := Vector2(128.0, 168.0)
 const TILE_GAP := 14.0
-const POPUP_SIZE := Vector2(620.0, 616.0)
+const POPUP_SIZE := Vector2(620.0, 700.0)
+const SHOP_TILE := Vector2(200.0, 210.0)
 const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 		["무게", "weight"], ["밀기", "push"]]
 
@@ -35,8 +36,14 @@ var _popup: Control
 var _popup_face: Control
 var _popup_action: Button
 var _popup_close: Button
+var _popup_feed: Button
 var _popup_cat: Dictionary = {}
 var _settings: Control
+var _shop: Control
+var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
+var _boost_chips := {}  # boost id -> Button
+var _shop_wallet: Label
+var _bob := 0.0  # title cat idle bounce (affection level 5+)
 
 
 func _ready() -> void:
@@ -55,7 +62,15 @@ func _ready() -> void:
 	_build_popup()
 	_build_toast()
 	_build_settings()
+	_build_shop()
 	Sfx.play_bgm("title")
+
+
+## The selected cat bounces on the title once affection reaches level 5.
+func _process(delta: float) -> void:
+	if GameState.affection_level(GameState.selected_cat) >= 5:
+		_bob += delta
+		queue_redraw()
 
 
 ## Story button subtitle mirrors the saved progress.
@@ -89,6 +104,16 @@ func _build_settings() -> void:
 	$UI.add_child(b)
 	_settings = SETTINGS_PANEL.new()
 	$UI.add_child(_settings)
+	var shop_btn := Button.new()
+	shop_btn.text = "★ 상점"
+	shop_btn.position = Vector2(30.0, 100.0)
+	shop_btn.size = Vector2(150.0, 56.0)
+	shop_btn.add_theme_font_size_override("font_size", 24)
+	shop_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	shop_btn.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_open_shop())
+	$UI.add_child(shop_btn)
 
 
 func _settings_open() -> bool:
@@ -100,6 +125,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_settings.close()
+		return
+	if _shop and _shop.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_close_shop()
 		return
 	if _popup and _popup.visible:
 		# The popup swallows mode hotkeys; Esc closes it.
@@ -119,6 +149,210 @@ func _unhandled_input(event: InputEvent) -> void:
 				_start(GameState.MODE_STORY, true)
 			KEY_5, KEY_KP_5:
 				_start(GameState.MODE_ENDLESS, true)
+
+
+# --- Shop (accessories + run boosts) ------------------------------------------
+
+
+## Code-built shop overlay: accessory tiles per slot plus one-run endless
+## boosts. Sized off the viewport so portrait (mobile) and landscape both fit.
+func _build_shop() -> void:
+	_shop = Control.new()
+	_shop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop.visible = false
+	$UI.add_child(_shop)
+	var dim := Button.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim_sb := StyleBoxFlat.new()
+	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		dim.add_theme_stylebox_override(st, dim_sb)
+	dim.pressed.connect(_close_shop)
+	_shop.add_child(dim)
+	var pw := minf(vw - 60.0, 940.0)
+	var ph := minf(vh - 140.0, 980.0)
+	var panel := PanelContainer.new()
+	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
+	panel.size = Vector2(pw, ph)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("1c1a26")
+	box.set_corner_radius_all(18)
+	box.set_border_width_all(3)
+	box.border_color = Color(CREAM, 0.65)
+	box.content_margin_left = 30.0
+	box.content_margin_right = 30.0
+	box.content_margin_top = 22.0
+	box.content_margin_bottom = 22.0
+	panel.add_theme_stylebox_override("panel", box)
+	_shop.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+	var title := Label.new()
+	title.text = "냥냥 상점"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", CREAM)
+	v.add_child(title)
+	_shop_wallet = Label.new()
+	_shop_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shop_wallet.add_theme_font_size_override("font_size", 24)
+	_shop_wallet.add_theme_color_override("font_color", GOLD_COL)
+	v.add_child(_shop_wallet)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 12)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+	var per_row := maxi(1, int((pw - 60.0 + TILE_GAP) / (SHOP_TILE.x + TILE_GAP)))
+	for slot: Array in [["head", "머리 장식"], ["neck", "목 장식"]]:
+		list.add_child(_shop_header(str(slot[1])))
+		var items := GameState.ACCESSORIES.filter(
+				func(a: Dictionary) -> bool: return a.slot == slot[0])
+		var row: HBoxContainer = null
+		for i in items.size():
+			if i % per_row == 0:
+				row = HBoxContainer.new()
+				row.add_theme_constant_override("separation", int(TILE_GAP))
+				list.add_child(row)
+			row.add_child(_make_shop_tile(items[i]))
+	list.add_child(_shop_header("다음 판 부스트  ·  무한의 계단 1판 소모"))
+	var boost_row := HBoxContainer.new()
+	boost_row.add_theme_constant_override("separation", 14)
+	list.add_child(boost_row)
+	for b: Dictionary in GameState.BOOSTS:
+		var chip := Button.new()
+		chip.custom_minimum_size = Vector2((pw - 88.0) / 3.0, 128.0)
+		chip.add_theme_font_size_override("font_size", 20)
+		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		chip.pressed.connect(_on_boost_chip.bind(b))
+		boost_row.add_child(chip)
+		_boost_chips[b.id] = chip
+	var close := Button.new()
+	close.text = "닫기"
+	close.custom_minimum_size = Vector2(200.0, 52.0)
+	close.add_theme_font_size_override("font_size", 22)
+	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.pressed.connect(_close_shop)
+	var close_wrap := CenterContainer.new()
+	close_wrap.add_child(close)
+	v.add_child(close_wrap)
+
+
+func _shop_header(text: String) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", 22)
+	l.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	return l
+
+
+func _make_shop_tile(acc: Dictionary) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = SHOP_TILE
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(14)
+	sb.bg_color = Color(1, 1, 1, 0.05)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(1, 1, 1, 0.18)
+	b.add_theme_stylebox_override("normal", sb)
+	var hover: StyleBoxFlat = sb.duplicate()
+	hover.bg_color = Color(1, 1, 1, 0.12)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", sb)
+	b.pressed.connect(_on_shop_item.bind(acc))
+	var face := Control.new()
+	face.set_anchors_preset(Control.PRESET_FULL_RECT)
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.draw.connect(func() -> void: _draw_shop_tile(face, acc))
+	b.add_child(face)
+	_shop_tiles[acc.id] = face
+	return b
+
+
+func _draw_shop_tile(ci: Control, acc: Dictionary) -> void:
+	# Preview: the cream cat modeling the item.
+	var skin := {"body": Color("f4e3c8"), "ear": Color("d9a05c"), "acc": [acc]}
+	Player.paint_cat(ci, Vector2(SHOP_TILE.x / 2.0, 84.0), 64.0, 0.0, true, false, skin)
+	var font := ThemeDB.fallback_font
+	_draw_center_text(ci, font, str(acc.name), 152.0, 20, Color.WHITE, SHOP_TILE.x)
+	var owned: bool = acc.id in GameState.acc_owned
+	var equipped: bool = GameState.acc_head == acc.id or GameState.acc_neck == acc.id
+	if equipped:
+		_draw_center_text(ci, font, "장착 중", 184.0, 18, CREAM, SHOP_TILE.x)
+	elif owned:
+		_draw_center_text(ci, font, "보유 · 눌러서 장착", 184.0, 16,
+				Color(1, 1, 1, 0.6), SHOP_TILE.x)
+	elif acc.price.type == "gold":
+		_draw_center_text(ci, font, "%d G" % acc.price.amount, 184.0, 18, GOLD_COL,
+				SHOP_TILE.x)
+	else:
+		_draw_center_text(ci, font, "◆ %d" % acc.price.amount, 184.0, 18, GEM_COL,
+				SHOP_TILE.x)
+
+
+func _on_shop_item(acc: Dictionary) -> void:
+	if acc.id in GameState.acc_owned:
+		Sfx.play("click")
+		GameState.toggle_acc(str(acc.id))
+	elif GameState.try_buy_acc(str(acc.id)):
+		Sfx.play("buy")
+		GameState.toggle_acc(str(acc.id))  # wear it right away
+		_show_toast("%s 구매 완료!" % acc.name, CREAM)
+	else:
+		Sfx.play("error")
+		_show_toast("골드가 부족해요!" if acc.price.type == "gold" else "보석이 부족해요!",
+				Color(1.0, 0.55, 0.5))
+		return
+	_refresh_shop()
+	_refresh_currency()
+	_refresh_tiles()
+
+
+func _on_boost_chip(boost: Dictionary) -> void:
+	var had: bool = boost.id in GameState.pending_boosts
+	if not GameState.toggle_boost(str(boost.id)):
+		Sfx.play("error")
+		_show_toast("골드가 부족해요!", Color(1.0, 0.55, 0.5))
+		return
+	Sfx.play("click" if had else "buy")
+	_refresh_shop()
+	_refresh_currency()
+
+
+func _refresh_shop() -> void:
+	_shop_wallet.text = "보유   %d G      ◆ %d" % [GameState.gold, GameState.gems]
+	for id: String in _shop_tiles:
+		_shop_tiles[id].queue_redraw()
+	for b: Dictionary in GameState.BOOSTS:
+		var chip: Button = _boost_chips[b.id]
+		var pending: bool = b.id in GameState.pending_boosts
+		chip.text = "%s  ·  %d G\n%s\n%s" % [b.name, b.price, b.desc,
+				"준비 완료! (다시 누르면 환불)" if pending else "누르면 구매"]
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(12)
+		sb.bg_color = Color(CREAM, 0.16) if pending else Color(1, 1, 1, 0.05)
+		sb.set_border_width_all(2)
+		sb.border_color = CREAM if pending else Color(1, 1, 1, 0.2)
+		chip.add_theme_stylebox_override("normal", sb)
+		var hover: StyleBoxFlat = sb.duplicate()
+		hover.bg_color = Color(CREAM, 0.24) if pending else Color(1, 1, 1, 0.11)
+		chip.add_theme_stylebox_override("hover", hover)
+		chip.add_theme_stylebox_override("pressed", sb)
+
+
+func _open_shop() -> void:
+	_refresh_shop()
+	_shop.visible = true
+
+
+func _close_shop() -> void:
+	_shop.visible = false
+	queue_redraw()  # title cat may have changed outfit
 
 
 # --- Character select ---------------------------------------------------------
@@ -191,7 +425,10 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 		_draw_lock(ci, center + Vector2(34.0, 24.0))
 	var font := ThemeDB.fallback_font
 	var name_col := Color.WHITE if unlocked else Color(1, 1, 1, 0.45)
-	_draw_center_text(ci, font, cat.name, 112.0, 22, name_col)
+	var tile_name := str(cat.name)
+	if unlocked and GameState.affection_level(cat.id) >= 10:
+		tile_name = "★" + tile_name
+	_draw_center_text(ci, font, tile_name, 112.0, 22, name_col)
 	if not unlocked:
 		var u: Dictionary = cat.unlock
 		match u.type:
@@ -272,6 +509,9 @@ func _build_popup() -> void:
 	_popup_close = _make_popup_button(panel, false)
 	_popup_close.text = "닫기"
 	_popup_close.pressed.connect(_close_popup)
+	_popup_feed = _make_popup_button(panel, false)
+	_popup_feed.add_theme_font_size_override("font_size", 19)
+	_popup_feed.pressed.connect(_on_popup_feed)
 
 
 func _make_popup_button(panel: Control, accent: bool) -> Button:
@@ -307,6 +547,7 @@ func _open_popup(cat: Dictionary) -> void:
 		_popup_action.text = "구매  ◆ %d" % u.amount
 	else:
 		_popup_action.visible = false
+	_refresh_feed_button()
 	# Bottom row: action + close side by side, or close alone centered.
 	var y := POPUP_SIZE.y - 70.0
 	if _popup_action.visible:
@@ -324,6 +565,53 @@ func _open_popup(cat: Dictionary) -> void:
 
 func _close_popup() -> void:
 	_popup.visible = false
+
+
+## Feed button doubles as the affection progress readout.
+func _refresh_feed_button() -> void:
+	var cat := _popup_cat
+	if cat.is_empty() or not GameState.is_unlocked(cat.id):
+		_popup_feed.visible = false
+		return
+	_popup_feed.visible = true
+	_popup_feed.size = Vector2(400.0, 46.0)
+	_popup_feed.position = Vector2((POPUP_SIZE.x - 400.0) / 2.0, POPUP_SIZE.y - 158.0)
+	var to_next := GameState.snacks_to_next(str(cat.id))
+	if to_next == 0:
+		_popup_feed.text = "애정도 MAX  ·  최고의 단짝!"
+		_popup_feed.disabled = true
+	else:
+		_popup_feed.text = "간식 주기  %d G   (다음 레벨까지 %d개)" \
+				% [GameState.snack_price(str(cat.id)), to_next]
+		_popup_feed.disabled = false
+
+
+func _on_popup_feed() -> void:
+	var cat := _popup_cat
+	if cat.is_empty():
+		return
+	var before_level := GameState.affection_level(cat.id)
+	var before_stage := GameState.aff_stage(cat.id)
+	if GameState.feed_cat(str(cat.id)):
+		var level := GameState.affection_level(cat.id)
+		if GameState.aff_stage(cat.id) > before_stage:
+			Sfx.play("record")
+			_show_toast("%s (이)의 모습이 변했다!! Lv.%d" % [cat.name, level], GOLD_COL)
+		elif level > before_level:
+			Sfx.play("record")
+			_show_toast("애정도 레벨 업!  Lv.%d — 능력 +%d%%" \
+					% [level, roundi(GameState.affection_bonus(cat.id) * 100)],
+					Color(0.96, 0.62, 0.7))
+		else:
+			Sfx.play("buy")
+			_show_toast("%s (이)가 좋아한다냥! ♥" % cat.name, Color(0.96, 0.62, 0.7))
+		_refresh_feed_button()
+		_refresh_currency()
+		_popup_face.queue_redraw()
+		_refresh_tiles()
+	else:
+		Sfx.play("error")
+		_show_toast("골드가 부족해요!", Color(1.0, 0.55, 0.5))
 
 
 func _on_popup_action() -> void:
@@ -371,7 +659,10 @@ func _draw_popup(ci: Control) -> void:
 		Player.paint_cat(ci, center, 110.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(52.0, 38.0))
 	var name_col := Color.WHITE if unlocked else Color(1, 1, 1, 0.6)
-	_draw_center_text(ci, font, str(cat.name), 226.0, 34, name_col, POPUP_SIZE.x)
+	var pop_name := str(cat.name)
+	if unlocked and GameState.affection_level(cat.id) >= 10:
+		pop_name = "★ %s ★" % pop_name
+	_draw_center_text(ci, font, pop_name, 226.0, 34, name_col, POPUP_SIZE.x)
 	_draw_center_text(ci, font, "「%s」" % cat.get("trait", ""), 262.0, 21,
 			Color(CREAM, 0.95), POPUP_SIZE.x)
 	# Stat bars.
@@ -385,6 +676,15 @@ func _draw_popup(ci: Control) -> void:
 			var r := Rect2(238.0 + p * 50.0, row_y, 42.0, 16.0)
 			var col := Color(CREAM, 0.95) if p < pips else Color(1, 1, 1, 0.12)
 			ci.draw_rect(r, col)
+	# Affection hearts (snacks fed) — unlocked cats only.
+	if unlocked:
+		var level := GameState.affection_level(cat.id)
+		var hearts := "♥".repeat(level) + "♡".repeat(10 - level)
+		var line := "애정도 Lv.%d   %s" % [level, hearts]
+		if level > 1:
+			line += "   능력 +%d%%" % roundi(GameState.affection_bonus(cat.id) * 100)
+		_draw_center_text(ci, font, line, 522.0, 20,
+				Color(0.96, 0.62, 0.7), POPUP_SIZE.x)
 	# Status / unlock condition line.
 	var status := ""
 	var status_col := Color(1, 1, 1, 0.7)
@@ -499,7 +799,11 @@ func _draw() -> void:
 			draw_rect(Rect2(p, Vector2(42.0, 42.0)),
 					Color(1.0, 0.96, 0.84, 0.18), false, 2.0)
 	# The cube cat perched above the title, wearing the selected skin.
-	Player.paint_cat(self, Vector2(vw / 2.0, 100), 96.0, 0.0, true, false,
+	# High affection (level 5+) earns it a happy idle bounce.
+	var cat_y := 100.0
+	if GameState.affection_level(GameState.selected_cat) >= 5:
+		cat_y += sin(_bob * 5.0) * 7.0
+	Player.paint_cat(self, Vector2(vw / 2.0, cat_y), 96.0, 0.0, true, false,
 			GameState.cat_skin(GameState.selected_cat))
 	_draw_stat_line()
 

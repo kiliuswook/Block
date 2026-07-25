@@ -90,6 +90,7 @@ var versus_pieces := 0
 var fever_gauge := 0.0
 var fever_active := false
 var fever_timer := 0.0
+var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
 # Split screen: one board per player — global EventBus signals are muted and
 # the piece is driven by this board's own action set instead of the defaults.
 var split := false
@@ -138,10 +139,21 @@ func start_game() -> void:
 		cam.enabled = mode == Mode.ENDLESS
 		cam.position = Vector2(COLS * CELL / 2.0, ROWS * CELL / 2.0)
 		cam.reset_smoothing()
+	gold_mult = 1.0
 	if _story():
 		# Resume from the next uncleared stage; a finished story replays from 1.
 		level = GameState.story_stage % StoryStages.TOTAL + 1
 		_apply_stage()
+	elif mode == Mode.ENDLESS and not split:
+		# Consume boosts bought for this run (shop / death-popup chips).
+		for b: String in GameState.take_boosts():
+			match b:
+				"warmup":
+					_build_warmup_stairs()
+				"fever":
+					fever_gauge = 0.5
+				"lucky":
+					gold_mult = 1.5
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	playing = true
@@ -571,6 +583,16 @@ func _lock_piece() -> void:
 	_spawn_piece()
 
 
+## Warmup boost: a staircase against the left wall reaching 5 floors up, so
+## the run starts with a quick climb instead of a bare pit. Columns only —
+## never a full row, so it can't be cashed in as an instant line clear.
+func _build_warmup_stairs() -> void:
+	for i in range(1, 6):
+		var x := 5 - i  # x=4 is 1 tall ... x=0 is 5 tall
+		for d in range(i):
+			grid[Vector2i(x, ROWS - 1 - d)] = "J"
+
+
 ## Endless: line clears fight the lava — every clear shoves it back down
 ## (scaling steeply with multi-line clears) and pays gold on the spot.
 ## Height itself is never lost: _clear_lines leaves gaps instead of collapsing.
@@ -578,7 +600,7 @@ func _endless_line_reward(cleared: int) -> void:
 	lava_y += LAVA_PUSH[cleared] * CELL
 	if split:
 		return  # split race: shared wallet would double-pay across two boards
-	var g: int = GOLD_PER_CLEAR[cleared]
+	var g := int(GOLD_PER_CLEAR[cleared] * gold_mult)
 	GameState.add_currency(g, 0)
 	gold_fx.append([Vector2(player.position.x, player.position.y - CELL), 0.0, g])
 	Sfx.play("gold")
