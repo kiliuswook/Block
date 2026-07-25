@@ -36,6 +36,8 @@ func _ready() -> void:
 	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage6.png",
 			func(inst: Node) -> void: inst._hide_story_intro())
 	GameState.story_stage = saved_story
+	GameState.mode = GameState.MODE_CLASSIC
+	await _capture("res://core/scenes/classic.tscn", OUT + "/classic.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
@@ -91,6 +93,11 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	GameState.mode = GameState.MODE_CLASSIC
+	await _capture("res://core/scenes/classic.tscn", OUT + "/m_classic.png",
+			func(inst: Node) -> void:
+				# 데스크톱 캡처엔 터치스크린이 없으니 터치 버튼을 강제 생성.
+				inst._build_touch(inst.get_viewport_rect().size, true))
 	get_tree().quit()
 
 

@@ -18,6 +18,16 @@ const LINE_SCORES := [0, 100, 300, 500, 800]
 const PIECES := ["I", "O", "T", "S", "Z", "J", "L"]
 const HOLD_PANEL := Rect2(-186, 0, 146, 96)
 
+# --- Classic (arcade) ruleset — the original NES/arcade level design ---------
+# Gravity: frames per row at 60fps, indexed by displayed level 1..30.
+# 1-9 ease down 48→8, 10 hits 6, then the classic plateaus, 20-29 at 2,
+# 30+ is the one-frame kill screen.
+const CLASSIC_FRAMES := [48, 43, 38, 33, 28, 23, 18, 13, 8, 6,
+		5, 5, 5, 4, 4, 4, 3, 3, 3, 2,
+		2, 2, 2, 2, 2, 2, 2, 2, 2, 1]
+# Arcade scoring: single/double/triple/tetris × level.
+const CLASSIC_SCORES := [0, 40, 100, 300, 1200]
+
 # Cat-Tris palette: classic tetromino hues, deepened so blocks read as
 # cold pit debris and never outshine the warm cream cat.
 const COLORS := {
@@ -115,6 +125,10 @@ var fall_timer := 0.0
 var lock_timer := 0.0
 var lock_resets := 0
 var das_timer := 0.0
+# Classic (arcade) mode: NES gravity/scoring, uniform randomizer with one
+# re-roll, no hold / ghost / hard drop, one-piece preview.
+var classic := false
+var last_piece := ""
 
 
 func start_game() -> void:
@@ -128,6 +142,7 @@ func start_game() -> void:
 	fall_timer = 0.0
 	das_timer = 0.0
 	is_paused = false
+	last_piece = ""
 	GameState.reset()
 	for i in NEXT_COUNT:
 		queue.append(_draw_from_bag())
@@ -147,9 +162,9 @@ func _process(delta: float) -> void:
 		_try_rotate(1)
 	if Input.is_action_just_pressed("rotate_ccw"):
 		_try_rotate(-1)
-	if Input.is_action_just_pressed("hold_piece"):
+	if Input.is_action_just_pressed("hold_piece") and not classic:
 		_hold()
-	if Input.is_action_just_pressed("hard_drop") and playing:
+	if Input.is_action_just_pressed("hard_drop") and playing and not classic:
 		_hard_drop()
 	if playing:
 		_apply_gravity(delta)
@@ -198,6 +213,8 @@ func _apply_gravity(delta: float) -> void:
 
 
 func _fall_interval() -> float:
+	if classic:
+		return CLASSIC_FRAMES[clampi(level, 1, CLASSIC_FRAMES.size()) - 1] / 60.0
 	return pow(0.8 - (level - 1) * 0.007, level - 1)
 
 
@@ -272,7 +289,9 @@ func _lock_piece() -> void:
 	var cleared := _clear_lines()
 	if cleared > 0:
 		total_lines += cleared
-		GameState.score += LINE_SCORES[cleared] * level
+		var table := CLASSIC_SCORES if classic else LINE_SCORES
+		GameState.score += table[cleared] * level
+		Sfx.play("clear", 1.0 + 0.07 * (cleared - 1))
 		EventBus.lines_changed.emit(total_lines)
 		var new_level := int(total_lines / 10.0) + 1
 		if new_level != level:
@@ -325,7 +344,24 @@ func _end_game() -> void:
 	queue_redraw()
 
 
+## Arcade continue ("insert coin"): fresh field, score/level/lines kept.
+func continue_run() -> void:
+	grid.clear()
+	fall_timer = 0.0
+	playing = true
+	_spawn_next()
+	queue_redraw()
+
+
 func _draw_from_bag() -> String:
+	if classic:
+		# NES randomizer: uniform roll, one re-roll when it repeats the
+		# previous piece — streaky and drought-prone, as the arcade was.
+		var roll: String = PIECES.pick_random()
+		if roll == last_piece:
+			roll = PIECES.pick_random()
+		last_piece = roll
+		return roll
 	if bag.is_empty():
 		bag = PIECES.duplicate()
 		bag.shuffle()
@@ -367,24 +403,27 @@ func _draw() -> void:
 		if c.y >= 0:
 			_draw_cell(c, COLORS[grid[c]])
 	if playing and current_type != "":
-		var gp := _ghost_pos()
-		if gp != current_pos:
-			var ghost_color: Color = COLORS[current_type]
-			ghost_color.a = 0.22
-			for c in _cells(current_type, current_rot, gp):
-				if c.y >= 0:
-					_draw_cell(c, ghost_color)
+		if not classic:  # the arcade had no ghost piece
+			var gp := _ghost_pos()
+			if gp != current_pos:
+				var ghost_color: Color = COLORS[current_type]
+				ghost_color.a = 0.22
+				for c in _cells(current_type, current_rot, gp):
+					if c.y >= 0:
+						_draw_cell(c, ghost_color)
 		for c in _cells(current_type, current_rot, current_pos):
 			if c.y >= 0:
 				_draw_cell(c, COLORS[current_type])
 	draw_rect(Rect2(-2, -2, COLS * CELL + 4, ROWS * CELL + 4), Color(1, 1, 1, 0.35), false, 2.0)
-	draw_rect(HOLD_PANEL, Color(0.08, 0.09, 0.12))
-	if hold_type != "":
-		var hold_color: Color = COLORS[hold_type]
-		if hold_used:
-			hold_color = hold_color.darkened(0.5)
-		_draw_preview(hold_type, HOLD_PANEL, hold_color)
-	for i in queue.size():
+	if not classic:  # no hold in the arcade
+		draw_rect(HOLD_PANEL, Color(0.08, 0.09, 0.12))
+		if hold_type != "":
+			var hold_color: Color = COLORS[hold_type]
+			if hold_used:
+				hold_color = hold_color.darkened(0.5)
+			_draw_preview(hold_type, HOLD_PANEL, hold_color)
+	var shown := 1 if classic else queue.size()  # arcade showed one NEXT
+	for i in shown:
 		var slot := Rect2(Vector2(COLS * CELL + 40.0, i * 104.0), Vector2(146, 96))
 		draw_rect(slot, Color(0.08, 0.09, 0.12))
 		_draw_preview(queue[i], slot, COLORS[queue[i]])

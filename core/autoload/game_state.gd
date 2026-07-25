@@ -6,6 +6,7 @@ const SAVE_PATH := "user://save.json"
 const MODE_STORY := 0
 const MODE_ENDLESS := 1
 const MODE_VERSUS := 2
+const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — always available / gold, gems — purchasable / height — endless best
@@ -115,6 +116,7 @@ const SKIP_COST := 3  # gems to skip a story stage after repeated failures
 var mode: int = MODE_STORY
 var split: bool = false  # 2-player split screen (escape race/endless only), not saved
 var best_height: int = 0
+var classic_best: int = 0  # classic mode all-time high score
 var story_stage: int = 0  # highest story stage cleared
 var games_played: int = 0
 var gold: int = 0
@@ -168,6 +170,15 @@ func story_skip(stage_num: int) -> void:
 		skipped_stages.append(stage_num)
 	story_stage = maxi(story_stage, stage_num)
 	save_game()
+
+
+## Records a finished classic run. Returns true on a new all-time high score.
+func record_classic(s: int) -> bool:
+	if s <= classic_best:
+		return false
+	classic_best = s
+	save_game()
+	return true
 
 
 ## Records a finished endless run. Returns true if it set a new all-time best.
@@ -420,6 +431,7 @@ func save_game() -> void:
 	var data := {
 		"score": score,
 		"best_height": best_height,
+		"classic_best": classic_best,
 		"story_stage": story_stage,
 		"games_played": games_played,
 		"gold": gold,
@@ -452,6 +464,7 @@ func load_game() -> void:
 	if data is Dictionary:
 		score = int(data.get("score", 0))
 		best_height = int(data.get("best_height", 0))
+		classic_best = int(data.get("classic_best", 0))
 		story_stage = int(data.get("story_stage", 0))
 		games_played = int(data.get("games_played", 0))
 		gold = int(data.get("gold", 0))

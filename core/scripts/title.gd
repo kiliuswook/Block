@@ -18,6 +18,7 @@ const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
 @onready var versus_btn: Button = $UI/VersusBtn
+@onready var classic_btn: Button = $UI/ClassicBtn
 @onready var escape2_btn: Button = $UI/Escape2Btn
 @onready var endless2_btn: Button = $UI/Endless2Btn
 
@@ -54,8 +55,10 @@ func _ready() -> void:
 	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY))
 	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
 	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
+	classic_btn.pressed.connect(func() -> void: _start(GameState.MODE_CLASSIC))
 	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY, true))
 	endless2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS, true))
+	_refresh_classic_desc()
 	_refresh_story_desc()
 	_build_currency_display()
 	_build_character_row()
@@ -83,10 +86,21 @@ func _refresh_story_desc() -> void:
 		desc.text = "이어서 도전  —  STAGE %d / %d" % [GameState.story_stage + 1, total]
 
 
+## Classic-mode subtitle carries the arcade high score.
+func _refresh_classic_desc() -> void:
+	if GameState.classic_best > 0:
+		($UI/ClassicDesc as Label).text = \
+				"고전 오락실 그대로 — 최고 기록  %d점" % GameState.classic_best
+
+
 func _start(mode: int, split := false) -> void:
 	Sfx.play("click")
 	GameState.mode = mode
 	GameState.split = split
+	# Classic runs its own scene (portrait-aware) on every platform.
+	if mode == GameState.MODE_CLASSIC:
+		get_tree().change_scene_to_file("res://core/scenes/classic.tscn")
+		return
 	get_tree().change_scene_to_file(main_scene)
 
 
@@ -146,8 +160,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_3, KEY_KP_3:
 				_start(GameState.MODE_VERSUS)
 			KEY_4, KEY_KP_4:
-				_start(GameState.MODE_STORY, true)
+				_start(GameState.MODE_CLASSIC)
 			KEY_5, KEY_KP_5:
+				_start(GameState.MODE_STORY, true)
+			KEY_6, KEY_KP_6:
 				_start(GameState.MODE_ENDLESS, true)
 
 
@@ -824,5 +840,5 @@ func _draw_stat_line() -> void:
 	while w > vw - 40.0 and size > 12:
 		size -= 1
 		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	draw_string(font, Vector2((vw - w) / 2.0, tile_y - 26.0), text,
+	draw_string(font, Vector2((vw - w) / 2.0, tile_y - 12.0), text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 0.85))

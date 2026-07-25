@@ -17,10 +17,11 @@ func _ready() -> void:
 	BootScript.dev_platform = "mobile"  # 타이틀 복귀 시에도 모바일 유지
 	for n in ["VersusBtn", "VersusDesc", "Escape2Btn", "Endless2Btn"]:
 		get_node("UI/" + n).visible = false
-	_place($UI/TitleLabel, 40.0, 230.0, 1000.0, 160.0)
-	_place($UI/SubtitleLabel, 40.0, 400.0, 1000.0, 50.0)
-	_big_button(escape_btn, $UI/EscapeDesc, 560.0)
-	_big_button(endless_btn, $UI/EndlessDesc, 760.0)
+	_place($UI/TitleLabel, 40.0, 200.0, 1000.0, 160.0)
+	_place($UI/SubtitleLabel, 40.0, 370.0, 1000.0, 50.0)
+	_big_button(escape_btn, $UI/EscapeDesc, 500.0)
+	_big_button(endless_btn, $UI/EndlessDesc, 700.0)
+	_big_button(classic_btn, $UI/ClassicDesc, 900.0)
 	var hint: Label = $UI/HintLabel
 	_place(hint, 40.0, vh - 90.0, 1000.0, 40.0)
 	hint.text = "모드를 터치해서 시작!"
