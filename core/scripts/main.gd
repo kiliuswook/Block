@@ -79,6 +79,7 @@ func _ready() -> void:
 	EventBus.versus_round_over.connect(_on_versus_round)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var versus := GameState.mode == GameState.MODE_VERSUS
+	var classic := GameState.mode == GameState.MODE_CLASSIC
 	level_title.visible = not endless and not versus
 	level_label.visible = not endless and not versus
 	score_title.visible = not endless and not versus
@@ -89,6 +90,15 @@ func _ready() -> void:
 	height_label.visible = endless
 	best_title.visible = endless
 	best_label.visible = endless
+	if classic:
+		level_title.text = "STAGE"
+		goal_label.text = "고전 오락실 테트리스!
+출구는 없다 — 라인을 지우며 살아남자
+10줄마다 스테이지 상승, 점점 빨라진다
+대시로 블록을 밀고, 2회 타격으로 파괴
+싱글 40 · 더블 100 · 트리플 300
+테트리스 1200 × 스테이지"
+		EventBus.level_changed.connect(_on_classic_stage)
 	if endless:
 		goal_label.text = "블록을 쌓고 밟으며
 끝없이 위로 올라가자!
@@ -247,9 +257,14 @@ func _on_game_over() -> void:
 	var was_record := false
 	var stats := ""
 	var endless := GameState.mode == GameState.MODE_ENDLESS
+	var classic := GameState.mode == GameState.MODE_CLASSIC
 	if endless:
 		was_record = GameState.record_height(height)
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
+	elif classic:
+		was_record = GameState.record_classic(GameState.score)
+		stats = "SCORE %d      STAGE %d      LINES %d" \
+				% [GameState.score, board.level, board.total_lines]
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 		# Track consecutive deaths on the same stage for the skip offer.
@@ -260,7 +275,7 @@ func _on_game_over() -> void:
 			stage_fails = 1
 	var earned := _award_run_rewards(was_record)
 	var cost := _revive_cost()
-	var show_skip: bool = not endless and stage_fails >= 3 \
+	var show_skip: bool = not endless and not classic and stage_fails >= 3 \
 			and GameState.story_stage < StoryStages.TOTAL
 	# Let the death sink in for a beat before the popup slides up.
 	var tw := create_tween()
@@ -270,9 +285,10 @@ func _on_game_over() -> void:
 			death_popup.open(stats, was_record, earned, cost, endless, show_skip))
 
 
-## Gems the next revive costs right now (0 = free).
+## Gems the next revive costs right now (0 = free). Endless and classic use
+## the arcade-continue escalation; story gives one free per stage, then 1.
 func _revive_cost() -> int:
-	if GameState.mode == GameState.MODE_ENDLESS:
+	if GameState.mode != GameState.MODE_STORY:
 		return 0 if revives_used == 0 else revives_used + 1
 	return 1 if story_revived.has(board.level) else 0
 
@@ -285,6 +301,11 @@ func _award_run_rewards(was_record: bool) -> String:
 	if GameState.mode == GameState.MODE_ENDLESS:
 		run_gold = int(height * 3 * board.gold_mult)  # lucky jelly boost applies
 		run_gems = mini(height / 30, 3)
+	elif GameState.mode == GameState.MODE_CLASSIC:
+		# Arcade scores swing bigger (1200 × stage tetrises), so gold divides
+		# harder and gems come from stage depth.
+		run_gold = GameState.score / 40
+		run_gems = mini((board.level - 1) / 5, 3)
 	else:
 		run_gold = GameState.score / 20
 		run_gems = mini(board.level - 1, 3)
@@ -468,10 +489,10 @@ func _on_revive() -> void:
 	if cost > 0 and not GameState.spend_gems(cost):
 		Sfx.play("error")
 		return
-	if GameState.mode == GameState.MODE_ENDLESS:
-		revives_used += 1
-	else:
+	if GameState.mode == GameState.MODE_STORY:
 		story_revived[board.level] = true
+	else:
+		revives_used += 1
 	death_popup.close()
 	board.revive_player()
 	_screen_flash(0.25)
@@ -530,6 +551,20 @@ func _restart() -> void:
 
 func _to_title() -> void:
 	get_tree().change_scene_to_file("res://core/scenes/boot.tscn")
+
+
+## Classic: every stage-up gets the milestone slam.
+func _on_classic_stage(new_stage: int) -> void:
+	if new_stage <= 1:
+		return
+	milestone_label.text = "STAGE %d" % new_stage
+	if new_stage >= 30:
+		milestone_label.text = "STAGE %d — 킬 스크린!!" % new_stage
+	elif new_stage >= 20:
+		milestone_label.text = "STAGE %d — 최고 속도!" % new_stage
+	Sfx.play("milestone")
+	_pop_milestone()
+	_screen_flash(0.16)
 
 
 func _on_escaped(new_level: int) -> void:

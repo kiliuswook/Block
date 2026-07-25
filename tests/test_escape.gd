@@ -485,6 +485,47 @@ func _ready() -> void:
 	s13.start_game()
 	_check(s13.level == 1, "a finished story replays from stage 1")
 
+	# --- Classic mode: arcade rules, cat controls ------------------------------
+	GameState.mode = GameState.MODE_CLASSIC
+	GameState.split = false
+	var cl: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var clp: Node2D = load("res://core/scripts/player.gd").new()
+	clp.name = "Player"
+	cl.add_child(clp)
+	add_child(cl)
+	cl.start_game()
+	_check(cl.playing, "classic: game starts")
+	_check(not cl.door_left and not cl.door_right, "classic: both exits sealed")
+	_check(cl.rect_hits_solid(Rect2(-30, c, 10, 10)),
+			"classic: left door wall is solid")
+	_check(cl.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, c, 10, 10)),
+			"classic: right door wall is solid")
+	# NES gravity mapping: stage 1 keeps base pacing, deep stages hit the floor.
+	_check(absf(cl._track_time() - EscapeBoard.TRACK_TIME_BASE) < 0.01,
+			"classic: stage 1 keeps the full tracking window")
+	cl.level = 9
+	_check(cl._track_time() <= 1.01, "classic: stage 9 tracking window bottoms out")
+	_check(cl._fall_interval() <= 0.05, "classic: stage 9 pieces slam down")
+	cl.level = 30
+	_check(cl._fall_interval() <= 0.031, "classic: stage 30 kill screen speed")
+	# Arcade scoring (40 x stage) and the 10-line stage-up, via the lock path.
+	cl.level = 1
+	cl.total_lines = 9
+	for x in range(EscapeBoard.COLS):
+		cl.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"
+	cl.piece_type = "O"
+	cl.piece_rot = 0
+	cl.piece_pos = Vector2i(0, 9)
+	var classic_score: int = GameState.score
+	cl._lock_piece()
+	# 10 x stage placement score (house rule) + the arcade single (40 x stage).
+	_check(GameState.score == classic_score + 10 + 40,
+			"classic: single pays the arcade 40 x stage")
+	_check(cl.total_lines == 10, "classic: line total advanced")
+	_check(cl.level == 2, "classic: 10th line advances the stage")
+	_check(not cl.door_left and not cl.door_right,
+			"classic: stage up never opens the doors")
+
 	# Restore the real save the story tests overwrote
 	GameState.story_stage = saved_story
 	GameState.save_game()

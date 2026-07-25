@@ -90,17 +90,13 @@ func _refresh_story_desc() -> void:
 func _refresh_classic_desc() -> void:
 	if GameState.classic_best > 0:
 		($UI/ClassicDesc as Label).text = \
-				"고전 오락실 그대로 — 최고 기록  %d점" % GameState.classic_best
+				"고전 오락실 난이도 그대로 — 최고 기록  %d점" % GameState.classic_best
 
 
 func _start(mode: int, split := false) -> void:
 	Sfx.play("click")
 	GameState.mode = mode
 	GameState.split = split
-	# Classic runs its own scene (portrait-aware) on every platform.
-	if mode == GameState.MODE_CLASSIC:
-		get_tree().change_scene_to_file("res://core/scenes/classic.tscn")
-		return
 	get_tree().change_scene_to_file(main_scene)
 
 

@@ -97,7 +97,7 @@ offset_bottom = 742.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "고전 오락실 그대로 — 라인을 지우고 살아남아 스테이지를 올려라!"
+text = "고전 오락실 난이도 그대로 — 고양이로 라인을 지우며 살아남아라!"
 
 [node name="Escape2Btn" type="Button" parent="UI"]
 offset_left = 1226.0

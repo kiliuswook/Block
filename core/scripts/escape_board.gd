@@ -13,7 +13,7 @@ extends Node2D
 signal finished(win: bool)
 
 enum PieceState { TRACKING, FALLING, LANDED }
-enum Mode { STORY, ENDLESS, VERSUS }
+enum Mode { STORY, ENDLESS, VERSUS, CLASSIC }
 
 const COLS := 10
 const ROWS := 14
@@ -144,6 +144,11 @@ func start_game() -> void:
 		# Resume from the next uncleared stage; a finished story replays from 1.
 		level = GameState.story_stage % StoryStages.TOTAL + 1
 		_apply_stage()
+	elif mode == Mode.CLASSIC:
+		# Arcade pit: both exits sealed — clear lines and survive with the
+		# usual cat controls; every 10 lines is a stage (arcade level).
+		door_left = false
+		door_right = false
 	elif mode == Mode.ENDLESS and not split:
 		# Consume boosts bought for this run (shop / death-popup chips).
 		for b: String in GameState.take_boosts():
@@ -570,11 +575,19 @@ func _lock_piece() -> void:
 	var cleared := _clear_lines()
 	if cleared > 0:
 		total_lines += cleared
-		GameState.score += LINE_SCORES[cleared] * level
+		# Classic pays the arcade table (40/100/300/1200 × stage, pre-level-up).
+		var table: Array = Board.CLASSIC_SCORES if mode == Mode.CLASSIC else LINE_SCORES
+		GameState.score += table[cleared] * level
 		_add_fever(cleared * FEVER_PER_LINE)
 		Sfx.play("clear", 1.0 + 0.07 * (cleared - 1))
 		if mode == Mode.ENDLESS:
 			_endless_line_reward(cleared)
+		elif mode == Mode.CLASSIC:
+			# Arcade level design: every 10 lines advances the stage.
+			var new_stage := total_lines / 10 + 1
+			if new_stage != level:
+				level = new_stage
+				EventBus.level_changed.emit(level)
 		_story_add_progress("lines", cleared)
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
@@ -982,6 +995,10 @@ func _difficulty() -> int:
 
 
 func _track_time() -> float:
+	if mode == Mode.CLASSIC:
+		# The NES gravity table scales our tracking window: stage 1 keeps the
+		# full 5s, the plateaus tighten it, the kill screen pins it at 1s.
+		return clampf(TRACK_TIME_BASE * _classic_frames() / 48.0, 1.0, TRACK_TIME_BASE)
 	if _story() and stage.has("track_time"):
 		return float(stage.track_time)
 	return maxf(TRACK_TIME_BASE - (_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
@@ -990,9 +1007,17 @@ func _track_time() -> float:
 func _fall_interval() -> float:
 	if fever_active:
 		return FEVER_FALL_INTERVAL
+	if mode == Mode.CLASSIC:
+		return clampf(FALL_INTERVAL_BASE * _classic_frames() / 48.0,
+				0.03, FALL_INTERVAL_BASE)
 	if _story() and stage.has("fall_interval"):
 		return float(stage.fall_interval)
 	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
+
+
+## NES frames-per-row for the current stage (Board.CLASSIC_FRAMES, 1-based).
+func _classic_frames() -> float:
+	return float(Board.CLASSIC_FRAMES[clampi(level, 1, Board.CLASSIC_FRAMES.size()) - 1])
 
 
 func _lava_speed() -> float:
