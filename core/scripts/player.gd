@@ -299,6 +299,40 @@ func _draw() -> void:
 
 
 static var _body_box: StyleBoxFlat
+static var _glow_box: StyleBoxFlat  # max-affection golden rim
+
+
+## Small heart glyph — affection marks (forehead, floating by the ears).
+static func paint_heart(ci: CanvasItem, at: Vector2, r: float, col: Color) -> void:
+	ci.draw_circle(at + Vector2(-r * 0.45, 0.0), r * 0.62, col)
+	ci.draw_circle(at + Vector2(r * 0.45, 0.0), r * 0.62, col)
+	ci.draw_colored_polygon(PackedVector2Array([
+		at + Vector2(-r * 0.99, r * 0.25), at + Vector2(r * 0.99, r * 0.25),
+		at + Vector2(0.0, r * 1.35),
+	]), col)
+
+
+## Curled cat tail as a quadratic curve from root to tip (affection stage 2+).
+static func _paint_tail(ci: CanvasItem, root: Vector2, ctrl: Vector2, tip: Vector2,
+		w: float, col: Color, tip_col: Color) -> void:
+	var pts := PackedVector2Array()
+	for i in range(11):
+		var t := i / 10.0
+		pts.append(root.lerp(ctrl, t).lerp(ctrl.lerp(tip, t), t))
+	ci.draw_polyline(pts, col, w)
+	ci.draw_circle(tip, w * 0.62, tip_col)
+
+
+## Four-point twinkle star (affection stage 2+).
+static func paint_sparkle(ci: CanvasItem, at: Vector2, r: float, col: Color) -> void:
+	ci.draw_colored_polygon(PackedVector2Array([
+		at + Vector2(0.0, -r), at + Vector2(r * 0.28, 0.0),
+		at + Vector2(0.0, r), at + Vector2(-r * 0.28, 0.0),
+	]), col)
+	ci.draw_colored_polygon(PackedVector2Array([
+		at + Vector2(-r, 0.0), at + Vector2(0.0, r * 0.28),
+		at + Vector2(r, 0.0), at + Vector2(0.0, -r * 0.28),
+	]), col)
 
 
 ## Draws the cube cat onto any canvas item (player, title screen, ...).
@@ -311,14 +345,31 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	var ink_col: Color = skin.get("ink", INK_COLOR)
 	var aff := int(skin.get("aff", 1))  # affection looks stage 1..3
 	if cat_alive and aff >= 3:
-		# Max affection: a soft warm aura glows behind the whole cat.
-		ci.draw_circle(center, s * 0.80, Color(1.0, 0.95, 0.8, 0.10))
-		ci.draw_circle(center, s * 0.67, Color(1.0, 0.94, 0.78, 0.13))
-	# Protruding ears (behind the body).
+		# Max affection: a golden halo with light rays behind the whole cat.
+		ci.draw_circle(center, s * 0.85, Color(1.0, 0.9, 0.6, 0.14))
+		ci.draw_circle(center, s * 0.70, Color(1.0, 0.88, 0.55, 0.18))
+		for i in range(8):
+			var a := TAU * i / 8.0 + 0.39
+			ci.draw_line(center + Vector2.from_angle(a) * s * 0.74,
+					center + Vector2.from_angle(a) * s * 0.98,
+					Color(1.0, 0.9, 0.6, 0.4), s * 0.05)
+	if cat_alive and aff >= 2:
+		# Grown cats sprout a curled tail — two of them at max affection,
+		# myth-cat style, with bright cream tips.
+		var tip_col := Color(1.0, 0.96, 0.88) if aff >= 3 else ear_col.lightened(0.3)
+		if aff >= 3:
+			_paint_tail(ci, center + Vector2(s * 0.44, s * 0.36),
+					center + Vector2(s * 0.94, s * 0.24), center + Vector2(s * 0.9, -s * 0.18),
+					s * 0.1, ear_col, tip_col)
+		_paint_tail(ci, center + Vector2(s * 0.44, s * 0.3),
+				center + Vector2(s * 0.78, s * 0.1), center + Vector2(s * 0.66, -s * 0.3),
+				s * 0.11, ear_col, tip_col)
+	# Protruding ears (behind the body) — they grow with affection.
+	var ear_h := s * (0.3 if aff >= 2 and cat_alive else 0.16)
 	for sg in [-1.0, 1.0]:
 		ci.draw_colored_polygon(PackedVector2Array([
 			center + Vector2(sg * s * 0.40, -half + 2.0),
-			center + Vector2(sg * s * 0.28, -half - s * 0.16),
+			center + Vector2(sg * s * 0.28, -half - ear_h),
 			center + Vector2(sg * s * 0.13, -half + 2.0),
 		]), ear_col)
 	# Rounded body with soft dark outline.
@@ -330,6 +381,17 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	_body_box.bg_color = body_col
 	_body_box.border_color = Color(0.24, 0.18, 0.14, 0.55)
 	_body_box.draw(ci.get_canvas_item(), Rect2(center - Vector2.ONE * half, Vector2.ONE * s))
+	if cat_alive and aff >= 3:
+		# Max affection: the body itself glows with a golden rim.
+		if _glow_box == null:
+			_glow_box = StyleBoxFlat.new()
+			_glow_box.draw_center = false
+			_glow_box.anti_aliasing = true
+		_glow_box.set_corner_radius_all(int(s * 0.25))
+		_glow_box.set_border_width_all(maxi(2, int(s * 0.05)))
+		_glow_box.border_color = Color(1.0, 0.85, 0.4, 0.8)
+		_glow_box.draw(ci.get_canvas_item(),
+				Rect2(center - Vector2.ONE * (half + s * 0.045), Vector2.ONE * (s + s * 0.09)))
 	# Keycap-style ear patches on the top corners.
 	var inset := s * 0.12
 	for sg in [-1.0, 1.0]:
@@ -338,6 +400,33 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			center + Vector2(sg * (half - s * 0.38), -half + 3.0),
 			center + Vector2(sg * (half - inset), -half + s * 0.30),
 		]), ear_col)
+	if cat_alive and aff >= 2:
+		# Tucked front paws peeking out at the bottom edge.
+		for sg in [-1.0, 1.0]:
+			ci.draw_circle(center + Vector2(sg * s * 0.18, half - s * 0.04), s * 0.085,
+					body_col.lightened(0.22))
+	if cat_alive and aff >= 3:
+		# Legend look: cheek fluff and crown tufts break the cube silhouette,
+		# plus a golden earring on the right ear.
+		for sg in [-1.0, 1.0]:
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(sg * half, -s * 0.04),
+				center + Vector2(sg * (half + s * 0.13), s * 0.02),
+				center + Vector2(sg * half, s * 0.09),
+			]), body_col)
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(sg * half, s * 0.12),
+				center + Vector2(sg * (half + s * 0.1), s * 0.17),
+				center + Vector2(sg * half, s * 0.22),
+			]), body_col)
+		for i in [-1, 0, 1]:
+			ci.draw_colored_polygon(PackedVector2Array([
+				center + Vector2(i * s * 0.09 - s * 0.045, -half + 1.0),
+				center + Vector2(i * s * 0.09 + s * 0.045, -half + 1.0),
+				center + Vector2(i * s * 0.09, -half - s * 0.11),
+			]), body_col)
+		ci.draw_arc(center + Vector2(s * 0.33, -half + s * 0.02), s * 0.04, 0.0, TAU, 10,
+				Color(1.0, 0.84, 0.4), s * 0.028)
 	# Face: eyes, mouth, blush, whiskers.
 	var ex := s * 0.19
 	var ey := -s * 0.06
@@ -355,22 +444,29 @@ static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		ci.draw_circle(center + Vector2(-s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
 		ci.draw_circle(center + Vector2(s * 0.30, s * 0.09), s * 0.055, Color(0.94, 0.55, 0.55, 0.4))
 		if aff >= 2:
-			# Loved cats: rosier cheeks and a sparkle in each eye.
+			# Loved cats: rosier cheeks, eye sparkles, a forehead heart mark
+			# and little twinkles floating around the head.
 			for sg in [-1.0, 1.0]:
 				ci.draw_circle(center + Vector2(sg * s * 0.30, s * 0.09), s * 0.07,
 						Color(0.94, 0.5, 0.52, 0.3))
 				ci.draw_circle(center + Vector2(sg * ex + look + er * 0.35, ey - er * 0.35),
 						er * 0.34, Color(1, 1, 1, 0.92))
+			var mark_col := Color(1.0, 0.82, 0.35, 0.95) if aff >= 3 else Color(ink_col, 0.5)
+			paint_heart(ci, center + Vector2(0.0, -s * 0.31), s * 0.055, mark_col)
+			paint_sparkle(ci, center + Vector2(-s * 0.55, -s * 0.52), s * 0.08,
+					Color(1, 1, 1, 0.85))
+			paint_sparkle(ci, center + Vector2(s * 0.60, -s * 0.16), s * 0.055,
+					Color(1, 1, 1, 0.7))
 		if aff >= 3:
-			# Max affection: a little heart floats by the ear.
-			var hc := Color(0.95, 0.5, 0.6, 0.95)
-			var hp := center + Vector2(s * 0.48, -half - s * 0.22)
-			ci.draw_circle(hp + Vector2(-s * 0.035, 0.0), s * 0.048, hc)
-			ci.draw_circle(hp + Vector2(s * 0.035, 0.0), s * 0.048, hc)
-			ci.draw_colored_polygon(PackedVector2Array([
-				hp + Vector2(-s * 0.078, s * 0.018), hp + Vector2(s * 0.078, s * 0.018),
-				hp + Vector2(0.0, s * 0.105),
-			]), hc)
+			# Max affection: hearts float by both ears, golden twinkles join in.
+			paint_heart(ci, center + Vector2(s * 0.48, -half - s * 0.24), s * 0.075,
+					Color(0.95, 0.5, 0.6, 0.95))
+			paint_heart(ci, center + Vector2(-s * 0.52, -half - s * 0.10), s * 0.05,
+					Color(0.95, 0.55, 0.62, 0.85))
+			paint_sparkle(ci, center + Vector2(s * 0.52, -s * 0.66), s * 0.095,
+					Color(1.0, 0.88, 0.5, 0.95))
+			paint_sparkle(ci, center + Vector2(-s * 0.66, s * 0.14), s * 0.065,
+					Color(1.0, 0.88, 0.5, 0.8))
 	else:
 		for sg in [-1.0, 1.0]:
 			var c := center + Vector2(sg * ex, ey)

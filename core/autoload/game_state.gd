@@ -122,6 +122,8 @@ var games_played: int = 0
 var gold: int = 0
 var gems: int = 0
 var selected_cat: String = "cream"
+var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
+var player_id: String = ""  # stable random id identifying this save on boards
 var purchased: Array = []  # ids of cats bought with gold/gems
 var acc_owned: Array = []  # ids of purchased accessories
 var acc_head: String = ""  # equipped accessory per slot ("" = none)
@@ -143,7 +145,23 @@ var score: int = 0:
 
 func _ready() -> void:
 	load_game()
+	if player_id == "":
+		randomize()
+		player_id = "%08x" % (randi() & 0x7fffffff)
+		save_game()
+	if nickname == "":
+		nickname = "냥이-%04d" % (randi() % 10000)
+		save_game()
 	EventBus.game_started.connect(func() -> void: games_played += 1)
+
+
+func set_nickname(n: String) -> void:
+	n = n.strip_edges().left(12)
+	if n == "" or n == nickname:
+		return
+	nickname = n
+	save_game()
+	Ranks.rename_and_resubmit()
 
 
 func reset() -> void:
@@ -161,6 +179,7 @@ func story_clear(stage_num: int) -> void:
 	var reward_gems := 2 if stage_num % 10 == 0 else 0
 	add_currency(reward_gold, reward_gems)  # save_game included
 	EventBus.story_reward.emit(reward_gold, reward_gems)
+	Ranks.submit("story", story_stage)
 
 
 ## Skip ticket: marks the stage as passed without paying the first-clear
@@ -178,6 +197,7 @@ func record_classic(s: int) -> bool:
 		return false
 	classic_best = s
 	save_game()
+	Ranks.submit("classic", classic_best)
 	return true
 
 
@@ -187,6 +207,7 @@ func record_height(h: int) -> bool:
 		return false
 	best_height = h
 	save_game()
+	Ranks.submit("endless", best_height)
 	return true
 
 
@@ -437,6 +458,8 @@ func save_game() -> void:
 		"gold": gold,
 		"gems": gems,
 		"selected_cat": selected_cat,
+		"nickname": nickname,
+		"player_id": player_id,
 		"purchased": purchased,
 		"acc_owned": acc_owned,
 		"acc_head": acc_head,
@@ -470,6 +493,8 @@ func load_game() -> void:
 		gold = int(data.get("gold", 0))
 		gems = int(data.get("gems", 0))
 		selected_cat = str(data.get("selected_cat", "cream"))
+		nickname = str(data.get("nickname", ""))
+		player_id = str(data.get("player_id", ""))
 		var bought: Variant = data.get("purchased", [])
 		if bought is Array:
 			purchased = bought

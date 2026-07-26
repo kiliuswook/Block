@@ -45,6 +45,12 @@ var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
 var _boost_chips := {}  # boost id -> Button
 var _shop_wallet: Label
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
+var _ranks: Control
+var _rank_tabs := {}  # mode key -> Button
+var _rank_mode := "endless"
+var _rank_list: VBoxContainer
+var _rank_status: Label
+var _nick_edit: LineEdit
 
 
 func _ready() -> void:
@@ -66,6 +72,10 @@ func _ready() -> void:
 	_build_toast()
 	_build_settings()
 	_build_shop()
+	_build_ranks()
+	Ranks.board_loaded.connect(func(_ok: bool) -> void:
+		if _ranks and _ranks.visible:
+			_refresh_rank_list())
 	Sfx.play_bgm("title")
 
 
@@ -124,6 +134,16 @@ func _build_settings() -> void:
 		Sfx.play("click")
 		_open_shop())
 	$UI.add_child(shop_btn)
+	var rank_btn := Button.new()
+	rank_btn.text = "♛ 랭킹"
+	rank_btn.position = Vector2(30.0, 170.0)
+	rank_btn.size = Vector2(150.0, 56.0)
+	rank_btn.add_theme_font_size_override("font_size", 24)
+	rank_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	rank_btn.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_open_ranks())
+	$UI.add_child(rank_btn)
 
 
 func _settings_open() -> bool:
@@ -140,6 +160,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_close_shop()
+		return
+	if _ranks and _ranks.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_ranks.visible = false
 		return
 	if _popup and _popup.visible:
 		# The popup swallows mode hotkeys; Esc closes it.
@@ -365,6 +390,206 @@ func _open_shop() -> void:
 func _close_shop() -> void:
 	_shop.visible = false
 	queue_redraw()  # title cat may have changed outfit
+
+
+# --- Rankings (per-mode leaderboards) -------------------------------------------
+
+
+## Rankings overlay: one board per mode, my row highlighted, nickname editor.
+## Works offline too — then it shows only the local records.
+func _build_ranks() -> void:
+	_ranks = Control.new()
+	_ranks.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ranks.visible = false
+	$UI.add_child(_ranks)
+	var dim := Button.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim_sb := StyleBoxFlat.new()
+	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		dim.add_theme_stylebox_override(st, dim_sb)
+	dim.pressed.connect(func() -> void: _ranks.visible = false)
+	_ranks.add_child(dim)
+	var pw := minf(vw - 60.0, 760.0)
+	var ph := minf(vh - 140.0, 960.0)
+	var panel := PanelContainer.new()
+	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
+	panel.size = Vector2(pw, ph)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("1c1a26")
+	box.set_corner_radius_all(18)
+	box.set_border_width_all(3)
+	box.border_color = Color(CREAM, 0.65)
+	box.content_margin_left = 28.0
+	box.content_margin_right = 28.0
+	box.content_margin_top = 20.0
+	box.content_margin_bottom = 20.0
+	panel.add_theme_stylebox_override("panel", box)
+	_ranks.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+	var title := Label.new()
+	title.text = "♛ 랭킹"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", CREAM)
+	v.add_child(title)
+	# Nickname row: shown on every board, editable here.
+	var nick_row := HBoxContainer.new()
+	nick_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	nick_row.add_theme_constant_override("separation", 10)
+	v.add_child(nick_row)
+	var nick_title := Label.new()
+	nick_title.text = "내 이름"
+	nick_title.add_theme_font_size_override("font_size", 20)
+	nick_title.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	nick_row.add_child(nick_title)
+	_nick_edit = LineEdit.new()
+	_nick_edit.custom_minimum_size = Vector2(240.0, 44.0)
+	_nick_edit.max_length = 12
+	_nick_edit.add_theme_font_size_override("font_size", 20)
+	nick_row.add_child(_nick_edit)
+	var nick_save := Button.new()
+	nick_save.text = "변경"
+	nick_save.custom_minimum_size = Vector2(90.0, 44.0)
+	nick_save.add_theme_font_size_override("font_size", 18)
+	nick_save.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	nick_save.pressed.connect(func() -> void:
+		Sfx.play("click")
+		GameState.set_nickname(_nick_edit.text)
+		_nick_edit.text = GameState.nickname
+		_show_toast("이름이 '%s' (으)로 바뀌었어요!" % GameState.nickname, CREAM)
+		_refresh_rank_list())
+	nick_row.add_child(nick_save)
+	# Mode tabs.
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 10)
+	v.add_child(tabs)
+	for entry: Array in [["story", "스토리"], ["endless", "무한의 계단"], ["classic", "클래식"]]:
+		var b := Button.new()
+		b.text = str(entry[1])
+		b.custom_minimum_size = Vector2((pw - 80.0) / 3.0, 50.0)
+		b.add_theme_font_size_override("font_size", 20)
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		b.pressed.connect(_on_rank_tab.bind(str(entry[0])))
+		tabs.add_child(b)
+		_rank_tabs[entry[0]] = b
+	_rank_status = Label.new()
+	_rank_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_rank_status.add_theme_font_size_override("font_size", 16)
+	_rank_status.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	v.add_child(_rank_status)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(scroll)
+	_rank_list = VBoxContainer.new()
+	_rank_list.add_theme_constant_override("separation", 4)
+	_rank_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_rank_list)
+	var close := Button.new()
+	close.text = "닫기"
+	close.custom_minimum_size = Vector2(200.0, 52.0)
+	close.add_theme_font_size_override("font_size", 22)
+	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.pressed.connect(func() -> void: _ranks.visible = false)
+	var wrap := CenterContainer.new()
+	wrap.add_child(close)
+	v.add_child(wrap)
+
+
+func _open_ranks() -> void:
+	_nick_edit.text = GameState.nickname
+	_ranks.visible = true
+	_refresh_rank_list()
+	Ranks.refresh()  # board_loaded will re-render with fresh data
+
+
+func _on_rank_tab(mode_key: String) -> void:
+	Sfx.play("click")
+	_rank_mode = mode_key
+	_refresh_rank_list()
+
+
+func _refresh_rank_list() -> void:
+	for tab_key: String in _rank_tabs:
+		var b: Button = _rank_tabs[tab_key]
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(10)
+		var active: bool = tab_key == _rank_mode
+		sb.bg_color = Color(CREAM, 0.18) if active else Color(1, 1, 1, 0.05)
+		sb.set_border_width_all(2)
+		sb.border_color = CREAM if active else Color(1, 1, 1, 0.2)
+		b.add_theme_stylebox_override("normal", sb)
+		var hover: StyleBoxFlat = sb.duplicate()
+		hover.bg_color = Color(CREAM, 0.24) if active else Color(1, 1, 1, 0.11)
+		b.add_theme_stylebox_override("hover", hover)
+		b.add_theme_stylebox_override("pressed", sb)
+	for child in _rank_list.get_children():
+		child.queue_free()
+	var mine := GameState.player_id
+	var local_v := Ranks.local_value(_rank_mode)
+	var list := Ranks.entries(_rank_mode)
+	if Ranks.online() and Ranks.busy and list.is_empty():
+		_rank_status.text = "불러오는 중..."
+		return
+	var rank := Ranks.my_rank(_rank_mode)
+	if not Ranks.online():
+		# Pre-launch board: bot crowd + my real record mixed in.
+		_rank_status.text = ("내 순위  %d위  ·  %s   (다른 유저는 임시 데이터)" \
+				% [rank, Ranks.value_text(_rank_mode, local_v)]) if rank > 0 \
+				else "아직 내 기록 없음 — 한 판 달리면 자동 등록!   (다른 유저는 임시 데이터)"
+	else:
+		_rank_status.text = ("내 순위  %d위  ·  %s" \
+				% [rank, Ranks.value_text(_rank_mode, local_v)]) \
+				if rank > 0 else ("아직 순위 없음 — 기록을 세우면 자동 등록!" if local_v <= 0
+				else "등록 중... 잠시 후 새로고침해 보세요")
+	if list.is_empty():
+		_rank_list.add_child(_rank_row(0, "첫 기록의 주인공이 되어보자냥!", -1, false))
+	for i in mini(list.size(), 50):
+		var e: Dictionary = list[i]
+		_rank_list.add_child(_rank_row(i + 1, str(e.get("name", "???")),
+				int(e.get("v", 0)), str(e.get("id")) == mine))
+
+
+func _rank_row(rank: int, name_text: String, v: int, mine: bool) -> Control:
+	var row := PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(8)
+	sb.bg_color = Color(CREAM, 0.14) if mine else Color(1, 1, 1, 0.04)
+	if mine:
+		sb.set_border_width_all(2)
+		sb.border_color = Color(CREAM, 0.8)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 7.0
+	sb.content_margin_bottom = 7.0
+	row.add_theme_stylebox_override("panel", sb)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 12)
+	row.add_child(h)
+	var rank_l := Label.new()
+	rank_l.text = ("%d위" % rank) if rank > 0 else ("내 기록" if v >= 0 else "")
+	rank_l.custom_minimum_size.x = 64.0
+	rank_l.add_theme_font_size_override("font_size", 18)
+	rank_l.add_theme_color_override("font_color",
+			GOLD_COL if rank in [1, 2, 3] else Color(1, 1, 1, 0.6))
+	h.add_child(rank_l)
+	var name_l := Label.new()
+	name_l.text = name_text + ("   ◀ 나" if mine and rank > 0 else "")
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.add_theme_font_size_override("font_size", 18)
+	name_l.add_theme_color_override("font_color", CREAM if mine else Color(1, 1, 1, 0.85))
+	h.add_child(name_l)
+	if v >= 0:
+		var val_l := Label.new()
+		val_l.text = Ranks.value_text(_rank_mode, v)
+		val_l.add_theme_font_size_override("font_size", 18)
+		val_l.add_theme_color_override("font_color", GOLD_COL)
+		h.add_child(val_l)
+	return row
 
 
 # --- Character select ---------------------------------------------------------

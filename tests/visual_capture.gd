@@ -22,6 +22,8 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_shop.png",
 			func(inst: Node) -> void: inst._open_shop())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
+			func(inst: Node) -> void: inst._open_ranks())
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
 	var saved_story: int = GameState.story_stage
 	GameState.mode = GameState.MODE_STORY
