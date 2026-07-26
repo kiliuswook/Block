@@ -51,6 +51,7 @@ var _rank_mode := "endless"
 var _rank_list: VBoxContainer
 var _rank_status: Label
 var _nick_edit: LineEdit
+var _replay_viewer: Control
 
 
 func _ready() -> void:
@@ -160,6 +161,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_close_shop()
+		return
+	if _replay_viewer and _replay_viewer.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_replay_viewer.playing_back = false
+			_replay_viewer.visible = false
 		return
 	if _ranks and _ranks.visible:
 		if event is InputEventKey and event.pressed \
@@ -498,6 +505,8 @@ func _build_ranks() -> void:
 	var wrap := CenterContainer.new()
 	wrap.add_child(close)
 	v.add_child(wrap)
+	_replay_viewer = preload("res://core/scripts/replay_viewer.gd").new()
+	$UI.add_child(_replay_viewer)
 
 
 func _open_ranks() -> void:
@@ -551,10 +560,11 @@ func _refresh_rank_list() -> void:
 	for i in mini(list.size(), 50):
 		var e: Dictionary = list[i]
 		_rank_list.add_child(_rank_row(i + 1, str(e.get("name", "???")),
-				int(e.get("v", 0)), str(e.get("id")) == mine))
+				int(e.get("v", 0)), str(e.get("id")) == mine, e))
 
 
-func _rank_row(rank: int, name_text: String, v: int, mine: bool) -> Control:
+func _rank_row(rank: int, name_text: String, v: int, mine: bool,
+		entry: Dictionary = {}) -> Control:
 	var row := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.set_corner_radius_all(8)
@@ -589,6 +599,22 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool) -> Control:
 		val_l.add_theme_font_size_override("font_size", 18)
 		val_l.add_theme_color_override("font_color", GOLD_COL)
 		h.add_child(val_l)
+	if not entry.is_empty() and Ranks.has_replay_for(_rank_mode, entry):
+		var mode_key := _rank_mode  # captured: tab may change before the press
+		var play := Button.new()
+		play.text = "▶"
+		play.custom_minimum_size = Vector2(52.0, 30.0)
+		play.add_theme_font_size_override("font_size", 16)
+		play.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		play.pressed.connect(func() -> void:
+			Sfx.play("click")
+			var rep: Dictionary = Ranks.replay_for(mode_key, entry)
+			if rep.is_empty():
+				_show_toast("리플레이를 불러올 수 없어요", Color(1.0, 0.55, 0.5))
+				return
+			_replay_viewer.open(rep, "%s  ·  %s" % [name_text,
+					Ranks.value_text(mode_key, v)]))
+		h.add_child(play)
 	return row
 
 

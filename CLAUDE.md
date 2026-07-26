@@ -28,7 +28,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - `core/` — 두 플랫폼이 공유하는 게임 본체
   - `core/scenes/` — 씬 파일 (.tscn). 메인 씬: `core/scenes/main.tscn`
   - `core/scripts/` — 씬에 붙는 스크립트 (.gd)
-  - `core/autoload/` — 싱글톤 (EventBus, GameState, Sfx)
+  - `core/autoload/` — 싱글톤 (EventBus, GameState, Sfx, Replays, Ranks — 랭킹은 `ranks.gd`의 `BOARD_URL` 비면 목업 봇 오프라인 모드)
 - `shared/assets/` — 공용 리소스 (이미지, 사운드, 폰트)
 - `platform/` — 플랫폼 추상화: `platform.gd`(autoload `Platform`, 피처 태그로 구현체 선택) + `platform_base.gd`(no-op 기본 구현, `PlatformBase`)
 - 시작 씬은 `core/scenes/boot.tscn` — 피처 태그로 플랫폼 타이틀에 라우팅. 개발 시 플랫폼 강제: ① 에디터에서 `tests/run_mobile.tscn`/`run_steam.tscn` 열고 **F6** (권장 — 세로 창·복귀까지 유지) ② 커맨드라인 `--mobile`/`--steam` 인자(`--` 구분자 유무 무관) ③ 모바일 씬(title_mobile/main_mobile) 직접 F6도 자동 보정. 강제 상태는 `boot.gd`의 `dev_platform` static이 세션 동안 유지: 스팀 `steam/ui/title_steam.tscn`, 모바일 `mobile/ui/title_mobile.tscn`, 그 외 `core/scenes/title.tscn`. 타이틀 복귀도 boot 경유(`main.gd`). 플랫폼 타이틀은 core 타이틀 씬을 상속(+스크립트 `extends "res://core/scripts/title.gd"`)

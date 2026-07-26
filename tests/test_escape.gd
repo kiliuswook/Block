@@ -533,6 +533,18 @@ func _ready() -> void:
 	_check(not cl.door_left and not cl.door_right,
 			"classic: stage up never opens the doors")
 
+	# --- Replay recording -------------------------------------------------------
+	cl._rec_tick(0.25)
+	cl._rec_tick(0.25)
+	_check(cl.rec_frames.size() >= EscapeBoard.REC_STRIDE * 2, "replay: frames recorded")
+	var rep: Dictionary = cl.rec_export()
+	_check(not rep.is_empty() and not (rep.events as Array).is_empty(),
+			"replay: export carries frames and grid events")
+	var round_trip: Dictionary = Replays.decode(Replays.encode(rep))
+	_check(round_trip.get("frames") == rep.get("frames"),
+			"replay: encode/decode round-trip keeps frames")
+	_check(int(round_trip.get("rows", 0)) == cl.rows, "replay: metadata survives")
+
 	# Restore the real save the story tests overwrote
 	GameState.story_stage = saved_story
 	GameState.save_game()

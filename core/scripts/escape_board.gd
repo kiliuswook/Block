@@ -94,6 +94,16 @@ var fever_gauge := 0.0
 var fever_active := false
 var fever_timer := 0.0
 var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
+# Replay recording: 10Hz state frames (cat + piece + score) plus grid-diff
+# events, exported via rec_export(). Story records one stage at a time.
+const REC_STEP := 0.1
+const REC_MAX_FRAMES := 6000  # ~10 minutes, then the recording just stops
+const REC_STRIDE := 8
+var rec_frames := PackedInt32Array()
+var rec_events: Array = []
+var _rec_shadow := {}
+var _rec_timer := 0.0
+var _rec_on := false
 # Split screen: one board per player — global EventBus signals are muted and
 # the piece is driven by this board's own action set instead of the defaults.
 var split := false
@@ -169,6 +179,7 @@ func start_game() -> void:
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	playing = true
+	_rec_reset()
 	if not split:
 		EventBus.game_started.emit()
 		EventBus.lines_changed.emit(0)
@@ -241,6 +252,7 @@ func _process(delta: float) -> void:
 				_fall(delta)
 			PieceState.LANDED:
 				_landed(delta)
+	_rec_tick(delta)
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
@@ -629,6 +641,65 @@ func _endless_line_reward(cleared: int) -> void:
 	Sfx.play("gold")
 
 
+# --- Replay recording -------------------------------------------------------------
+
+
+func _rec_reset() -> void:
+	_rec_on = not split and mode != Mode.VERSUS
+	rec_frames = PackedInt32Array()
+	rec_events = []
+	_rec_shadow = {}
+	_rec_timer = 0.0
+	if _rec_on:
+		_rec_diff()  # opening keyframe: prefilled stages start with cells set
+
+
+func _rec_tick(delta: float) -> void:
+	if not _rec_on or not playing:
+		return
+	_rec_timer += delta
+	if _rec_timer < REC_STEP:
+		return
+	_rec_timer = fmod(_rec_timer, REC_STEP)
+	_rec_diff()
+	var pt := Board.PIECES.find(piece_type) if piece_type != "" else -1
+	rec_frames.append_array(PackedInt32Array([
+		int(player.position.x), int(player.position.y),
+		pt, piece_rot, piece_pos.x, piece_pos.y, int(piece_state),
+		int(lava_y) if mode == Mode.ENDLESS else GameState.score,
+	]))
+	if rec_frames.size() >= REC_MAX_FRAMES * REC_STRIDE:
+		_rec_on = false  # marathon runs: stop recording, keep what we have
+
+
+## Grid changes land as diff events against a shadow copy — locks, clears,
+## breaks and revive blasts all reduce to added/removed cells.
+func _rec_diff() -> void:
+	var adds := PackedInt32Array()
+	var dels := PackedInt32Array()
+	for c: Vector2i in grid:
+		if not _rec_shadow.has(c) or _rec_shadow[c] != grid[c]:
+			adds.append_array(PackedInt32Array([c.x, c.y, Board.PIECES.find(grid[c])]))
+	for c: Vector2i in _rec_shadow:
+		if not grid.has(c):
+			dels.append_array(PackedInt32Array([c.x, c.y]))
+	if adds.is_empty() and dels.is_empty():
+		return
+	rec_events.append({"f": rec_frames.size() / REC_STRIDE, "a": adds, "d": dels})
+	_rec_shadow = grid.duplicate()
+
+
+## Snapshot of the finished (or in-progress) recording for storage/sharing.
+func rec_export() -> Dictionary:
+	_rec_diff()
+	if rec_frames.is_empty():
+		return {}
+	return {"v": 1, "mode": int(mode), "cat": GameState.selected_cat,
+			"rows": rows, "door": door_row, "dl": door_left, "dr": door_right,
+			"level": level,
+			"frames": rec_frames.duplicate(), "events": rec_events.duplicate(true)}
+
+
 # --- Story goals ----------------------------------------------------------------
 
 
@@ -858,6 +929,9 @@ func _escape() -> void:
 		finished.emit(true)
 		return
 	if _story():
+		# A first-time clear keeps its replay (watched from the rankings).
+		if level > GameState.story_stage:
+			Replays.save_replay("story", rec_export())
 		GameState.story_clear(level)
 		GameState.score += ESCAPE_SCORE * level
 		if level >= StoryStages.TOTAL:
@@ -868,6 +942,7 @@ func _escape() -> void:
 			return
 		level += 1
 		_apply_stage()
+		_rec_reset()
 		player.respawn(_spawn_point())
 		_spawn_piece()
 		EventBus.level_changed.emit(level)

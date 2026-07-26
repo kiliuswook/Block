@@ -76,10 +76,17 @@ func submit(mode_key: String, value: int) -> void:
 		return e is Dictionary and str(e.get("id")) != GameState.player_id)
 	var mine := {"id": GameState.player_id, "name": GameState.nickname,
 			"v": maxi(value, local_value(mode_key)), "cat": GameState.selected_cat}
+	var rep := Replays.encode(Replays.load_replay(mode_key))
+	if rep != "":
+		mine["replay"] = rep
 	entries.append(mine)
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("v", 0)) > int(b.get("v", 0)))
-	data[mode_key] = entries.slice(0, MAX_ENTRIES)
+	entries = entries.slice(0, MAX_ENTRIES)
+	# Replays are heavy — only the top 10 keep theirs on the shared board.
+	for i in range(10, entries.size()):
+		(entries[i] as Dictionary).erase("replay")
+	data[mode_key] = entries
 	board = data
 	await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
 
@@ -132,6 +139,20 @@ func _mock_entries(mode_key: String) -> Array:
 		out.append({"id": "bot-%d" % i, "name": MOCK_NAMES[i], "v": v,
 				"cat": MOCK_CATS[rng.randi_range(0, MOCK_CATS.size() - 1)]})
 	return out
+
+
+## Replay for a board entry: my own comes from disk (always freshest),
+## other players' ride inside their entry. {} when there is none.
+func replay_for(mode_key: String, e: Dictionary) -> Dictionary:
+	if str(e.get("id")) == GameState.player_id:
+		return Replays.load_replay(mode_key)
+	return Replays.decode(str(e.get("replay", "")))
+
+
+func has_replay_for(mode_key: String, e: Dictionary) -> bool:
+	if str(e.get("id")) == GameState.player_id:
+		return Replays.has_replay(mode_key)
+	return str(e.get("replay", "")) != ""
 
 
 ## My 1-based rank on the fetched board (0 = not on it yet).

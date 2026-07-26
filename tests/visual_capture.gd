@@ -24,6 +24,18 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_shop())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
+			func(inst: Node) -> void:
+				var rep := {"v": 1, "mode": 1, "cat": "mint", "rows": 20, "door": 0,
+					"dl": false, "dr": false, "level": 1,
+					"frames": PackedInt32Array([
+						320, 1216, 2, 0, 3, 14, 1, 1500,
+						330, 1180, 2, 0, 3, 15, 1, 1498]),
+					"events": [{"f": 0,
+						"a": PackedInt32Array([0, 19, 0, 1, 19, 1, 2, 19, 2, 3, 19, 4]),
+						"d": PackedInt32Array()}]}
+				inst._replay_viewer.open(rep, "테스트냥  ·  42층")
+				inst._replay_viewer.playing_back = false)
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
 	var saved_story: int = GameState.story_stage
 	GameState.mode = GameState.MODE_STORY

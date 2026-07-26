@@ -263,10 +263,14 @@ func _on_game_over() -> void:
 	if endless:
 		was_record = GameState.record_height(height)
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
+		if was_record:
+			Replays.save_replay("endless", board.rec_export())
 	elif classic:
 		was_record = GameState.record_classic(GameState.score)
 		stats = "SCORE %d      STAGE %d      LINES %d" \
 				% [GameState.score, board.level, board.total_lines]
+		if was_record:
+			Replays.save_replay("classic", board.rec_export())
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 		# Track consecutive deaths on the same stage for the skip offer.
