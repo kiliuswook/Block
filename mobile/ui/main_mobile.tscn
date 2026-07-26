@@ -97,7 +97,7 @@ offset_top = 1330.0
 offset_right = 1040.0
 offset_bottom = 1370.0
 theme_override_font_sizes/font_size = 22
-text = "빈 곳을 탭하면 블록 회전   (왼쪽 = 반시계 · 오른쪽 = 시계)"
+text = "왼쪽 ◀ ▶ 이동 · ▼ 낙하   |   오른쪽 회전 · ▲ 점프"
 
 [node name="TouchControls" parent="."]
 script = ExtResource("2_touch")
@@ -109,32 +109,39 @@ offset_right = 220.0
 offset_bottom = 110.0
 
 [node name="LeftButton" parent="TouchControls"]
-offset_left = 180.0
+offset_left = 30.0
 offset_top = 1650.0
-offset_right = 400.0
+offset_right = 250.0
 offset_bottom = 1870.0
 
 [node name="RightButton" parent="TouchControls"]
-offset_left = 680.0
+offset_left = 270.0
 offset_top = 1650.0
-offset_right = 900.0
+offset_right = 490.0
 offset_bottom = 1870.0
 
 [node name="RotCCWButton" parent="TouchControls"]
-visible = false
+offset_left = 600.0
+offset_top = 1430.0
+offset_right = 810.0
+offset_bottom = 1610.0
 
 [node name="RotCWButton" parent="TouchControls"]
-visible = false
+offset_left = 840.0
+offset_top = 1430.0
+offset_right = 1050.0
+offset_bottom = 1610.0
 
 [node name="DropButton" parent="TouchControls"]
-offset_left = 430.0
-offset_top = 1650.0
-offset_right = 650.0
-offset_bottom = 1870.0
+offset_left = 150.0
+offset_top = 1430.0
+offset_right = 370.0
+offset_bottom = 1610.0
 
 [node name="JumpButton" parent="TouchControls"]
-offset_left = 430.0
-offset_top = 1400.0
-offset_right = 650.0
-offset_bottom = 1620.0
-label = "▲"
+offset_left = 600.0
+offset_top = 1650.0
+offset_right = 1050.0
+offset_bottom = 1870.0
+label = "▲ 점프"
+font_size = 40

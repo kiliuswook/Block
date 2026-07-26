@@ -67,7 +67,7 @@ const STAGES: Array[Dictionary] = [
 	{"name": "줄 클리어 II", "goal": {"type": "lines", "count": 2}, "door_row": 12,
 		"track_time": 5.5, "fall_interval": 0.4, "prefill": "line_gaps",
 		"hint": "2줄! 이제 모든 모양의 블록이 떨어진다\nZ/X로 블록을 회전시킬 수도 있다",
-		"hint_touch": "2줄! 이제 모든 모양의 블록이 떨어진다\n빈 곳을 탭하면 블록이 회전한다"},
+		"hint_touch": "2줄! 이제 모든 모양의 블록이 떨어진다\n오른쪽 회전 버튼으로 블록을 돌려보자"},
 	{"name": "오르막", "goal": {"type": "escape"}, "door_row": 4,
 		"track_time": 5.0, "fall_interval": 0.35,
 		"hint": "출구가 더 높아졌다!\n벽에 붙어 미끄러지며 다시 점프 = 벽점프도 기억해두자"},
