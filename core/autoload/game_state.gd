@@ -124,6 +124,8 @@ var gems: int = 0
 var selected_cat: String = "cream"
 var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
 var player_id: String = ""  # stable random id identifying this save on boards
+var weekly: Dictionary = {}  # this week's bests: {"week": id, "story": n, ...}
+var weekly_claimed: int = 0  # last finished week whose prize was checked
 var purchased: Array = []  # ids of cats bought with gold/gems
 var acc_owned: Array = []  # ids of purchased accessories
 var acc_head: String = ""  # equipped accessory per slot ("" = none)
@@ -172,7 +174,11 @@ func reset() -> void:
 ## A first-time clear pays a reward: 20~50 gold scaling with the stage, plus
 ## 2 gems at every 10-stage boss. Announced via EventBus.story_reward.
 func story_clear(stage_num: int) -> void:
+	# Weekly board counts every clear — replayed stages included.
+	var weekly_up := record_weekly("story", stage_num)
 	if stage_num <= story_stage:
+		if weekly_up:
+			Ranks.submit("story", story_stage)
 		return
 	story_stage = stage_num
 	var reward_gold := 20 + stage_num / 4
@@ -208,6 +214,30 @@ func record_height(h: int) -> bool:
 	best_height = h
 	save_game()
 	Ranks.submit("endless", best_height)
+	return true
+
+
+# --- Weekly bests (weekly leaderboards reset Monday 00:00 KST) ------------------
+
+
+func _roll_weekly() -> void:
+	var wk: int = Ranks.week_id()
+	if int(weekly.get("week", -1)) != wk:
+		weekly = {"week": wk, "story": 0, "endless": 0, "classic": 0}
+
+
+func weekly_value(mode_key: String) -> int:
+	_roll_weekly()
+	return int(weekly.get(mode_key, 0))
+
+
+## Records a run result on this week's board. Returns true when it improved.
+func record_weekly(mode_key: String, v: int) -> bool:
+	_roll_weekly()
+	if v <= int(weekly.get(mode_key, 0)):
+		return false
+	weekly[mode_key] = v
+	save_game()
 	return true
 
 
@@ -460,6 +490,8 @@ func save_game() -> void:
 		"selected_cat": selected_cat,
 		"nickname": nickname,
 		"player_id": player_id,
+		"weekly": weekly,
+		"weekly_claimed": weekly_claimed,
 		"purchased": purchased,
 		"acc_owned": acc_owned,
 		"acc_head": acc_head,
@@ -495,6 +527,12 @@ func load_game() -> void:
 		selected_cat = str(data.get("selected_cat", "cream"))
 		nickname = str(data.get("nickname", ""))
 		player_id = str(data.get("player_id", ""))
+		var wkly: Variant = data.get("weekly", {})
+		if wkly is Dictionary:
+			weekly = {}
+			for k in wkly:
+				weekly[str(k)] = int(wkly[k])
+		weekly_claimed = int(data.get("weekly_claimed", 0))
 		var bought: Variant = data.get("purchased", [])
 		if bought is Array:
 			purchased = bought

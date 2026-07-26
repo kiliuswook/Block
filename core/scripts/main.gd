@@ -261,16 +261,22 @@ func _on_game_over() -> void:
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
 	if endless:
+		var weekly_up := GameState.record_weekly("endless", height)
 		was_record = GameState.record_height(height)
 		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
 		if was_record:
 			Replays.save_replay("endless", board.rec_export())
+		if weekly_up and not was_record:  # record_height already submits
+			Ranks.submit("endless", GameState.best_height)
 	elif classic:
+		var weekly_up := GameState.record_weekly("classic", GameState.score)
 		was_record = GameState.record_classic(GameState.score)
 		stats = "SCORE %d      STAGE %d      LINES %d" \
 				% [GameState.score, board.level, board.total_lines]
 		if was_record:
 			Replays.save_replay("classic", board.rec_export())
+		if weekly_up and not was_record:
+			Ranks.submit("classic", GameState.classic_best)
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 		# Track consecutive deaths on the same stage for the skip offer.

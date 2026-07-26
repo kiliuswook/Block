@@ -47,9 +47,12 @@ var _shop_wallet: Label
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
 var _ranks: Control
 var _rank_tabs := {}  # mode key -> Button
+var _rank_scopes := {}  # true (주간) / false (누적) -> Button
 var _rank_mode := "endless"
+var _rank_weekly := true
 var _rank_list: VBoxContainer
 var _rank_status: Label
+var _rank_sub: Label
 var _nick_edit: LineEdit
 var _replay_viewer: Control
 
@@ -77,6 +80,13 @@ func _ready() -> void:
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
 		if _ranks and _ranks.visible:
 			_refresh_rank_list())
+	Ranks.weekly_reward.connect(func(g: int, gm: int) -> void:
+		Sfx.play("record")
+		var line := "지난주 랭킹 보상!  +%d G" % g
+		if gm > 0:
+			line += "  +%d ◆" % gm
+		_show_toast(line, GOLD_COL)
+		_refresh_currency())
 	Sfx.play_bgm("title")
 
 
@@ -469,6 +479,23 @@ func _build_ranks() -> void:
 		_show_toast("이름이 '%s' (으)로 바뀌었어요!" % GameState.nickname, CREAM)
 		_refresh_rank_list())
 	nick_row.add_child(nick_save)
+	# Scope toggle: weekly (resets Monday 00:00 KST, top 3 win prizes) / all-time.
+	var scopes := HBoxContainer.new()
+	scopes.alignment = BoxContainer.ALIGNMENT_CENTER
+	scopes.add_theme_constant_override("separation", 10)
+	v.add_child(scopes)
+	for entry: Array in [[true, "주간 랭킹"], [false, "누적 랭킹"]]:
+		var sb_btn := Button.new()
+		sb_btn.text = str(entry[1])
+		sb_btn.custom_minimum_size = Vector2((pw - 70.0) / 2.0, 48.0)
+		sb_btn.add_theme_font_size_override("font_size", 20)
+		sb_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		sb_btn.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_rank_weekly = entry[0]
+			_refresh_rank_list())
+		scopes.add_child(sb_btn)
+		_rank_scopes[entry[0]] = sb_btn
 	# Mode tabs.
 	var tabs := HBoxContainer.new()
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -483,6 +510,11 @@ func _build_ranks() -> void:
 		b.pressed.connect(_on_rank_tab.bind(str(entry[0])))
 		tabs.add_child(b)
 		_rank_tabs[entry[0]] = b
+	_rank_sub = Label.new()
+	_rank_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_rank_sub.add_theme_font_size_override("font_size", 16)
+	_rank_sub.add_theme_color_override("font_color", GOLD_COL)
+	v.add_child(_rank_sub)
 	_rank_status = Label.new()
 	_rank_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_rank_status.add_theme_font_size_override("font_size", 16)
@@ -524,43 +556,55 @@ func _on_rank_tab(mode_key: String) -> void:
 
 func _refresh_rank_list() -> void:
 	for tab_key: String in _rank_tabs:
-		var b: Button = _rank_tabs[tab_key]
-		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(10)
-		var active: bool = tab_key == _rank_mode
-		sb.bg_color = Color(CREAM, 0.18) if active else Color(1, 1, 1, 0.05)
-		sb.set_border_width_all(2)
-		sb.border_color = CREAM if active else Color(1, 1, 1, 0.2)
-		b.add_theme_stylebox_override("normal", sb)
-		var hover: StyleBoxFlat = sb.duplicate()
-		hover.bg_color = Color(CREAM, 0.24) if active else Color(1, 1, 1, 0.11)
-		b.add_theme_stylebox_override("hover", hover)
-		b.add_theme_stylebox_override("pressed", sb)
+		_style_rank_tab(_rank_tabs[tab_key], tab_key == _rank_mode)
+	for scope_key: bool in _rank_scopes:
+		_style_rank_tab(_rank_scopes[scope_key], scope_key == _rank_weekly)
+	_rank_sub.visible = _rank_weekly
+	if _rank_weekly:
+		_rank_sub.text = "초기화까지 %s   ·   1~3위 보상  ◆5+500G / ◆3+300G / ◆2+200G" \
+				% Ranks.week_remaining_text()
 	for child in _rank_list.get_children():
 		child.queue_free()
 	var mine := GameState.player_id
-	var local_v := Ranks.local_value(_rank_mode)
-	var list := Ranks.entries(_rank_mode)
+	var local_v := GameState.weekly_value(_rank_mode) if _rank_weekly \
+			else Ranks.local_value(_rank_mode)
+	var list := Ranks.entries(_rank_mode, _rank_weekly)
 	if Ranks.online() and Ranks.busy and list.is_empty():
 		_rank_status.text = "불러오는 중..."
 		return
-	var rank := Ranks.my_rank(_rank_mode)
+	var rank := Ranks.my_rank(_rank_mode, _rank_weekly)
+	var scope_txt := "이번 주" if _rank_weekly else "내"
 	if not Ranks.online():
 		# Pre-launch board: bot crowd + my real record mixed in.
-		_rank_status.text = ("내 순위  %d위  ·  %s   (다른 유저는 임시 데이터)" \
-				% [rank, Ranks.value_text(_rank_mode, local_v)]) if rank > 0 \
+		_rank_status.text = ("%s 순위  %d위  ·  %s   (다른 유저는 임시 데이터)" \
+				% [scope_txt, rank, Ranks.value_text(_rank_mode, local_v)]) if rank > 0 \
 				else "아직 내 기록 없음 — 한 판 달리면 자동 등록!   (다른 유저는 임시 데이터)"
 	else:
-		_rank_status.text = ("내 순위  %d위  ·  %s" \
-				% [rank, Ranks.value_text(_rank_mode, local_v)]) \
+		_rank_status.text = ("%s 순위  %d위  ·  %s" \
+				% [scope_txt, rank, Ranks.value_text(_rank_mode, local_v)]) \
 				if rank > 0 else ("아직 순위 없음 — 기록을 세우면 자동 등록!" if local_v <= 0
 				else "등록 중... 잠시 후 새로고침해 보세요")
 	if list.is_empty():
 		_rank_list.add_child(_rank_row(0, "첫 기록의 주인공이 되어보자냥!", -1, false))
 	for i in mini(list.size(), 50):
 		var e: Dictionary = list[i]
+		# Replays ride only on the all-time boards.
 		_rank_list.add_child(_rank_row(i + 1, str(e.get("name", "???")),
-				int(e.get("v", 0)), str(e.get("id")) == mine, e))
+				int(e.get("v", 0)), str(e.get("id")) == mine,
+				{} if _rank_weekly else e))
+
+
+func _style_rank_tab(b: Button, active: bool) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(10)
+	sb.bg_color = Color(CREAM, 0.18) if active else Color(1, 1, 1, 0.05)
+	sb.set_border_width_all(2)
+	sb.border_color = CREAM if active else Color(1, 1, 1, 0.2)
+	b.add_theme_stylebox_override("normal", sb)
+	var hover: StyleBoxFlat = sb.duplicate()
+	hover.bg_color = Color(CREAM, 0.24) if active else Color(1, 1, 1, 0.11)
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", sb)
 
 
 func _rank_row(rank: int, name_text: String, v: int, mine: bool,

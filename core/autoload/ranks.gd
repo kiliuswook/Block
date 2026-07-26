@@ -6,12 +6,21 @@ extends Node
 ## Entries: {"id": String, "name": String, "v": int, "cat": String}.
 
 signal board_loaded(ok: bool)
+signal weekly_reward(gold: int, gems: int)  # last week's top-3 payout landed
 
 ## The shared board: a jsonblob.com blob (anonymous, CORS-enabled, extended
 ## on every access). Point this at any GET/PUT JSON endpoint to migrate.
 const BOARD_URL := "https://jsonblob.com/api/jsonBlob/019f9dbf-29d9-7346-bf9d-32c674bfed1c"
 const MODES := ["story", "endless", "classic"]
 const MAX_ENTRIES := 100  # kept per mode, sorted by value desc
+
+# Weekly boards live beside the all-time ones under "wk_<mode>" keys, stamped
+# with the week id. The first client of a new week rolls them into "lw_<mode>"
+# (last week's final standings — kept so winners can claim their prize) and
+# starts fresh. Weeks flip Monday 00:00 KST.
+const WEEK_ANCHOR := 313200  # unix time of Monday 1970-01-05 00:00 KST
+const WEEK_LEN := 604800
+const WEEKLY_REWARDS := [[500, 5], [300, 3], [200, 2]]  # rank 1..3: [gold, gems]
 
 ## Offline placeholder crowd: until the backend goes live, boards are filled
 ## with these bot entries (deterministic per mode) plus the real local record.
@@ -36,6 +45,21 @@ func _ready() -> void:
 
 func online() -> bool:
 	return BOARD_URL != ""
+
+
+func week_id() -> int:
+	return (int(Time.get_unix_time_from_system()) - WEEK_ANCHOR) / WEEK_LEN
+
+
+## "3일 4시간" until the weekly boards reset (Monday 00:00 KST).
+func week_remaining_text() -> String:
+	var rem := WEEK_LEN - ((int(Time.get_unix_time_from_system()) - WEEK_ANCHOR) % WEEK_LEN)
+	var d := rem / 86400
+	var h := (rem % 86400) / 3600
+	var m := (rem % 3600) / 60
+	if d > 0:
+		return "%d일 %d시간" % [d, h]
+	return ("%d시간 %d분" % [h, m]) if h > 0 else "%d분" % m
 
 
 ## My current local best for a mode key.
@@ -65,9 +89,9 @@ func submit_all() -> void:
 			submit(m, local_value(m))
 
 
-## Fire-and-forget: merge my best into the shared board (read-modify-write).
-## Submits queue behind each other — concurrent RMWs would drop each other's
-## writes (the blob is replaced whole).
+## Fire-and-forget: merge my bests (all-time + this week) into the shared
+## board in one read-modify-write. Submits queue behind each other —
+## concurrent RMWs would drop each other's writes (the blob is replaced whole).
 func submit(mode_key: String, value: int) -> void:
 	if not online() or value <= 0:
 		return
@@ -78,72 +102,132 @@ func submit(mode_key: String, value: int) -> void:
 	if data is not Dictionary:
 		_submitting = false
 		return
-	var entries: Array = data.get(mode_key, [])
+	_rollover(data)
+	_merge_mine(data, mode_key, maxi(value, local_value(mode_key)), true)
+	var wv: int = GameState.weekly_value(mode_key)
+	if wv > 0:
+		_merge_mine(data, "wk_" + mode_key, wv, false)
+	board = data
+	await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
+	_submitting = false
+	_claim_rewards()
+
+
+## Replaces my entry in one board list; replays ride only on the all-time
+## boards (top 10 keep theirs — they are heavy).
+func _merge_mine(data: Dictionary, key: String, value: int, with_replay: bool) -> void:
+	var entries: Array = data.get(key, [])
 	entries = entries.filter(func(e: Variant) -> bool:
 		return e is Dictionary and str(e.get("id")) != GameState.player_id)
 	var mine := {"id": GameState.player_id, "name": GameState.nickname,
-			"v": maxi(value, local_value(mode_key)), "cat": GameState.selected_cat}
-	var rep := Replays.encode(Replays.load_replay(mode_key))
-	if rep != "":
-		mine["replay"] = rep
+			"v": value, "cat": GameState.selected_cat}
+	if with_replay:
+		var rep := Replays.encode(Replays.load_replay(key))
+		if rep != "":
+			mine["replay"] = rep
 	entries.append(mine)
 	entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("v", 0)) > int(b.get("v", 0)))
 	entries = entries.slice(0, MAX_ENTRIES)
-	# Replays are heavy — only the top 10 keep theirs on the shared board.
 	for i in range(10, entries.size()):
 		(entries[i] as Dictionary).erase("replay")
-	data[mode_key] = entries
-	board = data
-	await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
-	_submitting = false
+	data[key] = entries
 
 
-## Refreshes the whole board; listeners get board_loaded(ok).
+## New week: current weekly boards become last week's final standings (kept
+## for prize claims), fresh weekly boards start empty.
+func _rollover(data: Dictionary) -> void:
+	var wk := week_id()
+	var stored := int(data.get("week", wk))
+	if stored < wk:
+		data["lw_week"] = stored
+		for m: String in MODES:
+			data["lw_" + m] = data.get("wk_" + m, [])
+			data["wk_" + m] = []
+	data["week"] = wk
+
+
+## Pays out last week's top-3 prizes for every mode I placed in. Runs after
+## any fetch; each finished week is checked exactly once per save.
+func _claim_rewards() -> void:
+	var lw := int(board.get("lw_week", -1))
+	if lw < 0 or lw <= GameState.weekly_claimed:
+		return
+	var gold := 0
+	var gems := 0
+	for m: String in MODES:
+		var list: Array = board.get("lw_" + m, [])
+		list = list.filter(func(e: Variant) -> bool: return e is Dictionary)
+		list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return int(a.get("v", 0)) > int(b.get("v", 0)))
+		for i in mini(3, list.size()):
+			if str(list[i].get("id")) == GameState.player_id:
+				gold += WEEKLY_REWARDS[i][0]
+				gems += WEEKLY_REWARDS[i][1]
+	GameState.weekly_claimed = lw
+	GameState.save_game()
+	if gold > 0 or gems > 0:
+		GameState.add_currency(gold, gems)
+		weekly_reward.emit(gold, gems)
+
+
+## Refreshes the whole board; listeners get board_loaded(ok). Viewing also
+## performs the weekly rollover (so boards reset even if nobody submits) and
+## collects any pending last-week prize.
 func refresh() -> void:
 	if not online() or busy:
 		board_loaded.emit(online() and not board.is_empty())
 		return
 	busy = true
 	var data: Variant = await _http(HTTPClient.METHOD_GET)
-	busy = false
 	if data is Dictionary:
+		var stored := int(data.get("week", -1))
+		_rollover(data)
 		board = data
+		if stored != -1 and stored != int(data.get("week")) and not _submitting:
+			_submitting = true
+			await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
+			_submitting = false
+		_claim_rewards()
+	busy = false
 	board_loaded.emit(data is Dictionary)
 
 
-## Sorted entries for a mode — the fetched board online, or the mock crowd
+## Sorted entries for a board — the fetched data online, or the mock crowd
 ## merged with my real local record while the backend isn't wired up.
-func entries(mode_key: String) -> Array:
+func entries(mode_key: String, weekly := false) -> Array:
 	var list: Array
+	var my_v := GameState.weekly_value(mode_key) if weekly else local_value(mode_key)
 	if online():
-		list = board.get(mode_key, [])
+		list = board.get(("wk_" if weekly else "") + mode_key, [])
 		list = list.filter(func(e: Variant) -> bool: return e is Dictionary)
 	else:
-		list = _mock_entries(mode_key)
-		if local_value(mode_key) > 0:
+		list = _mock_entries(mode_key, weekly)
+		if my_v > 0:
 			list.append({"id": GameState.player_id, "name": GameState.nickname,
-					"v": local_value(mode_key), "cat": GameState.selected_cat})
+					"v": my_v, "cat": GameState.selected_cat})
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("v", 0)) > int(b.get("v", 0)))
 	return list
 
 
 ## Deterministic bot board per mode: same names, same scores, every visit —
-## so climbing past "골골송장인" actually feels earned.
-func _mock_entries(mode_key: String) -> Array:
+## so climbing past "골골송장인" actually feels earned. Weekly mocks reshuffle
+## each week with smaller scores.
+func _mock_entries(mode_key: String, weekly := false) -> Array:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash("cattris-" + mode_key)
+	rng.seed = hash("cattris-" + mode_key + ("-w%d" % week_id() if weekly else ""))
 	var out: Array = []
+	var s := 0.5 if weekly else 1.0  # a week's grind runs lower than a lifetime's
 	for i in MOCK_NAMES.size():
 		var v := 0
 		match mode_key:
 			"story":
-				v = clampi(120 - i * 5 - rng.randi_range(0, 3), 1, 120)
+				v = clampi(int((120 - i * 5 - rng.randi_range(0, 3)) * s), 1, 120)
 			"endless":
-				v = maxi(int(130.0 * pow(0.83, i)) + rng.randi_range(0, 4), 2)
+				v = maxi(int(130.0 * s * pow(0.83, i)) + rng.randi_range(0, 4), 2)
 			"classic":
-				v = maxi(int(240000.0 * pow(0.72, i)) + rng.randi_range(0, 900), 400)
+				v = maxi(int(240000.0 * s * pow(0.72, i)) + rng.randi_range(0, 900), 400)
 		out.append({"id": "bot-%d" % i, "name": MOCK_NAMES[i], "v": v,
 				"cat": MOCK_CATS[rng.randi_range(0, MOCK_CATS.size() - 1)]})
 	return out
@@ -163,9 +247,9 @@ func has_replay_for(mode_key: String, e: Dictionary) -> bool:
 	return str(e.get("replay", "")) != ""
 
 
-## My 1-based rank on the fetched board (0 = not on it yet).
-func my_rank(mode_key: String) -> int:
-	var list := entries(mode_key)
+## My 1-based rank on a board (0 = not on it yet).
+func my_rank(mode_key: String, weekly := false) -> int:
+	var list := entries(mode_key, weekly)
 	for i in list.size():
 		if str(list[i].get("id")) == GameState.player_id:
 			return i + 1
