@@ -134,6 +134,8 @@ P2 블록: 고양이를 깔아뭉개면 승리
 		_build_split()
 	else:
 		board.start_game()
+		if not endless:  # endless is camera-driven; fixed pits get scaled to fit
+			_fit_board()
 
 
 func _on_game_started() -> void:
@@ -355,7 +357,14 @@ func _build_split() -> void:
 		sv.transparent_bg = true
 		svc.add_child(sv)
 		var b: EscapeBoard = BOARD_SCENE.instantiate()
-		b.position = Vector2((HALF_W - EscapeBoard.COLS * EscapeBoard.CELL) / 2.0, 92.0)
+		if GameState.mode == GameState.MODE_STORY:
+			# Split escape race: fixed 20-row pit — scale to the half viewport.
+			var bs := (1080.0 - 80.0) / (EscapeBoard.PIT_ROWS * EscapeBoard.CELL)
+			b.scale = Vector2(bs, bs)
+			b.position = Vector2(
+					(HALF_W - EscapeBoard.COLS * EscapeBoard.CELL * bs) / 2.0, 40.0)
+		else:
+			b.position = Vector2((HALF_W - EscapeBoard.COLS * EscapeBoard.CELL) / 2.0, 92.0)
 		sv.add_child(b)
 		b.finished.connect(_on_split_finished.bind(i))
 		boards.append(b)
@@ -551,6 +560,24 @@ func _restart() -> void:
 
 func _to_title() -> void:
 	get_tree().change_scene_to_file("res://core/scenes/boot.tscn")
+
+
+## Every fixed-pit mode plays in the standard 20-row tetris well — taller
+## than the scene layouts expect, so scale the board to fit between the top
+## margin and (portrait) the touch zone, centered horizontally. Endless keeps
+## its camera instead.
+func _fit_board() -> void:
+	var vp := get_viewport_rect().size
+	var portrait := vp.y > vp.x
+	var top := 200.0 if portrait else 40.0
+	var bottom := 1410.0 if portrait else vp.y - 56.0
+	var s := minf(1.0, (bottom - top) / (board.rows * EscapeBoard.CELL))
+	board.scale = Vector2(s, s)
+	board.position = Vector2((vp.x - EscapeBoard.COLS * EscapeBoard.CELL * s) / 2.0, top)
+	if portrait:
+		# The tall well runs through the portrait help-line slot — drop it,
+		# the touch buttons are self-explanatory.
+		help_label.visible = false
 
 
 ## Classic: every stage-up gets the milestone slam.

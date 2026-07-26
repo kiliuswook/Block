@@ -16,7 +16,9 @@ enum PieceState { TRACKING, FALLING, LANDED }
 enum Mode { STORY, ENDLESS, VERSUS, CLASSIC }
 
 const COLS := 10
-const ROWS := 14
+const ROWS := 14  # story stage data coordinate base — prefills/door_row are
+				  # authored on the original 14-row pit and shifted at load
+const PIT_ROWS := 20  # actual well height, every mode — standard tetris
 const CELL := 64.0
 const DOOR_ROW_TOP := 0
 const DOOR_ROW_BOTTOM := 1
@@ -78,6 +80,7 @@ var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
 var gold_fx: Array = []  # [pos: Vector2, age: float, amount: int] — floating "+N G" popup
 var mode := Mode.STORY
+var rows := PIT_ROWS  # pit height in cells
 var best_height := 0
 var drop_tap_time := -1e9
 var lava_y := 0.0
@@ -113,6 +116,7 @@ var survive_time := 0.0
 func start_game() -> void:
 	mode = GameState.mode as Mode
 	split = GameState.split
+	rows = PIT_ROWS
 	grid.clear()
 	cracked.clear()
 	bag.clear()
@@ -122,7 +126,7 @@ func start_game() -> void:
 	best_height = 0
 	versus_pieces = 0
 	p2_das_timer = 0.0
-	lava_y = ROWS * CELL + LAVA_START_OFFSET
+	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	gold_fx.clear()
 	fever_gauge = 0.0
@@ -132,12 +136,15 @@ func start_game() -> void:
 	stage = {}
 	door_left = true
 	door_right = true
-	door_row = DOOR_ROW_TOP
+	# Non-story exits keep their original height-above-floor: the pit grew
+	# from 14 to 20 rows, so "top" doors ride 6 rows down with the old summit.
+	# Classic keeps its sealed slabs at the true top corners.
+	door_row = DOOR_ROW_TOP if mode == Mode.CLASSIC else DOOR_ROW_TOP + (PIT_ROWS - ROWS)
 	goal_done = true
 	GameState.reset()
 	if cam:
 		cam.enabled = mode == Mode.ENDLESS
-		cam.position = Vector2(COLS * CELL / 2.0, ROWS * CELL / 2.0)
+		cam.position = Vector2(COLS * CELL / 2.0, rows * CELL / 2.0)
 		cam.reset_smoothing()
 	gold_mult = 1.0
 	if _story():
@@ -186,13 +193,16 @@ func _apply_stage() -> void:
 	goal_count = 0
 	survive_time = 0.0
 	goal_done = _goal_type() == "escape"
-	door_row = clampi(int(stage.get("door_row", 0)), 0, ROWS - 2)
+	# Stage data is authored on the 14-row pit: shift doors and prefills down
+	# so every height-above-floor (and thus the balance) stays identical.
+	var shift := rows - ROWS
+	door_row = clampi(int(stage.get("door_row", 0)) + shift, 0, rows - 2)
 	_set_doors(goal_done)
 	grid.clear()
 	cracked.clear()
 	var pf: Dictionary = stage.get("prefill_cells", {})
 	for c: Vector2i in pf:
-		grid[c] = pf[c]
+		grid[c + Vector2i(0, shift)] = pf[c]
 	bag.clear()
 	next_type = ""
 	EventBus.story_stage_started.emit(level)
@@ -265,7 +275,7 @@ func _update_endless(delta: float) -> void:
 	# The player sits at ~1/3 from the screen bottom (not centered) so the
 	# climbing space above stays wide open.
 	var cam_offset := get_viewport_rect().size.y / 6.0
-	cam.position.y = minf(player.position.y - cam_offset, ROWS * CELL / 2.0)
+	cam.position.y = minf(player.position.y - cam_offset, rows * CELL / 2.0)
 	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
 	lava_phase += delta
@@ -275,7 +285,7 @@ func _update_endless(delta: float) -> void:
 	if feet > lava_y:
 		_kill_player()
 		return
-	var h := int(round((ROWS * CELL - feet) / CELL))
+	var h := int(round((rows * CELL - feet) / CELL))
 	if h > best_height:
 		GameState.score += (h - best_height) * HEIGHT_SCORE
 		best_height = h
@@ -307,7 +317,7 @@ func _rect_hits_bounds(r: Rect2) -> bool:
 	if r.end.x > COLS * CELL \
 			and not (mode != Mode.ENDLESS and door_right and _rect_in_side_door(r)):
 		return true
-	if r.end.y > ROWS * CELL:
+	if r.end.y > rows * CELL:
 		return true
 	if mode != Mode.ENDLESS and r.position.y < 0.0:
 		return true
@@ -603,7 +613,7 @@ func _build_warmup_stairs() -> void:
 	for i in range(1, 6):
 		var x := 5 - i  # x=4 is 1 tall ... x=0 is 5 tall
 		for d in range(i):
-			grid[Vector2i(x, ROWS - 1 - d)] = "J"
+			grid[Vector2i(x, rows - 1 - d)] = "J"
 
 
 ## Endless: line clears fight the lava — every clear shoves it back down
@@ -833,7 +843,7 @@ func _try_rotate(dir: int) -> void:
 
 func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 	for c in _cells(piece_type, rot, pos):
-		if c.x < 0 or c.x >= COLS or c.y >= ROWS:
+		if c.x < 0 or c.x >= COLS or c.y >= rows:
 			return true
 		if not ignore_grid and grid.has(c):
 			return true
@@ -914,7 +924,7 @@ func _blast_all_cells(center: Vector2i) -> void:
 ## from under the freshly revived cat.
 func _build_revive_platform(spot: Vector2) -> void:
 	var row := int(floor(lava_y / CELL)) - REVIVE_PLATFORM_GAP
-	if row >= ROWS:  # lava still below the pit floor — the floor itself catches the cat
+	if row >= rows:  # lava still below the pit floor — the floor itself catches the cat
 		return
 	var gap := 0 if spot.x > COLS * CELL / 2.0 else COLS - 1
 	for x in range(COLS):
@@ -934,11 +944,11 @@ func _find_revive_spot() -> Vector2:
 		var offsets: Array = [0] if radius == 0 else [-radius, radius]
 		for sx in offsets:
 			var x: float = clampf(player.position.x + sx * CELL, half, COLS * CELL - half)
-			for up in range(0, ROWS * 2):
+			for up in range(0, rows * 2):
 				var p := Vector2(x, player.position.y - up * CELL)
 				if p.y - half < 0.0 and mode != Mode.ENDLESS:
 					break
-				if p.y + half > ROWS * CELL:
+				if p.y + half > rows * CELL:
 					continue
 				if not rect_hits_solid(Rect2(p - Vector2.ONE * half, size)):
 					return p
@@ -1082,7 +1092,7 @@ func _fever_spawn_x() -> int:
 ## row when those columns are empty. Endless rows go negative as the stack
 ## climbs, so "deepest" means the largest value returned here.
 func _surface_row(x0: int, x1: int) -> int:
-	var top := ROWS
+	var top := rows
 	for c: Vector2i in grid:
 		if c.x >= x0 and c.x <= x1:
 			top = mini(top, c.y)
@@ -1122,7 +1132,7 @@ func _spawn_point() -> Vector2:
 	var col := COLS / 2.0
 	if _story():
 		col = float(stage.get("spawn_col", col))
-	return Vector2(col * CELL, ROWS * CELL - Player.SIZE / 2.0)
+	return Vector2(col * CELL, rows * CELL - Player.SIZE / 2.0)
 
 
 func _cells(type: String, rot: int, pos: Vector2i) -> Array:
@@ -1138,14 +1148,14 @@ func _cell_rect(c: Vector2i) -> Rect2:
 
 func _draw() -> void:
 	var w := COLS * CELL
-	var h := ROWS * CELL
+	var h := rows * CELL
 	var top := 0.0
 	if mode == Mode.ENDLESS and cam:
 		top = minf(0.0, cam.position.y - VIEW_BELOW)
 	_draw_pit_background(w, h, top)
 	for x in range(1, COLS):
 		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
-	for y in range(int(floor(top / CELL)) + 1, ROWS):
+	for y in range(int(floor(top / CELL)) + 1, rows):
 		draw_line(Vector2(0, y * CELL), Vector2(w, y * CELL), Color(1, 1, 1, 0.04))
 	var show_hidden := mode == Mode.ENDLESS
 	for c in grid:
@@ -1249,7 +1259,7 @@ func _draw_lock(at: Vector2) -> void:
 
 ## Rising lava: hot glowing surface with a slow wave, cooling to dark below.
 func _draw_lava(w: float) -> void:
-	var bottom := maxf(ROWS * CELL, lava_y) + CELL * 6.0
+	var bottom := maxf(rows * CELL, lava_y) + CELL * 6.0
 	var hot := Color("ff8c38")
 	var dark := Color("6d1a0c")
 	draw_polygon(PackedVector2Array([
@@ -1320,7 +1330,7 @@ func _draw_gold_fx() -> void:
 
 
 func _draw_fever(w: float) -> void:
-	var cam_y := cam.position.y if cam else ROWS * CELL / 2.0
+	var cam_y := cam.position.y if cam else rows * CELL / 2.0
 	var bar := Rect2(CELL * 0.5, cam_y + 470.0, w - CELL, 16.0)
 	draw_rect(bar, Color(0, 0, 0, 0.45))
 	if fever_active:

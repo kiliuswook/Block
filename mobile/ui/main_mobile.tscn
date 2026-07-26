@@ -121,16 +121,15 @@ offset_right = 490.0
 offset_bottom = 1870.0
 
 [node name="RotCCWButton" parent="TouchControls"]
-offset_left = 600.0
-offset_top = 1430.0
-offset_right = 810.0
-offset_bottom = 1610.0
+visible = false
 
 [node name="RotCWButton" parent="TouchControls"]
-offset_left = 840.0
+offset_left = 600.0
 offset_top = 1430.0
 offset_right = 1050.0
 offset_bottom = 1610.0
+label = "⟳ 회전"
+font_size = 40
 
 [node name="DropButton" parent="TouchControls"]
 offset_left = 150.0

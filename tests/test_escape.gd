@@ -32,10 +32,12 @@ func _ready() -> void:
 	_check(board.rect_hits_solid(Rect2(-5, 300, 10, 10)), "left wall below the door is solid")
 	_check(board.rect_hits_solid(Rect2(EscapeBoard.COLS * c - 5, 300, 10, 10)),
 			"right wall below the door is solid")
-	_check(board.rect_hits_solid(Rect2(100, EscapeBoard.ROWS * c - 5, 10, 10)), "floor is solid")
+	_check(board.rect_hits_solid(Rect2(100, board.rows * c - 5, 10, 10)), "floor is solid")
 	_check(board.rect_hits_solid(Rect2(100, -20, 10, 10)), "ceiling is solid")
-	_check(not board.rect_hits_solid(Rect2(-30, c, 10, 10)), "left side door is open")
-	_check(not board.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, c, 10, 10)),
+	# The 14-row stage data shifts +6 in the 20-row pit: top doors sit at rows 6-7.
+	var door_y: float = (EscapeBoard.PIT_ROWS - EscapeBoard.ROWS) * c + 10.0
+	_check(not board.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "left side door is open")
+	_check(not board.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, door_y, 10, 10)),
 			"right side door is open")
 	board.grid[Vector2i(4, 10)] = "T"
 	_check(board.rect_hits_solid(Rect2(4 * c + 10, 10 * c + 10, 10, 10)), "locked cell is solid")
@@ -134,11 +136,11 @@ func _ready() -> void:
 	_check(board.piece_pos == Vector2i(6, 4), "push power 3 shoves three cells")
 
 	# Landed grace: the piece rests shovable for a moment before locking
-	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)  # O resting on the floor
+	board.piece_pos = Vector2i(3, board.rows - 2)  # O resting on the floor
 	board._fall(1.0)
 	_check(board.piece_state == board.PieceState.LANDED, "piece lands into the grace state")
 	_check(board.grid.is_empty(), "landed piece has not locked yet")
-	_check(board.piece_hits_rect(Rect2(4 * c + 10, (EscapeBoard.ROWS - 1) * c + 10, 10, 10)),
+	_check(board.piece_hits_rect(Rect2(4 * c + 10, (board.rows - 1) * c + 10, 10, 10)),
 			"landed piece is still solid")
 	_check(board.shove_piece(-1), "landed piece can still be shoved")
 	_check(board.piece_pos.x == -1, "landed piece slammed into the left wall")
@@ -150,7 +152,7 @@ func _ready() -> void:
 	board.piece_type = "O"  # fixed shape: the random next piece may shove instead
 	board.piece_rot = 0
 	board.piece_state = board.PieceState.FALLING
-	board.piece_pos = Vector2i(3, EscapeBoard.ROWS - 2)
+	board.piece_pos = Vector2i(3, board.rows - 2)
 	player.position = board._spawn_point()
 	board._resolve_piece_overlap()
 	_check(not player.alive, "falling piece crushes pinned player")
@@ -348,7 +350,7 @@ func _ready() -> void:
 
 	# Crushed under blocks: the revive blast clears the cells around the cat
 	for x in range(3, 8):
-		for y in range(10, EscapeBoard.ROWS):
+		for y in range(10, board.rows):
 			board.grid[Vector2i(x, y)] = "T"
 	player.position = Vector2(5 * c + c / 2.0, 12 * c)
 	board.revive_player()
@@ -367,15 +369,15 @@ func _ready() -> void:
 	_check(s1.level == 1, "story starts at stage 1")
 	_check(s1.piece_type == "", "stage 1 spawns no pieces")
 	_check(not s1.grid.is_empty(), "stage 1 prefills the staircase")
-	_check(not s1.rect_hits_solid(Rect2(-30, c, 10, 10)), "stage 1 left door is open")
+	_check(not s1.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "stage 1 left door is open")
 	s1._escape()
 	_check(s1.level == 2, "escape advances to the next stage")
 	_check(s1.playing, "the run continues into the next stage")
 	_check(GameState.story_stage == 1, "stage clear is recorded")
 	_check(s1.piece_type == "O", "stage 2 restricts the piece bag")
-	# Stage 2 lowers the exit: the top wall is closed, rows 10-11 are the door
-	_check(s1.rect_hits_solid(Rect2(-30, c, 10, 10)), "lowered door: top wall is solid")
-	_check(not s1.rect_hits_solid(Rect2(-30, 10 * c + 10, 10, 10)),
+	# Stage 2 lowers the exit: top wall closed, authored rows 10-11 (+6 shift)
+	_check(s1.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "lowered door: top wall is solid")
+	_check(not s1.rect_hits_solid(Rect2(-30, 16 * c + 10, 10, 10)),
 			"lowered door: mid-wall exit is open")
 
 	# Stage 5: shove goal — ground doors locked until one shove opens them
@@ -388,7 +390,7 @@ func _ready() -> void:
 	s5.start_game()
 	_check(s5.level == 5, "story resumes from the next uncleared stage")
 	_check(not s5.goal_done, "goal stage starts locked")
-	_check(s5.rect_hits_solid(Rect2(-30, 12 * c + 10, 10, 10)),
+	_check(s5.rect_hits_solid(Rect2(-30, 18 * c + 10, 10, 10)),
 			"locked ground door is solid")
 	s5.piece_type = "O"
 	s5.piece_rot = 0
@@ -397,7 +399,7 @@ func _ready() -> void:
 	sp5.position = Vector2(2 * c, 700.0)  # clear of the piece's path
 	s5.shove_piece(1)
 	_check(s5.goal_done, "one shove completes the stage 5 goal")
-	_check(not s5.rect_hits_solid(Rect2(-30, 12 * c + 10, 10, 10)),
+	_check(not s5.rect_hits_solid(Rect2(-30, 18 * c + 10, 10, 10)),
 			"ground door opens once the goal is met")
 
 	# Stage 4: break goal counts destroyed blocks
@@ -409,9 +411,9 @@ func _ready() -> void:
 	add_child(s4)
 	s4.start_game()
 	_check(s4.piece_type == "", "break stage spawns no pieces")
-	_check(s4.grid.has(Vector2i(6, 12)), "break stage prefills the wall")
+	_check(s4.grid.has(Vector2i(6, 18)), "break stage prefills the wall (+6 shift)")
 	_check(not s4.goal_done, "break stage starts locked")
-	var wall_probe := Rect2(6 * c + 30, 12 * c + 30, 10, 10)
+	var wall_probe := Rect2(6 * c + 30, 18 * c + 30, 10, 10)
 	s4.break_cell_in_rect(wall_probe)  # crack
 	s4.break_cell_in_rect(wall_probe)  # destroy
 	_check(s4.goal_count == 1, "destroying a block counts toward the goal")
@@ -451,9 +453,9 @@ func _ready() -> void:
 	s19.add_child(sp19)
 	add_child(s19)
 	s19.start_game()
-	_check(s19.rect_hits_solid(Rect2(-30, 2 * c + 10, 10, 10)),
+	_check(s19.rect_hits_solid(Rect2(-30, 8 * c + 10, 10, 10)),
 			"stage 19 left door stays shut")
-	_check(not s19.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, 2 * c + 10, 10, 10)),
+	_check(not s19.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, 8 * c + 10, 10, 10)),
 			"stage 19 right door is open")
 
 	# Generated stages cover the long tail up to the finale
@@ -495,6 +497,11 @@ func _ready() -> void:
 	add_child(cl)
 	cl.start_game()
 	_check(cl.playing, "classic: game starts")
+	_check(cl.rows == EscapeBoard.PIT_ROWS, "classic: standard 20-row well")
+	_check(cl.rect_hits_solid(Rect2(100, cl.rows * c + 5, 10, 10)),
+			"classic: floor sits at the 20-row bottom")
+	_check(not cl.rect_hits_solid(Rect2(100, (EscapeBoard.ROWS + 2) * c, 10, 10)),
+			"classic: old 14-row floor line is open air")
 	_check(not cl.door_left and not cl.door_right, "classic: both exits sealed")
 	_check(cl.rect_hits_solid(Rect2(-30, c, 10, 10)),
 			"classic: left door wall is solid")
@@ -512,7 +519,7 @@ func _ready() -> void:
 	cl.level = 1
 	cl.total_lines = 9
 	for x in range(EscapeBoard.COLS):
-		cl.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"
+		cl.grid[Vector2i(x, cl.rows - 1)] = "O"
 	cl.piece_type = "O"
 	cl.piece_rot = 0
 	cl.piece_pos = Vector2i(0, 9)
