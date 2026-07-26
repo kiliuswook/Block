@@ -125,6 +125,10 @@ P2 블록: 고양이를 깔아뭉개면 승리
 		_layout_story_goal_label()
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
+	if get_viewport_rect().size.y > get_viewport_rect().size.x:
+		# Portrait: the endless camera keeps the pit behind the help-line slot,
+		# and the touch buttons explain themselves — drop the text everywhere.
+		help_label.visible = false
 	settings_panel = SETTINGS_PANEL.new()
 	settings_panel.closed.connect(_on_settings_closed)
 	$PopupLayer.add_child(settings_panel)

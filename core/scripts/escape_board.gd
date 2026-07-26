@@ -284,10 +284,17 @@ func _update_endless(delta: float) -> void:
 		return
 	# Camera follows the player both ways: rises with the climb, and scrolls
 	# back down when they drop into a hole. Never sinks past the start view.
-	# The player sits at ~1/3 from the screen bottom (not centered) so the
-	# climbing space above stays wide open.
-	var cam_offset := get_viewport_rect().size.y / 6.0
-	cam.position.y = minf(player.position.y - cam_offset, rows * CELL / 2.0)
+	# The player sits at ~1/3 from the bottom of the *usable* area — portrait
+	# screens reserve the bottom ~490px for the touch controls, so the cat
+	# rides higher there instead of hiding under the buttons.
+	var vp := get_viewport_rect().size
+	var usable := vp.y - 490.0 if vp.y > vp.x else vp.y
+	var cam_offset := usable / 1.5 - vp.y / 2.0  # cat screen y = usable * 2/3
+	# Camera floor: at run start the pit bottom sits just above the screen
+	# bottom (landscape) / the touch zone (portrait), never behind them.
+	var bottom_sy := vp.y - 60.0 if vp.x > vp.y else vp.y - 540.0
+	var cam_floor := rows * CELL - (bottom_sy - vp.y / 2.0)
+	cam.position.y = minf(player.position.y - cam_offset, cam_floor)
 	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
 	lava_phase += delta
@@ -1406,7 +1413,11 @@ func _draw_gold_fx() -> void:
 
 func _draw_fever(w: float) -> void:
 	var cam_y := cam.position.y if cam else rows * CELL / 2.0
-	var bar := Rect2(CELL * 0.5, cam_y + 470.0, w - CELL, 16.0)
+	# Bar rides just above the screen bottom — or above the touch zone on
+	# portrait, where the bottom belongs to the controls.
+	var vp := get_viewport_rect().size
+	var bar_sy := vp.y - 70.0 if vp.x > vp.y else vp.y - 555.0
+	var bar := Rect2(CELL * 0.5, cam_y - vp.y / 2.0 + bar_sy, w - CELL, 16.0)
 	draw_rect(bar, Color(0, 0, 0, 0.45))
 	if fever_active:
 		var t := fever_timer / FEVER_TIME
