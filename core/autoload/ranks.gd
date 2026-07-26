@@ -7,9 +7,9 @@ extends Node
 
 signal board_loaded(ok: bool)
 
-## Set this to a jsonblob.com blob URL (or any GET/PUT JSON endpoint) to go
-## online, e.g. "https://jsonblob.com/api/jsonBlob/<id>".
-const BOARD_URL := ""
+## The shared board: a jsonblob.com blob (anonymous, CORS-enabled, extended
+## on every access). Point this at any GET/PUT JSON endpoint to migrate.
+const BOARD_URL := "https://jsonblob.com/api/jsonBlob/019f9dbf-29d9-7346-bf9d-32c674bfed1c"
 const MODES := ["story", "endless", "classic"]
 const MAX_ENTRIES := 100  # kept per mode, sorted by value desc
 
@@ -25,6 +25,7 @@ const MOCK_CATS := ["cream", "cheese", "calico", "black", "gray", "mint", "pink"
 
 var board := {}  # last fetched board: mode key -> Array of entries
 var busy := false
+var _submitting := false  # serializes read-modify-write submits
 
 
 func _ready() -> void:
@@ -65,11 +66,17 @@ func submit_all() -> void:
 
 
 ## Fire-and-forget: merge my best into the shared board (read-modify-write).
+## Submits queue behind each other — concurrent RMWs would drop each other's
+## writes (the blob is replaced whole).
 func submit(mode_key: String, value: int) -> void:
 	if not online() or value <= 0:
 		return
+	while _submitting:
+		await get_tree().process_frame
+	_submitting = true
 	var data: Variant = await _http(HTTPClient.METHOD_GET)
 	if data is not Dictionary:
+		_submitting = false
 		return
 	var entries: Array = data.get(mode_key, [])
 	entries = entries.filter(func(e: Variant) -> bool:
@@ -89,6 +96,7 @@ func submit(mode_key: String, value: int) -> void:
 	data[mode_key] = entries
 	board = data
 	await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
+	_submitting = false
 
 
 ## Refreshes the whole board; listeners get board_loaded(ok).
