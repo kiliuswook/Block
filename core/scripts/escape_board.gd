@@ -103,6 +103,10 @@ var fever_gauge := 0.0
 var fever_active := false
 var fever_timer := 0.0
 var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
+# Endless: once its countdown ends a piece detaches and falls on its own (no
+# more rotation), so the next piece starts tracking immediately. Each entry:
+# {t: type, r: rot, p: pos, s: PieceState, ft: fall timer, lt: land timer}.
+var loose: Array = []
 # Picnic: floating jelly-fish snacks (cell -> visual variant), time left, haul.
 var snacks := {}
 var picnic_time := 0.0
@@ -152,6 +156,7 @@ func start_game() -> void:
 	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	gold_fx.clear()
+	loose.clear()
 	snacks.clear()
 	picnic_time = 0.0
 	picnic_snacks = 0
@@ -275,6 +280,8 @@ func _process(delta: float) -> void:
 				_fall(delta)
 			PieceState.LANDED:
 				_landed(delta)
+	if mode == Mode.ENDLESS and playing:
+		_step_loose(delta)
 	_rec_tick(delta)
 	for fx in break_fx:
 		fx[1] += delta
@@ -455,18 +462,21 @@ func rect_blocked_for_player(r: Rect2) -> bool:
 
 
 func piece_hits_rect(r: Rect2) -> bool:
-	if piece_state == PieceState.TRACKING or piece_type == "":
-		return false
-	for c in _cells(piece_type, piece_rot, piece_pos):
-		if _cell_rect(c).intersects(r):
-			return true
+	if piece_state != PieceState.TRACKING and piece_type != "":
+		for c in _cells(piece_type, piece_rot, piece_pos):
+			if _cell_rect(c).intersects(r):
+				return true
+	for e: Dictionary in loose:
+		for c: Vector2i in _loose_cells(e):
+			if _cell_rect(c).intersects(r):
+				return true
 	return false
 
 
 func _track(delta: float) -> void:
 	if Input.is_action_just_pressed(_drop_action()):
 		drop_tap_time = Time.get_ticks_msec() / 1000.0
-		_start_fall()
+		_release_piece()
 		return
 	track_timer += delta
 	track_move_timer += delta
@@ -481,7 +491,122 @@ func _track(delta: float) -> void:
 		if dir != 0 and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), true):
 			piece_pos.x += dir
 	if track_timer >= _track_time():
+		_release_piece()
+
+
+## The countdown ended (or the drop key sent the piece down). Endless detaches
+## the piece into [member loose] so the next one starts tracking immediately;
+## every other mode keeps the classic one-piece fall.
+func _release_piece() -> void:
+	if mode == Mode.ENDLESS and not fever_active:
+		_detach_piece()
+	else:
 		_start_fall()
+
+
+## Endless: the tracked piece lets go and free-falls on its own — locked out
+## of rotation from here — while the next piece appears at the top right away.
+func _detach_piece() -> void:
+	if _piece_collides(piece_rot, piece_pos, false):
+		_kill_player()  # true block out: the locked stack reached the spawn row
+		return
+	if _cells_hit_loose(_cells(piece_type, piece_rot, piece_pos), -1):
+		return  # the previous piece still fills this lane — try again next frame
+	loose.append({"t": piece_type, "r": piece_rot, "p": piece_pos,
+			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0})
+	if _resolve_loose_overlap(loose.size() - 1) or not playing:
+		return
+	_spawn_piece()
+
+
+func _loose_cells(e: Dictionary) -> Array:
+	return _cells(e.t, e.r, e.p)
+
+
+## Any of the given cells occupied by a loose piece (other than #exclude)?
+func _cells_hit_loose(cells: Array, exclude: int) -> bool:
+	for i in loose.size():
+		if i == exclude:
+			continue
+		for c: Vector2i in _loose_cells(loose[i]):
+			if c in cells:
+				return true
+	return false
+
+
+## Cells one step in the given direction hit a wall, the grid or another
+## loose piece. dir (0,1) = falling, (±1,0) = shove.
+func _loose_blocked(i: int, dir: Vector2i) -> bool:
+	var e: Dictionary = loose[i]
+	var moved: Array = _cells(e.t, e.r, e.p + dir)
+	for c: Vector2i in moved:
+		if c.x < 0 or c.x >= COLS or c.y >= rows or grid.has(c):
+			return true
+	return _cells_hit_loose(moved, i)
+
+
+## Steps every detached piece: fall, land into the shovable grace, lock.
+## Oldest (lowest) pieces step first so mid-air stacks settle bottom-up.
+func _step_loose(delta: float) -> void:
+	var interval := _fall_interval()
+	if Input.is_action_pressed(_drop_action()):
+		interval /= SOFT_DROP_FACTOR
+	var i := 0
+	while i < loose.size():
+		var e: Dictionary = loose[i]
+		if e.s == PieceState.FALLING:
+			e.ft += delta
+			while e.ft >= interval and playing:
+				e.ft -= interval
+				if _loose_blocked(i, Vector2i(0, 1)):
+					e.s = PieceState.LANDED
+					e.lt = 0.0
+					break
+				e.p += Vector2i(0, 1)
+				if _resolve_loose_overlap(i) or not playing:
+					return
+		elif e.s == PieceState.LANDED:
+			if not _loose_blocked(i, Vector2i(0, 1)):
+				# Shoved off a ledge (or the floor cleared): fall again.
+				e.s = PieceState.FALLING
+				e.ft = 0.0
+			else:
+				e.lt += delta
+				if e.lt >= LOCK_GRACE:
+					loose.remove_at(i)
+					_merge_piece(e.t, e.r, e.p)
+					if not playing:
+						return
+					continue
+		i += 1
+
+
+## Endless dash: shoves whichever detached piece the cat slammed into.
+func _shove_loose(dir: int, max_cells: int) -> bool:
+	var probe := player.rect()
+	probe.position.x += dir * CELL * 0.75
+	var target := -1
+	for i in loose.size():
+		for c: Vector2i in _loose_cells(loose[i]):
+			if _cell_rect(c).intersects(probe):
+				target = i
+				break
+		if target >= 0:
+			break
+	if target < 0:
+		return false
+	var e: Dictionary = loose[target]
+	var moved := false
+	var cells := 0
+	while cells < max_cells and not _loose_blocked(target, Vector2i(dir, 0)):
+		e.p += Vector2i(dir, 0)
+		moved = true
+		cells += 1
+		if _resolve_loose_overlap(target) or not playing:
+			break
+	if moved:
+		Sfx.play("shove")
+	return moved
 
 
 func _start_fall() -> void:
@@ -550,6 +675,8 @@ func _landed(delta: float) -> void:
 ## (the cat's push stat; default slams to the wall or the nearest locked
 ## block). Works while falling and during the landed grace window.
 func shove_piece(dir: int, max_cells: int = COLS) -> bool:
+	if not loose.is_empty() and _shove_loose(dir, max_cells):
+		return true
 	if piece_state == PieceState.TRACKING or piece_type == "":
 		return false
 	var moved := false
@@ -626,12 +753,20 @@ func _hard_drop() -> void:
 ## The falling piece overlaps the player: drive them straight down with it,
 ## sideways only as a last resort. Death only when truly pinned — crushed.
 func _resolve_piece_overlap() -> bool:
+	return _resolve_overlap_cells(_cells(piece_type, piece_rot, piece_pos))
+
+
+func _resolve_loose_overlap(i: int) -> bool:
+	return _resolve_overlap_cells(_loose_cells(loose[i]))
+
+
+func _resolve_overlap_cells(piece_cells: Array) -> bool:
 	if fever_active:
 		return false  # invincible: the piece passes straight through the cat
 	var pr := player.rect().grow(-CRUSH_MARGIN)
 	var cell_rects: Array = []
 	var overlapping: Array = []
-	for c in _cells(piece_type, piece_rot, piece_pos):
+	for c in piece_cells:
 		var r := _cell_rect(c)
 		cell_rects.append(r)
 		if r.intersects(pr):
@@ -679,9 +814,18 @@ func _resolve_piece_overlap() -> bool:
 
 
 func _lock_piece() -> void:
+	if _merge_piece(piece_type, piece_rot, piece_pos):
+		_spawn_piece()
+
+
+## Locks a piece's cells into the grid: overflow, line clears, scoring and the
+## picnic snack shuffle. Serves both the active piece and detached (loose)
+## endless pieces. Returns false when the game ended — or a rescue already
+## spawned the next piece — and the caller must not spawn another.
+func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 	var overflow := false
-	for c in _cells(piece_type, piece_rot, piece_pos):
-		grid[c] = piece_type
+	for c in _cells(t, r, pos):
+		grid[c] = t
 		cracked.erase(c)
 		if c.y < 0:
 			overflow = true
@@ -690,14 +834,14 @@ func _lock_piece() -> void:
 		if mode == Mode.PICNIC:
 			# Picnic: the whole overstuffed stack bursts and the hunt goes on.
 			_picnic_rescue(true)
-			return
+			return false
 		if mode == Mode.VERSUS:
 			_versus_over(1)
 		else:
 			_kill_player()
-		return
+		return false
 	if not _free_player_from_grid():
-		return
+		return false
 	if not fever_active:  # fever locks a piece every ~0.1s — too spammy to click
 		Sfx.play("lock")
 	GameState.score += 10 * level
@@ -722,14 +866,14 @@ func _lock_piece() -> void:
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
 		if not _free_player_from_grid():
-			return
+			return false
 	if mode == Mode.PICNIC:
 		# Locks and line shifts may have buried a snack — float it elsewhere.
 		for c: Vector2i in snacks.keys():
 			if grid.has(c):
 				snacks.erase(c)
 				_spawn_snack()
-	_spawn_piece()
+	return true
 
 
 ## Warmup boost: a staircase against the left wall reaching 5 floors up, so
@@ -1078,6 +1222,7 @@ func _escape() -> void:
 ## from the cat, and a flat rescue bar appears above the lava so the cat
 ## never free-falls straight back into it.
 func revive_player() -> void:
+	loose.clear()  # mid-air pieces vanish too — no instant re-crush
 	var center := Vector2i((player.position / CELL).floor())
 	if mode == Mode.ENDLESS:
 		_blast_all_cells(center)
@@ -1307,6 +1452,9 @@ func fever_platform_top(r: Rect2, tol: float) -> float:
 	if piece_state != PieceState.TRACKING and piece_type != "":
 		for c in _cells(piece_type, piece_rot, piece_pos):
 			best = minf(best, _platform_top_of(_cell_rect(c), r, tol))
+	for e: Dictionary in loose:
+		for c: Vector2i in _loose_cells(e):
+			best = minf(best, _platform_top_of(_cell_rect(c), r, tol))
 	# Locked grid: only exposed surfaces count (no landing inside the stack).
 	var x0 := int(floor((r.position.x + 6.0) / CELL))
 	var x1 := int(floor((r.end.x - 6.0) / CELL))
@@ -1372,6 +1520,7 @@ func _draw() -> void:
 		_draw_doors()
 	if mode == Mode.PICNIC:
 		_draw_snacks()
+	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
 	var border := Color(1, 1, 1, 0.35)
@@ -1519,6 +1668,21 @@ func _draw_piece() -> void:
 		var top_left := Vector2(piece_pos) * CELL
 		draw_string(ThemeDB.fallback_font, top_left + Vector2(CELL * 1.6, CELL * 1.4),
 				str(remain), HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(1, 1, 1, 0.9))
+
+
+## Detached endless pieces: full-color while falling, lock-pulse while landed.
+func _draw_loose() -> void:
+	for e: Dictionary in loose:
+		var color: Color = Board.COLORS[e.t]
+		var pulse := 0.0
+		if e.s == PieceState.LANDED:
+			pulse = 0.5 + 0.5 * sin(e.lt * 16.0)
+			color = color.lightened(0.18 + 0.18 * pulse)
+		for c: Vector2i in _loose_cells(e):
+			_draw_cell(c, color)
+			if e.s == PieceState.LANDED:
+				draw_rect(_cell_rect(c).grow(-2.0),
+						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
 
 
 func _draw_crack(c: Vector2i) -> void:

@@ -545,6 +545,54 @@ func _ready() -> void:
 			"replay: encode/decode round-trip keeps frames")
 	_check(int(round_trip.get("rows", 0)) == cl.rows, "replay: metadata survives")
 
+	# --- Endless: detached pieces (rotation locked, next piece is instant) ------
+	GameState.mode = GameState.MODE_ENDLESS
+	var b6: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p6: Node2D = load("res://core/scripts/player.gd").new()
+	p6.name = "Player"
+	b6.add_child(p6)
+	var cam6 := Camera2D.new()
+	cam6.name = "Cam"
+	b6.add_child(cam6)
+	add_child(b6)
+	b6.start_game()
+	b6.piece_type = "O"
+	b6.piece_rot = 0
+	b6.piece_state = b6.PieceState.TRACKING
+	b6.piece_pos = Vector2i(3, 4)
+	p6.position = Vector2(c, 16 * c)  # well clear of the falling lane
+	var queued6: String = b6.next_type
+	b6._release_piece()
+	_check(b6.loose.size() == 1, "endless: countdown end detaches the piece")
+	_check(b6.piece_state == b6.PieceState.TRACKING,
+			"endless: next piece starts tracking at once")
+	_check(b6.piece_type == queued6, "endless: the queued piece became active")
+	_check(b6.piece_hits_rect(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
+			"endless: detached piece is solid to the cat")
+	# The detached piece falls on its own, lands and locks into the grid.
+	var le: Dictionary = b6.loose[0]
+	le.p = Vector2i(3, b6.rows - 2)
+	b6._step_loose(EscapeBoard.FALL_INTERVAL_BASE)
+	_check(le.s == b6.PieceState.LANDED, "endless: detached piece lands")
+	b6._step_loose(EscapeBoard.LOCK_GRACE)
+	_check(b6.loose.is_empty(), "endless: landed piece locks after the grace")
+	_check(b6.grid.has(Vector2i(4, b6.rows - 1)),
+			"endless: locked cells merged into the grid")
+	# Mid-air pieces stack on each other instead of overlapping.
+	b6.grid.clear()
+	b6.loose.append({"t": "O", "r": 0, "p": Vector2i(3, 10),
+			"s": b6.PieceState.FALLING, "ft": 0.0, "lt": 0.0})
+	b6.loose.append({"t": "O", "r": 0, "p": Vector2i(3, 8),
+			"s": b6.PieceState.FALLING, "ft": 0.0, "lt": 0.0})
+	_check(b6._loose_blocked(1, Vector2i(0, 1)),
+			"endless: a piece stacks on the one below it")
+	# The dash shove targets the detached piece beside the cat.
+	p6.position = Vector2(3.5 * c, 11.0 * c)
+	_check(b6.shove_piece(1, 2), "endless: dash shoves the detached piece")
+	_check(b6.loose[0].p == Vector2i(5, 10),
+			"endless: shove moved it by the push-stat cells")
+	b6.loose.clear()
+
 	# --- 젤리 피크닉: casual no-death snack hunt --------------------------------
 	GameState.mode = GameState.MODE_PICNIC
 	var pk: Node2D = load("res://core/scripts/escape_board.gd").new()
