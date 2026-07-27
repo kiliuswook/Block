@@ -24,6 +24,11 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_shop())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
+	var saved_caps: Dictionary = GameState.keycaps.duplicate()
+	GameState.keycaps = {"C": 3, "A": 1, "T": 12, "S": 2, "Q": 1, "E": 5, "N": 1, "G": 120}
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_keycaps.png",
+			func(inst: Node) -> void: inst._open_keycap_dex())
+	GameState.keycaps = saved_caps
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
 				var rep := {"v": 1, "mode": 1, "cat": "mint", "rows": 20, "door": 0,
@@ -52,6 +57,15 @@ func _ready() -> void:
 	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic.png")
+	# In-game keycap block + collect popup (forced onto a prefilled floor row).
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_keycap.png",
+			func(inst: Node) -> void:
+				var b: Node = inst.get_node("Board")
+				for x in range(4):
+					b.grid[Vector2i(x, 19)] = "J"
+				b.keycaps[Vector2i(2, 19)] = "K"
+				b.keycap_fx.append([Vector2(6.5 * 64.0, 16.0 * 64.0), 0.0, "M"])
+				b.queue_redraw())
 	GameState.mode = GameState.MODE_PICNIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS
@@ -97,6 +111,10 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_shop.png",
 			func(inst: Node) -> void: inst._open_shop())
+	GameState.keycaps = {"C": 3, "A": 1, "T": 12, "S": 2, "Q": 1, "E": 5, "N": 1, "G": 120}
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_keycaps.png",
+			func(inst: Node) -> void: inst._open_keycap_dex())
+	GameState.keycaps = saved_caps
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

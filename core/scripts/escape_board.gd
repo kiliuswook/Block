@@ -37,7 +37,8 @@ const BREAK_FX_TIME := 0.3
 const LOCK_GRACE := 0.7  # landed piece stays shovable this long before locking
 const HEIGHT_SCORE := 10
 const VIEW_BELOW := 620.0  # how far below the camera center the pit stays drawn
-const ENDLESS_SPAWN_AHEAD := 7  # piece spawns this many cells above the camera cell
+const ENDLESS_SPAWN_AHEAD := 9  # piece spawns this many cells above the camera cell
+const SPAWN_CLEARANCE := 4  # next piece hovers at least a box height above loose pieces
 const LAVA_START_OFFSET := CELL * 3.0
 const LAVA_SPEED_BASE := 8.0
 const LAVA_SPEED_STEP := 2.0
@@ -66,6 +67,13 @@ const PICNIC_TRACK_TIME := 6.0
 const PICNIC_FALL_INTERVAL := 0.34
 const PICNIC_SNACK_MIN_UP := 1  # snack floats this many cells above the stack
 const PICNIC_SNACK_MAX_UP := 5
+# Alphabet keycaps: every so often a random locked block turns into a cat-eared
+# keycap; clear the line holding it to bank the letter (title-screen dex).
+# TEST CADENCE — release values should be far rarer (e.g. 45.0 / 0.15).
+const KEYCAP_INTERVAL := 6.0  # spawn roll every this many seconds
+const KEYCAP_CHANCE := 0.6  # chance a roll actually spawns one
+const KEYCAP_MAX_ACTIVE := 2  # keycaps sitting in the pit at once
+const KEYCAP_FX_TIME := 1.3
 const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
 const P2_DAS_REPEAT := 0.06
 const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
@@ -107,6 +115,10 @@ var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
 # more rotation), so the next piece starts tracking immediately. Each entry:
 # {t: type, r: rot, p: pos, s: PieceState, ft: fall timer, lt: land timer}.
 var loose: Array = []
+# Alphabet keycaps living on locked blocks (cell -> letter "A".."Z").
+var keycaps := {}
+var keycap_timer := 0.0
+var keycap_fx: Array = []  # [pos: Vector2, age: float, letter: String]
 # Picnic: floating jelly-fish snacks (cell -> visual variant), time left, haul.
 var snacks := {}
 var picnic_time := 0.0
@@ -157,6 +169,9 @@ func start_game() -> void:
 	lava_phase = 0.0
 	gold_fx.clear()
 	loose.clear()
+	keycaps.clear()
+	keycap_timer = 0.0
+	keycap_fx.clear()
 	snacks.clear()
 	picnic_time = 0.0
 	picnic_snacks = 0
@@ -239,6 +254,7 @@ func _apply_stage() -> void:
 	_set_doors(goal_done)
 	grid.clear()
 	cracked.clear()
+	keycaps.clear()
 	var pf: Dictionary = stage.get("prefill_cells", {})
 	for c: Vector2i in pf:
 		grid[c + Vector2i(0, shift)] = pf[c]
@@ -289,6 +305,10 @@ func _process(delta: float) -> void:
 	for fx in gold_fx:
 		fx[1] += delta
 	gold_fx = gold_fx.filter(func(fx: Array) -> bool: return fx[1] < GOLD_FX_TIME)
+	for fx in keycap_fx:
+		fx[1] += delta
+	keycap_fx = keycap_fx.filter(func(fx: Array) -> bool: return fx[1] < KEYCAP_FX_TIME)
+	_update_keycaps(delta)
 	if _story() and playing and not goal_done and _goal_type() == "survive":
 		var prev := int(survive_time)
 		survive_time += delta
@@ -486,12 +506,27 @@ func _track(delta: float) -> void:
 		track_move_timer -= TRACK_STEP
 		if mode == Mode.VERSUS:
 			continue  # versus: P2 steers the piece by hand instead
-		var target := int(player.position.x / CELL) - 2
+		var target := _track_target()
 		var dir := signi(target - piece_pos.x)
 		if dir != 0 and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), true):
 			piece_pos.x += dir
 	if track_timer >= _track_time():
 		_release_piece()
+
+
+## Origin column the tracking piece steers toward. The default "-2" centers
+## the 4-wide spawn box on the cat, but shapes/rotations whose occupied cells
+## sit inside the box (vertical I = one column, rotated T/S/O = two) would
+## then stop short of a wall-hugging cat. Clamp the target so the piece keeps
+## sliding until its real footprint covers the cat's column.
+func _track_target() -> int:
+	var min_dx := 3
+	var max_dx := 0
+	for c: Vector2i in Board.SHAPES[piece_type][piece_rot]:
+		min_dx = mini(min_dx, c.x)
+		max_dx = maxi(max_dx, c.x)
+	var pcol := int(player.position.x / CELL)
+	return clampi(pcol - 2, pcol - max_dx, pcol - min_dx)
 
 
 ## The countdown ended (or the drop key sent the piece down). Endless detaches
@@ -899,6 +934,39 @@ func _endless_line_reward(cleared: int) -> void:
 	Sfx.play("gold")
 
 
+# --- Alphabet keycaps -----------------------------------------------------------
+
+
+## Every KEYCAP_INTERVAL seconds, one random locked block may turn into an
+## alphabet keycap. Clearing the line that holds it banks the letter. Split
+## boards skip it (two boards share one save), versus skips it (P2 owns the
+## blocks, a collectible for P1 there makes no sense).
+func _update_keycaps(delta: float) -> void:
+	if not playing or split or mode == Mode.VERSUS:
+		return
+	keycap_timer += delta
+	if keycap_timer < KEYCAP_INTERVAL:
+		return
+	keycap_timer = 0.0
+	if randf() > KEYCAP_CHANCE or keycaps.size() >= KEYCAP_MAX_ACTIVE:
+		return
+	var cells: Array = grid.keys().filter(func(c: Vector2i) -> bool:
+		return not keycaps.has(c) and (mode == Mode.ENDLESS or c.y >= 0))
+	if cells.is_empty():
+		return
+	keycaps[cells.pick_random()] = char(65 + randi() % 26)
+	Sfx.play("crack")
+	queue_redraw()
+
+
+func _collect_keycap(c: Vector2i) -> void:
+	var letter: String = keycaps[c]
+	keycaps.erase(c)
+	GameState.add_keycap(letter)
+	keycap_fx.append([_cell_rect(c).get_center(), 0.0, letter])
+	Sfx.play("record")
+
+
 # --- Replay recording -------------------------------------------------------------
 
 
@@ -1004,9 +1072,12 @@ func _clear_lines() -> int:
 	var collapse := mode != Mode.ENDLESS
 	var new_grid := {}
 	var new_cracked := {}
+	var new_keycaps := {}
 	for c in grid:
 		if c.y in full_rows:
 			break_fx.append([c, 0.0])
+			if keycaps.has(c):
+				_collect_keycap(c)
 			continue
 		var dest: Vector2i = c
 		if collapse:
@@ -1018,8 +1089,11 @@ func _clear_lines() -> int:
 		new_grid[dest] = grid[c]
 		if cracked.has(c):
 			new_cracked[dest] = true
+		if keycaps.has(c):
+			new_keycaps[dest] = keycaps[c]
 	grid = new_grid
 	cracked = new_cracked
+	keycaps = new_keycaps
 	return full_rows.size()
 
 
@@ -1072,6 +1146,7 @@ func break_cell_in_rect(r: Rect2) -> bool:
 	if cracked.has(best):
 		cracked.erase(best)
 		grid.erase(best)
+		keycaps.erase(best)
 		break_fx.append([best, 0.0])
 		GameState.score += BREAK_SCORE
 		_story_add_progress("breaks", 1)
@@ -1136,12 +1211,18 @@ func _draw_from_bag() -> String:
 	return bag.pop_back()
 
 
-## In endless mode the piece hovers a fixed number of cells above the
-## (rise-only) camera, so it climbs along with the player.
+## In endless mode the piece hovers a fixed number of cells above the camera,
+## so it climbs along with the player. While a freshly detached piece still
+## fills that space, the row is pushed further up so the next piece never
+## spawns overlapping the previous one — it slides back down as the piece falls.
 func _endless_spawn_row() -> int:
 	if cam == null:
 		return 0
-	return int(floor(cam.position.y / CELL)) - ENDLESS_SPAWN_AHEAD
+	var row := int(floor(cam.position.y / CELL)) - ENDLESS_SPAWN_AHEAD
+	for e: Dictionary in loose:
+		for c: Vector2i in _loose_cells(e):
+			row = mini(row, c.y - SPAWN_CLEARANCE)
+	return row
 
 
 func _try_rotate(dir: int) -> void:
@@ -1210,6 +1291,7 @@ func _escape() -> void:
 	GameState.score += ESCAPE_SCORE * (level - 1)
 	grid.clear()
 	cracked.clear()
+	keycaps.clear()
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	EventBus.level_changed.emit(level)
@@ -1250,6 +1332,7 @@ func _blast_all_cells(center: Vector2i) -> void:
 			break_fx.append([c, -dist * REVIVE_FX_WAVE])
 	grid.clear()
 	cracked.clear()
+	keycaps.clear()
 
 
 ## Endless revive: a flat bar floats a few cells above the lava as a rescue
@@ -1310,6 +1393,7 @@ func _erase_cell(c: Vector2i) -> void:
 		return
 	grid.erase(c)
 	cracked.erase(c)
+	keycaps.erase(c)
 	break_fx.append([c, 0.0])
 
 
@@ -1510,6 +1594,10 @@ func _draw() -> void:
 			_draw_cell(c, Board.COLORS[grid[c]])
 			if cracked.has(c):
 				_draw_crack(c)
+			if keycaps.has(c):
+				paint_keycap(self, _cell_rect(c), keycaps[c],
+						0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 3.0
+								+ (c.x * 5 + c.y) * 1.1))
 	for fx in break_fx:
 		if fx[1] < 0.0:
 			continue  # revive ripple: the blast hasn't reached this cell yet
@@ -1520,6 +1608,7 @@ func _draw() -> void:
 		_draw_doors()
 	if mode == Mode.PICNIC:
 		_draw_snacks()
+	_draw_keycap_fx()
 	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
@@ -1749,6 +1838,67 @@ func _draw_snacks() -> void:
 			p + Vector2(7.0, 0.0), p + Vector2(19.0, -10.0), p + Vector2(19.0, 10.0),
 		]), col.darkened(0.15))
 		draw_circle(p + Vector2(-8.0, -3.0), 2.4, Color("2a2230"))
+
+
+## Cat-eared alphabet keycap riding a locked block: cream cap, two little ears,
+## whisker dots beside the letter. Static so the title-screen dex reuses it.
+## pulse (0..1) drives the soft glow; pass a constant for still UI renders.
+static func paint_keycap(ci: CanvasItem, r: Rect2, letter: String,
+		pulse := 0.5, glow := true) -> void:
+	var body := Color("f4e3c8")
+	var edge := Color("d9a05c")
+	var ink := Color("2a2230")
+	var center := r.get_center()
+	var s := r.size.x  # keycap scales off the cell size (64 in-game)
+	if glow:
+		ci.draw_circle(center, s * 0.47 + s * 0.06 * pulse,
+				Color(1.0, 0.95, 0.82, 0.10 + 0.08 * pulse))
+	var cap := r.grow(-s * 0.125)
+	# Ears peek over the top edge, drawn before the cap so their base hides.
+	for sx: float in [-1.0, 1.0]:
+		var ex := center.x + sx * s * 0.2
+		ci.draw_colored_polygon(PackedVector2Array([
+			Vector2(ex - s * 0.11, cap.position.y + s * 0.08),
+			Vector2(ex + s * 0.11, cap.position.y + s * 0.08),
+			Vector2(ex + sx * s * 0.03, cap.position.y - s * 0.1),
+		]), edge)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = body
+	sb.set_corner_radius_all(int(s * 0.14))
+	sb.set_border_width_all(maxi(1, int(s * 0.03)))
+	sb.border_color = edge
+	ci.draw_style_box(sb, cap)
+	# Light from above: a soft highlight along the keycap's top face.
+	ci.draw_rect(Rect2(cap.position + Vector2(s * 0.09, s * 0.05),
+			Vector2(cap.size.x - s * 0.18, s * 0.07)), Color(1, 1, 1, 0.5))
+	var font := ThemeDB.fallback_font
+	var fs := int(s * 0.44)
+	var w := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	ci.draw_string(font, Vector2(center.x - w / 2.0, center.y + fs * 0.36), letter,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
+	# Whisker dots flanking the letter — the cat face of the keycap.
+	for sx: float in [-1.0, 1.0]:
+		for dy: float in [-1.0, 1.0]:
+			ci.draw_circle(center + Vector2(sx * s * 0.3, s * 0.05 + dy * s * 0.05),
+					s * 0.022, Color(ink, 0.55))
+
+
+## Floating "키캡 획득!" popup rising off the cleared keycap block.
+func _draw_keycap_fx() -> void:
+	var font := ThemeDB.fallback_font
+	for fx in keycap_fx:
+		var t: float = fx[1] / KEYCAP_FX_TIME
+		var pos: Vector2 = fx[0] + Vector2(0.0, -CELL * 1.2 * t)
+		var col := Color("f4e3c8")
+		col.a = 1.0 - t * t
+		var cap := Rect2(pos - Vector2(CELL * 0.45, CELL * 0.85), Vector2.ONE * CELL * 0.9)
+		paint_keycap(self, cap, fx[2], 1.0, false)
+		var text := "%s 키캡 획득!" % fx[2]
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x
+		var tp := Vector2(pos.x - w / 2.0, pos.y + 24.0)
+		draw_string(font, tp + Vector2(2.0, 2.0), text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0, 0, 0, 0.6 * col.a))
+		draw_string(font, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, col)
 
 
 func _draw_cell(c: Vector2i, color: Color) -> void:

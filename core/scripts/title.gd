@@ -14,6 +14,8 @@ const POPUP_SIZE := Vector2(620.0, 700.0)
 const SHOP_TILE := Vector2(200.0, 210.0)
 const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 		["무게", "weight"], ["밀기", "push"]]
+const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
+const KEY_GAP := 8.0
 
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
@@ -46,6 +48,9 @@ var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
 var _boost_chips := {}  # boost id -> Button
 var _shop_wallet: Label
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
+var _keycap_dex: Control
+var _keycap_board: Control
+var _keycap_stats: Label
 var _ranks: Control
 var _rank_tabs := {}  # mode key -> Button
 var _rank_scopes := {}  # true (주간) / false (누적) -> Button
@@ -80,6 +85,7 @@ func _ready() -> void:
 	_build_settings()
 	_build_shop()
 	_build_ranks()
+	_build_keycap_dex()
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
 		if _ranks and _ranks.visible:
 			_refresh_rank_list())
@@ -165,6 +171,16 @@ func _build_settings() -> void:
 		Sfx.play("click")
 		_open_ranks())
 	$UI.add_child(rank_btn)
+	var cap_btn := Button.new()
+	cap_btn.text = "▦ 키캡"
+	cap_btn.position = Vector2(30.0, 240.0)
+	cap_btn.size = Vector2(150.0, 56.0)
+	cap_btn.add_theme_font_size_override("font_size", 24)
+	cap_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	cap_btn.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_open_keycap_dex())
+	$UI.add_child(cap_btn)
 
 
 func _settings_open() -> bool:
@@ -181,6 +197,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_close_shop()
+		return
+	if _keycap_dex and _keycap_dex.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_keycap_dex.visible = false
 		return
 	if _replay_viewer and _replay_viewer.visible:
 		if event is InputEventKey and event.pressed \
@@ -419,6 +440,133 @@ func _open_shop() -> void:
 func _close_shop() -> void:
 	_shop.visible = false
 	queue_redraw()  # title cat may have changed outfit
+
+
+# --- Keycap dex (alphabet collection) --------------------------------------------
+
+
+## Collected-keycaps overlay: a keyboard plate where every banked letter sits
+## as a cat-eared keycap; missing letters are empty sockets. Counts stack.
+func _build_keycap_dex() -> void:
+	_keycap_dex = Control.new()
+	_keycap_dex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_keycap_dex.visible = false
+	$UI.add_child(_keycap_dex)
+	var dim := Button.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim_sb := StyleBoxFlat.new()
+	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		dim.add_theme_stylebox_override(st, dim_sb)
+	dim.pressed.connect(func() -> void: _keycap_dex.visible = false)
+	_keycap_dex.add_child(dim)
+	var pw := minf(vw - 60.0, 1000.0)
+	var key := (pw - 60.0 - KEY_GAP * 9.0) / 10.0
+	var plate_h := key * 3.0 + KEY_GAP * 2.0 + 44.0
+	var ph := minf(vh - 100.0, plate_h + 250.0)
+	var panel := PanelContainer.new()
+	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
+	panel.size = Vector2(pw, ph)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("1c1a26")
+	box.set_corner_radius_all(18)
+	box.set_border_width_all(3)
+	box.border_color = Color(CREAM, 0.65)
+	box.content_margin_left = 30.0
+	box.content_margin_right = 30.0
+	box.content_margin_top = 22.0
+	box.content_margin_bottom = 22.0
+	panel.add_theme_stylebox_override("panel", box)
+	_keycap_dex.add_child(panel)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	panel.add_child(v)
+	var title := Label.new()
+	title.text = "▦ 키캡 도감"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", CREAM)
+	v.add_child(title)
+	_keycap_stats = Label.new()
+	_keycap_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_keycap_stats.add_theme_font_size_override("font_size", 24)
+	_keycap_stats.add_theme_color_override("font_color", GOLD_COL)
+	v.add_child(_keycap_stats)
+	_keycap_board = Control.new()
+	_keycap_board.custom_minimum_size = Vector2(pw - 60.0, plate_h)
+	_keycap_board.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_keycap_board.draw.connect(_draw_keycap_dex_board)
+	v.add_child(_keycap_board)
+	var hint := Label.new()
+	hint.text = "블록에 나타난 키캡이 있는 줄을 지우면 키캡을 모을 수 있다냥!"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	v.add_child(hint)
+	var close := Button.new()
+	close.text = "닫기"
+	close.custom_minimum_size = Vector2(200.0, 52.0)
+	close.add_theme_font_size_override("font_size", 22)
+	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.pressed.connect(func() -> void: _keycap_dex.visible = false)
+	var wrap := CenterContainer.new()
+	wrap.add_child(close)
+	v.add_child(wrap)
+
+
+func _open_keycap_dex() -> void:
+	_keycap_stats.text = "모은 키캡  %d / 26 종   ·   총 %d개" \
+			% [GameState.keycap_kinds(), GameState.keycap_total()]
+	_keycap_board.queue_redraw()
+	_keycap_dex.visible = true
+
+
+## The keyboard: three staggered QWERTY rows on a dark plate. Collected
+## letters wear the in-game cat keycap; missing ones are dim empty sockets.
+func _draw_keycap_dex_board() -> void:
+	var ci := _keycap_board
+	var bw := ci.size.x
+	var key := (bw - KEY_GAP * 9.0) / 10.0
+	var plate := Rect2(0.0, 0.0, bw, key * 3.0 + KEY_GAP * 2.0 + 44.0)
+	var plate_sb := StyleBoxFlat.new()
+	plate_sb.bg_color = Color("12111a")
+	plate_sb.set_corner_radius_all(16)
+	plate_sb.set_border_width_all(2)
+	plate_sb.border_color = Color(1, 1, 1, 0.14)
+	ci.draw_style_box(plate_sb, plate)
+	var font := ThemeDB.fallback_font
+	for r in KEY_ROWS.size():
+		var letters := KEY_ROWS[r]
+		var row_w := letters.length() * key + (letters.length() - 1) * KEY_GAP
+		var x := (bw - row_w) / 2.0
+		var y := 22.0 + r * (key + KEY_GAP)
+		for i in letters.length():
+			var letter := letters[i]
+			var rect := Rect2(x + i * (key + KEY_GAP), y, key, key)
+			var count := GameState.keycap_count(letter)
+			if count > 0:
+				EscapeBoard.paint_keycap(ci, rect, letter, 0.6, false)
+				if count > 1:
+					var badge := rect.position + Vector2(key - 14.0, key - 8.0)
+					ci.draw_circle(badge + Vector2(0.0, -6.0), 15.0, Color("b8433f"))
+					var txt := "×%d" % count if count < 100 else "99+"
+					var tw := font.get_string_size(txt,
+							HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+					ci.draw_string(font, badge + Vector2(-tw / 2.0, 0.0), txt,
+							HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
+			else:
+				# Empty socket: the key's resting hole, letter barely visible.
+				var sock := StyleBoxFlat.new()
+				sock.bg_color = Color(1, 1, 1, 0.04)
+				sock.set_corner_radius_all(int(key * 0.14))
+				sock.set_border_width_all(2)
+				sock.border_color = Color(1, 1, 1, 0.1)
+				ci.draw_style_box(sock, rect.grow(-key * 0.09))
+				var fs := int(key * 0.4)
+				var w := font.get_string_size(letter,
+						HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+				ci.draw_string(font, rect.get_center() + Vector2(-w / 2.0, fs * 0.36),
+						letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.16))
 
 
 # --- Rankings (per-mode leaderboards) -------------------------------------------

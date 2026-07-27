@@ -135,6 +135,7 @@ var acc_neck: String = ""
 var affection: Dictionary = {}  # cat id -> total snacks fed
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
+var keycaps: Dictionary = {}  # collected alphabet keycaps: "A".."Z" -> count
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
 # Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
 var vol_master: float = 1.0
@@ -283,6 +284,32 @@ func claim_daily_bonus() -> bool:
 	last_daily = today
 	save_game()
 	return true
+
+
+# --- Keycaps (alphabet collection) ---------------------------------------------
+
+
+func keycap_count(letter: String) -> int:
+	return int(keycaps.get(letter, 0))
+
+
+## Distinct letters collected so far (dex completion, 0..26).
+func keycap_kinds() -> int:
+	return keycaps.size()
+
+
+func keycap_total() -> int:
+	var total := 0
+	for letter in keycaps:
+		total += int(keycaps[letter])
+	return total
+
+
+## A cleared line held a keycap block: bank the letter (duplicates stack).
+func add_keycap(letter: String) -> void:
+	keycaps[letter] = keycap_count(letter) + 1
+	save_game()
+	EventBus.keycap_collected.emit(letter, keycap_count(letter))
 
 
 # --- Accessories --------------------------------------------------------------
@@ -512,6 +539,7 @@ func save_game() -> void:
 		"affection": affection,
 		"pending_boosts": pending_boosts,
 		"skipped_stages": skipped_stages,
+		"keycaps": keycaps,
 		"last_daily": last_daily,
 		"vol_master": vol_master,
 		"vol_bgm": vol_bgm,
@@ -572,6 +600,11 @@ func load_game() -> void:
 			skipped_stages = []
 			for s in skipped:
 				skipped_stages.append(int(s))
+		var caps: Variant = data.get("keycaps", {})
+		if caps is Dictionary:
+			keycaps = {}
+			for k in caps:
+				keycaps[str(k)] = int(caps[k])
 		last_daily = str(data.get("last_daily", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
 		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)

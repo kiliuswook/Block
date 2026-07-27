@@ -113,6 +113,25 @@ func _ready() -> void:
 			"tracking piece is not solid")
 	board.piece_state = board.PieceState.FALLING
 
+	# Tracking target covers a wall-hugging cat even when the piece's occupied
+	# cells sit inside the 4-wide box (vertical I = one column, rotated T = two).
+	player.position = Vector2(EscapeBoard.COLS * c - Player.SIZE / 2.0, 700.0)
+	board.piece_type = "I"
+	board.piece_rot = 3  # occupies x offset 1 only
+	_check(board._track_target() + 1 == EscapeBoard.COLS - 1,
+			"vertical I tracks all the way to the right wall")
+	board.piece_rot = 0  # occupies x offsets 0..3 — keeps the old -2 centering
+	_check(board._track_target() == EscapeBoard.COLS - 3, "flat I keeps the -2 centering")
+	board.piece_type = "T"
+	board.piece_rot = 3  # occupies x offsets 0..1
+	_check(board._track_target() + 1 == EscapeBoard.COLS - 1,
+			"rotated T reaches a right-wall cat")
+	player.position = Vector2(Player.SIZE / 2.0, 700.0)
+	board.piece_rot = 1  # occupies x offsets 1..2
+	_check(board._track_target() + 1 <= 0, "rotated T reaches a left-wall cat")
+	board.piece_type = "O"
+	board.piece_rot = 0
+
 	# Dash impact slams the piece sideways all the way to the wall
 	player.position = Vector2(2 * c, 700.0)  # out of the piece's way
 	board.piece_pos = Vector2i(3, 4)
@@ -569,6 +588,14 @@ func _ready() -> void:
 	_check(b6.piece_type == queued6, "endless: the queued piece became active")
 	_check(b6.piece_hits_rect(Rect2(4 * c + 10, 4 * c + 10, 10, 10)),
 			"endless: detached piece is solid to the cat")
+	# The next piece spawns clear of the freshly detached one: its 4-row spawn
+	# box must sit fully above the previous piece's topmost cell.
+	var loose_top6: int = b6.rows
+	for lc: Vector2i in b6._loose_cells(b6.loose[0]):
+		loose_top6 = mini(loose_top6, lc.y)
+	_check(b6.piece_pos.y + 3 < loose_top6, "endless: next piece spawns above the detached piece")
+	_check(b6._endless_spawn_row() <= loose_top6 - EscapeBoard.SPAWN_CLEARANCE,
+			"endless: tracking row stays above the falling piece")
 	# The detached piece falls on its own, lands and locks into the grid.
 	var le: Dictionary = b6.loose[0]
 	le.p = Vector2i(3, b6.rows - 2)
