@@ -545,6 +545,64 @@ func _ready() -> void:
 			"replay: encode/decode round-trip keeps frames")
 	_check(int(round_trip.get("rows", 0)) == cl.rows, "replay: metadata survives")
 
+	# --- 젤리 피크닉: casual no-death snack hunt --------------------------------
+	GameState.mode = GameState.MODE_PICNIC
+	var pk: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var pkp: Node2D = load("res://core/scripts/player.gd").new()
+	pkp.name = "Player"
+	pk.add_child(pkp)
+	add_child(pk)
+	pk.start_game()
+	_check(pk.mode == pk.Mode.PICNIC, "picnic: mode starts")
+	_check(not pk.door_left and not pk.door_right, "picnic: pit is sealed")
+	_check(pk.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "picnic: side walls have no exits")
+	_check(pk.snacks.size() == EscapeBoard.PICNIC_SNACKS_ACTIVE, "picnic: snacks spawn at start")
+	_check(pk.picnic_time == EscapeBoard.PICNIC_TIME, "picnic: timer starts full")
+	_check(absf(pk._track_time() - EscapeBoard.PICNIC_TRACK_TIME) < 0.01,
+			"picnic: relaxed tracking window")
+	_check(absf(pk._fall_interval() - EscapeBoard.PICNIC_FALL_INTERVAL) < 0.01,
+			"picnic: slow fixed gravity")
+	# A crush pops the piece like jelly instead of killing the cat.
+	pk.piece_type = "O"
+	pk.piece_rot = 0
+	pk.piece_state = pk.PieceState.FALLING
+	pk.piece_pos = Vector2i(3, pk.rows - 2)
+	pkp.position = pk._spawn_point()
+	pk._resolve_piece_overlap()
+	_check(pkp.alive, "picnic: crush rescues instead of killing")
+	_check(pk.playing, "picnic: game keeps running after a rescue")
+	# Touching a snack collects it, pays score and respawns one elsewhere.
+	pk.grid.clear()
+	pk.snacks.clear()
+	var snack_c := Vector2i(4, 10)
+	pk.snacks[snack_c] = 0
+	pkp.position = Vector2(4.5 * c, 10.5 * c)
+	var picnic_score: int = GameState.score
+	pk._update_picnic(0.016)
+	_check(pk.picnic_snacks == 1, "picnic: snack collected on touch")
+	_check(GameState.score == picnic_score + EscapeBoard.PICNIC_SNACK_SCORE,
+			"picnic: snack pays score")
+	_check(not pk.snacks.has(snack_c), "picnic: collected snack is gone")
+	_check(pk.snacks.size() == 1, "picnic: a replacement snack spawns")
+	# Stack overflow bursts the whole pit instead of ending the run.
+	pkp.position = Vector2(5 * c, 18 * c)
+	for x in range(EscapeBoard.COLS):
+		for y in range(3):
+			pk.grid[Vector2i(x, y)] = "O"
+	pk.piece_type = "O"
+	pk.piece_rot = 0
+	pk.piece_state = pk.PieceState.FALLING
+	pk.piece_pos = Vector2i(0, -1)
+	pk._lock_piece()
+	_check(pk.playing, "picnic: overflow keeps the game running")
+	_check(pk.grid.is_empty(), "picnic: overflow bursts the whole stack")
+	_check(pk.snacks.size() == EscapeBoard.PICNIC_SNACKS_ACTIVE,
+			"picnic: burst restocks the snacks")
+	# The clock is the only thing that ends a picnic.
+	pk._update_picnic(EscapeBoard.PICNIC_TIME + 1.0)
+	_check(not pk.playing, "picnic: timer end stops the run")
+	_check(pk.picnic_time == 0.0, "picnic: timer clamps at zero")
+
 	# Restore the real save the story tests overwrote
 	GameState.story_stage = saved_story
 	GameState.save_game()

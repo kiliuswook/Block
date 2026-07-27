@@ -11,7 +11,7 @@ signal weekly_reward(gold: int, gems: int)  # last week's top-3 payout landed
 ## The shared board: a jsonblob.com blob (anonymous, CORS-enabled, extended
 ## on every access). Point this at any GET/PUT JSON endpoint to migrate.
 const BOARD_URL := "https://jsonblob.com/api/jsonBlob/019f9dbf-29d9-7346-bf9d-32c674bfed1c"
-const MODES := ["story", "endless", "classic"]
+const MODES := ["story", "endless", "classic", "picnic"]
 const MAX_ENTRIES := 100  # kept per mode, sorted by value desc
 
 # Weekly boards live beside the all-time ones under "wk_<mode>" keys, stamped
@@ -71,6 +71,8 @@ func local_value(mode_key: String) -> int:
 			return GameState.best_height
 		"classic":
 			return GameState.classic_best
+		"picnic":
+			return GameState.picnic_best
 	return 0
 
 
@@ -228,6 +230,8 @@ func _mock_entries(mode_key: String, weekly := false) -> Array:
 				v = maxi(int(130.0 * s * pow(0.83, i)) + rng.randi_range(0, 4), 2)
 			"classic":
 				v = maxi(int(240000.0 * s * pow(0.72, i)) + rng.randi_range(0, 900), 400)
+			"picnic":
+				v = maxi(int(2600.0 * s * pow(0.85, i)) + rng.randi_range(0, 90), 150)
 		out.append({"id": "bot-%d" % i, "name": MOCK_NAMES[i], "v": v,
 				"cat": MOCK_CATS[rng.randi_range(0, MOCK_CATS.size() - 1)]})
 	return out

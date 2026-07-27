@@ -19,9 +19,15 @@ func _ready() -> void:
 		get_node("UI/" + n).visible = false
 	_place($UI/TitleLabel, 40.0, 200.0, 1000.0, 160.0)
 	_place($UI/SubtitleLabel, 40.0, 370.0, 1000.0, 50.0)
-	_big_button(escape_btn, $UI/EscapeDesc, 500.0)
-	_big_button(endless_btn, $UI/EndlessDesc, 700.0)
-	_big_button(classic_btn, $UI/ClassicDesc, 900.0)
+	_big_button(escape_btn, $UI/EscapeDesc, 470.0)
+	_big_button(picnic_btn, $UI/PicnicDesc, 650.0)  # 라이트 유저 최우선 노출
+	_big_button(endless_btn, $UI/EndlessDesc, 830.0)
+	_big_button(classic_btn, $UI/ClassicDesc, 1010.0)
+	# 터치 전용 화면에는 키보드 번호가 의미 없다 — "1. " 접두사 제거.
+	for b: Button in [escape_btn, picnic_btn, endless_btn, classic_btn]:
+		var dot := b.text.find(".")
+		if dot > 0:
+			b.text = b.text.substr(dot + 1).strip_edges()
 	var hint: Label = $UI/HintLabel
 	_place(hint, 40.0, vh - 90.0, 1000.0, 40.0)
 	hint.text = "모드를 터치해서 시작!"

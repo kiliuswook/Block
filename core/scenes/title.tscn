@@ -29,17 +29,17 @@ text = "구덩이에 빠진 큐브 고양이의 탈출극"
 
 [node name="EscapeBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 316.0
+offset_top = 304.0
 offset_right = 1210.0
-offset_bottom = 388.0
-theme_override_font_sizes/font_size = 34
+offset_bottom = 364.0
+theme_override_font_sizes/font_size = 32
 text = "1.  스토리 모드"
 
 [node name="EscapeDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 390.0
+offset_top = 366.0
 offset_right = 1210.0
-offset_bottom = 418.0
+offset_bottom = 390.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
@@ -47,17 +47,17 @@ text = "스테이지를 깨며 배우는 고양이의 탈출 이야기 — 튜�
 
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 424.0
+offset_top = 394.0
 offset_right = 1210.0
-offset_bottom = 496.0
-theme_override_font_sizes/font_size = 34
+offset_bottom = 454.0
+theme_override_font_sizes/font_size = 32
 text = "2.  무한의 계단 모드"
 
 [node name="EndlessDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 498.0
+offset_top = 456.0
 offset_right = 1210.0
-offset_bottom = 526.0
+offset_bottom = 480.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
@@ -65,17 +65,17 @@ text = "끝없이 블록을 쌓으며 최대한 높이 올라가자!"
 
 [node name="VersusBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 532.0
+offset_top = 484.0
 offset_right = 1210.0
-offset_bottom = 604.0
-theme_override_font_sizes/font_size = 34
+offset_bottom = 544.0
+theme_override_font_sizes/font_size = 32
 text = "3.  2P 대전 모드"
 
 [node name="VersusDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 606.0
+offset_top = 546.0
 offset_right = 1210.0
-offset_bottom = 634.0
+offset_bottom = 570.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
@@ -83,37 +83,56 @@ text = "P1 고양이는 탈출, P2 블록은 뭉개기 — 한 키보드 대결!
 
 [node name="ClassicBtn" type="Button" parent="UI"]
 offset_left = 710.0
-offset_top = 640.0
+offset_top = 574.0
 offset_right = 1210.0
-offset_bottom = 712.0
-theme_override_font_sizes/font_size = 34
+offset_bottom = 634.0
+theme_override_font_sizes/font_size = 32
 text = "4.  클래식 테트리스"
 
 [node name="ClassicDesc" type="Label" parent="UI"]
 offset_left = 710.0
-offset_top = 714.0
+offset_top = 636.0
 offset_right = 1210.0
-offset_bottom = 742.0
+offset_bottom = 660.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
 text = "고전 오락실 난이도 그대로 — 고양이로 라인을 지우며 살아남아라!"
 
+[node name="PicnicBtn" type="Button" parent="UI"]
+offset_left = 710.0
+offset_top = 664.0
+offset_right = 1210.0
+offset_bottom = 724.0
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 1)
+text = "5.  젤리 피크닉  ♥ 편안함"
+
+[node name="PicnicDesc" type="Label" parent="UI"]
+offset_left = 710.0
+offset_top = 726.0
+offset_right = 1210.0
+offset_bottom = 750.0
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(1, 1, 1, 0.5)
+horizontal_alignment = 1
+text = "아무도 죽지 않는 힐링 모드 — 2분 동안 젤리 생선을 냠냠 모으자!"
+
 [node name="Escape2Btn" type="Button" parent="UI"]
 offset_left = 1226.0
-offset_top = 316.0
+offset_top = 304.0
 offset_right = 1400.0
-offset_bottom = 388.0
+offset_bottom = 364.0
 theme_override_font_sizes/font_size = 24
-text = "5. 2인 분할"
+text = "6. 2인 분할"
 
 [node name="Endless2Btn" type="Button" parent="UI"]
 offset_left = 1226.0
-offset_top = 424.0
+offset_top = 394.0
 offset_right = 1400.0
-offset_bottom = 496.0
+offset_bottom = 454.0
 theme_override_font_sizes/font_size = 24
-text = "6. 2인 분할"
+text = "7. 2인 분할"
 
 [node name="HintLabel" type="Label" parent="UI"]
 offset_left = 460.0
@@ -123,4 +142,4 @@ offset_bottom = 1040.0
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.4)
 horizontal_alignment = 1
-text = "버튼 클릭 / 터치  또는  1 ~ 6 키로 선택   (5 · 6 = 화면 분할 2인)"
+text = "버튼 클릭 / 터치  또는  1 ~ 7 키로 선택   (6 · 7 = 화면 분할 2인)"

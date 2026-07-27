@@ -19,6 +19,7 @@ const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
 @onready var endless_btn: Button = $UI/EndlessBtn
 @onready var versus_btn: Button = $UI/VersusBtn
 @onready var classic_btn: Button = $UI/ClassicBtn
+@onready var picnic_btn: Button = $UI/PicnicBtn
 @onready var escape2_btn: Button = $UI/Escape2Btn
 @onready var endless2_btn: Button = $UI/Endless2Btn
 
@@ -66,9 +67,11 @@ func _ready() -> void:
 	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
 	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
 	classic_btn.pressed.connect(func() -> void: _start(GameState.MODE_CLASSIC))
+	picnic_btn.pressed.connect(func() -> void: _start(GameState.MODE_PICNIC))
 	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY, true))
 	endless2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS, true))
 	_refresh_classic_desc()
+	_refresh_picnic_desc()
 	_refresh_story_desc()
 	_build_currency_display()
 	_build_character_row()
@@ -112,6 +115,13 @@ func _refresh_classic_desc() -> void:
 	if GameState.classic_best > 0:
 		($UI/ClassicDesc as Label).text = \
 				"고전 오락실 난이도 그대로 — 최고 기록  %d점" % GameState.classic_best
+
+
+## Picnic subtitle carries the snack-hunt high score.
+func _refresh_picnic_desc() -> void:
+	if GameState.picnic_best > 0:
+		($UI/PicnicDesc as Label).text = \
+				"아무도 죽지 않는 힐링 모드 — 최고 기록  %d점" % GameState.picnic_best
 
 
 func _start(mode: int, split := false) -> void:
@@ -200,8 +210,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_4, KEY_KP_4:
 				_start(GameState.MODE_CLASSIC)
 			KEY_5, KEY_KP_5:
-				_start(GameState.MODE_STORY, true)
+				_start(GameState.MODE_PICNIC)
 			KEY_6, KEY_KP_6:
+				_start(GameState.MODE_STORY, true)
+			KEY_7, KEY_KP_7:
 				_start(GameState.MODE_ENDLESS, true)
 
 
@@ -501,11 +513,12 @@ func _build_ranks() -> void:
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 10)
 	v.add_child(tabs)
-	for entry: Array in [["story", "스토리"], ["endless", "무한의 계단"], ["classic", "클래식"]]:
+	for entry: Array in [["story", "스토리"], ["endless", "무한의 계단"],
+			["classic", "클래식"], ["picnic", "피크닉"]]:
 		var b := Button.new()
 		b.text = str(entry[1])
-		b.custom_minimum_size = Vector2((pw - 80.0) / 3.0, 50.0)
-		b.add_theme_font_size_override("font_size", 20)
+		b.custom_minimum_size = Vector2((pw - 90.0) / 4.0, 50.0)
+		b.add_theme_font_size_override("font_size", 18)
 		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		b.pressed.connect(_on_rank_tab.bind(str(entry[0])))
 		tabs.add_child(b)

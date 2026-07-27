@@ -13,7 +13,7 @@ extends Node2D
 signal finished(win: bool)
 
 enum PieceState { TRACKING, FALLING, LANDED }
-enum Mode { STORY, ENDLESS, VERSUS, CLASSIC }
+enum Mode { STORY, ENDLESS, VERSUS, CLASSIC, PICNIC }
 
 const COLS := 10
 const ROWS := 14  # story stage data coordinate base — prefills/door_row are
@@ -57,6 +57,15 @@ const FEVER_PER_PIECE := 0.03  # small trickle charge for every locked piece
 const FEVER_FALL_INTERVAL := 0.025  # fever: near-instant fall steps
 const FEVER_LOCK_GRACE := 0.07  # fever: quick lock so the next piece follows
 const FEVER_SPAWN_TRIES := 3  # fever spawn: candidate columns, deepest one wins
+# Jelly picnic (casual): a 2-minute no-death snack hunt. Pieces fall slow and
+# never speed up; anything that would kill the cat pops like jelly instead.
+const PICNIC_TIME := 120.0
+const PICNIC_SNACKS_ACTIVE := 3  # snacks floating in the pit at any moment
+const PICNIC_SNACK_SCORE := 100
+const PICNIC_TRACK_TIME := 6.0
+const PICNIC_FALL_INTERVAL := 0.34
+const PICNIC_SNACK_MIN_UP := 1  # snack floats this many cells above the stack
+const PICNIC_SNACK_MAX_UP := 5
 const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
 const P2_DAS_REPEAT := 0.06
 const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
@@ -94,6 +103,10 @@ var fever_gauge := 0.0
 var fever_active := false
 var fever_timer := 0.0
 var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
+# Picnic: floating jelly-fish snacks (cell -> visual variant), time left, haul.
+var snacks := {}
+var picnic_time := 0.0
+var picnic_snacks := 0
 # Replay recording: 10Hz state frames (cat + piece + score) plus grid-diff
 # events, exported via rec_export(). Story records one stage at a time.
 const REC_STEP := 0.1
@@ -139,6 +152,9 @@ func start_game() -> void:
 	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	gold_fx.clear()
+	snacks.clear()
+	picnic_time = 0.0
+	picnic_snacks = 0
 	fever_gauge = 0.0
 	fever_active = false
 	fever_timer = 0.0
@@ -166,6 +182,13 @@ func start_game() -> void:
 		# usual cat controls; every 10 lines is a stage (arcade level).
 		door_left = false
 		door_right = false
+	elif mode == Mode.PICNIC:
+		# Sealed jelly pit: no exits, no death — just a timed snack hunt.
+		door_left = false
+		door_right = false
+		picnic_time = PICNIC_TIME
+		for i in range(PICNIC_SNACKS_ACTIVE):
+			_spawn_snack()
 	elif mode == Mode.ENDLESS and not split:
 		# Consume boosts bought for this run (shop / death-popup chips).
 		for b: String in GameState.take_boosts():
@@ -270,6 +293,8 @@ func _process(delta: float) -> void:
 			_story_goal_done()
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
+	elif mode == Mode.PICNIC:
+		_update_picnic(delta)
 	elif playing and (player.position.x < -CELL * 0.6
 			or player.position.x > COLS * CELL + CELL * 0.6):
 		if mode == Mode.VERSUS:
@@ -310,6 +335,78 @@ func _update_endless(delta: float) -> void:
 		best_height = h
 		if not split:
 			EventBus.height_changed.emit(best_height)
+
+
+# --- Jelly picnic (casual) ------------------------------------------------------
+
+
+func _update_picnic(delta: float) -> void:
+	lava_phase += delta  # doubles as the snack-bobbing animation clock
+	picnic_time -= delta
+	if picnic_time <= 0.0:
+		picnic_time = 0.0
+		playing = false
+		Sfx.play("milestone")
+		if split:
+			finished.emit(false)
+		else:
+			EventBus.game_over.emit()
+		queue_redraw()
+		return
+	var pr := player.rect().grow(6.0)
+	for c: Vector2i in snacks.keys():
+		if _cell_rect(c).grow(-10.0).intersects(pr):
+			_collect_snack(c)
+
+
+func _collect_snack(c: Vector2i) -> void:
+	snacks.erase(c)
+	picnic_snacks += 1
+	GameState.score += PICNIC_SNACK_SCORE
+	break_fx.append([c, 0.0])
+	gold_fx.append([_cell_rect(c).get_center(), 0.0, PICNIC_SNACK_SCORE])
+	Sfx.play("gold")
+	_spawn_snack()
+
+
+## Drops a snack over a random column, floating a few cells above that
+## column's stack surface — high ones ask for a little block-climbing.
+func _spawn_snack() -> void:
+	for attempt in range(40):
+		var x := randi_range(0, COLS - 1)
+		var surface := _surface_row(x, x)
+		var y := clampi(surface - randi_range(PICNIC_SNACK_MIN_UP, PICNIC_SNACK_MAX_UP),
+				2, rows - 1)
+		var c := Vector2i(x, y)
+		if grid.has(c) or snacks.has(c):
+			continue
+		if Vector2(c).distance_to(player.position / CELL) < 3.0:
+			continue  # never a freebie right on the cat
+		snacks[c] = randi_range(0, 2)
+		return
+
+
+## Picnic never kills: whatever pinned the cat pops like jelly instead. The
+## falling piece bursts, nearby locked cells shatter, and play just continues.
+## big = the stack overflowed the pit: blow the whole thing up and restock.
+func _picnic_rescue(big := false) -> void:
+	var center := Vector2i((player.position / CELL).floor())
+	Sfx.play("break")
+	if big:
+		_blast_all_cells(center)
+		snacks.clear()
+		for i in range(PICNIC_SNACKS_ACTIVE):
+			_spawn_snack()
+	if piece_type != "" and piece_state != PieceState.TRACKING:
+		for c in _cells(piece_type, piece_rot, piece_pos):
+			break_fx.append([c, 0.0])
+	_erase_cells_around(center, 1)
+	if not _shove_player_out_of_grid():
+		_erase_cells_around(center, 2)
+		_shove_player_out_of_grid()
+	_clear_spawn_window()
+	_spawn_piece()
+	queue_redraw()
 
 
 func rect_hits_solid(r: Rect2) -> bool:
@@ -590,6 +687,10 @@ func _lock_piece() -> void:
 			overflow = true
 	if overflow and mode != Mode.ENDLESS:
 		# Stack spilled over the top: cat dies in escape, P2 loses in versus.
+		if mode == Mode.PICNIC:
+			# Picnic: the whole overstuffed stack bursts and the hunt goes on.
+			_picnic_rescue(true)
+			return
 		if mode == Mode.VERSUS:
 			_versus_over(1)
 		else:
@@ -622,6 +723,12 @@ func _lock_piece() -> void:
 			EventBus.lines_changed.emit(total_lines)
 		if not _free_player_from_grid():
 			return
+	if mode == Mode.PICNIC:
+		# Locks and line shifts may have buried a snack — float it elsewhere.
+		for c: Vector2i in snacks.keys():
+			if grid.has(c):
+				snacks.erase(c)
+				_spawn_snack()
 	_spawn_piece()
 
 
@@ -1062,6 +1169,10 @@ func _erase_cell(c: Vector2i) -> void:
 
 
 func _kill_player() -> void:
+	if mode == Mode.PICNIC:
+		# Nobody dies at a picnic — pop the offending jelly and play on.
+		_picnic_rescue()
+		return
 	if mode == Mode.VERSUS:
 		# The cat got crushed or trapped — round to P2.
 		_versus_over(2)
@@ -1079,6 +1190,8 @@ func _kill_player() -> void:
 ## Difficulty driver: story scales with stage, endless with height climbed,
 ## versus with pieces spawned this round (rounds get tenser as they run long).
 func _difficulty() -> int:
+	if mode == Mode.PICNIC:
+		return 1  # picnic never speeds up
 	if mode == Mode.STORY:
 		return level
 	if mode == Mode.VERSUS:
@@ -1087,6 +1200,8 @@ func _difficulty() -> int:
 
 
 func _track_time() -> float:
+	if mode == Mode.PICNIC:
+		return PICNIC_TRACK_TIME
 	if mode == Mode.CLASSIC:
 		# The NES gravity table scales our tracking window: stage 1 keeps the
 		# full 5s, the plateaus tighten it, the kill screen pins it at 1s.
@@ -1099,6 +1214,8 @@ func _track_time() -> float:
 func _fall_interval() -> float:
 	if fever_active:
 		return FEVER_FALL_INTERVAL
+	if mode == Mode.PICNIC:
+		return PICNIC_FALL_INTERVAL
 	if mode == Mode.CLASSIC:
 		return clampf(FALL_INTERVAL_BASE * _classic_frames() / 48.0,
 				0.03, FALL_INTERVAL_BASE)
@@ -1251,12 +1368,18 @@ func _draw() -> void:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
-	if mode != Mode.ENDLESS:
+	if mode != Mode.ENDLESS and mode != Mode.PICNIC:
 		_draw_doors()
+	if mode == Mode.PICNIC:
+		_draw_snacks()
 	if piece_type != "":
 		_draw_piece()
 	var border := Color(1, 1, 1, 0.35)
-	if mode != Mode.ENDLESS:
+	if mode == Mode.PICNIC:
+		# Sealed jelly pit: unbroken walls all around, no doors to draw.
+		draw_rect(Rect2(-2.0, -2.0, w + 4.0, h + 4.0), border, false, 2.0)
+		_draw_gold_fx()
+	elif mode != Mode.ENDLESS:
 		# Side walls open at the exit rows: draw them with a gap at the doors.
 		var door_top := door_row * CELL
 		var door_bottom := (door_row + 2) * CELL
@@ -1281,6 +1404,10 @@ func _draw() -> void:
 func _draw_pit_background(w: float, h: float, top: float) -> void:
 	var top_col := Color("2a3040")
 	var bot_col := Color("0b0c12")
+	if mode == Mode.PICNIC:
+		# Picnic daylight: the softest, warmest pit in the game.
+		top_col = Color("3d4258")
+		bot_col = Color("1a1c28")
 	if mode == Mode.ENDLESS:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
@@ -1288,7 +1415,15 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 	draw_polygon(PackedVector2Array([
 		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
-	if mode != Mode.ENDLESS:
+	if mode == Mode.PICNIC:
+		# A single soft sunbeam straight down the middle of the picnic pit.
+		var beam := Color(1.0, 0.95, 0.82, 0.08)
+		var beam_faded := Color(1.0, 0.95, 0.82, 0.0)
+		draw_polygon(PackedVector2Array([
+			Vector2(w * 0.3, 0.0), Vector2(w * 0.7, 0.0),
+			Vector2(w * 0.8, h), Vector2(w * 0.2, h),
+		]), PackedColorArray([beam, beam, beam_faded, beam_faded]))
+	elif mode != Mode.ENDLESS:
 		# Warm light shafts slanting in — only from doors that are open.
 		var y0 := door_row * CELL
 		var y1 := (door_row + 2) * CELL
@@ -1407,8 +1542,8 @@ func _draw_gold_fx() -> void:
 		var pos: Vector2 = fx[0] + Vector2(-90.0, -CELL * t)
 		var col := Color("f7d354")
 		col.a = 1.0 - t * t
-		draw_string(font, pos, "+%d G" % fx[2],
-				HORIZONTAL_ALIGNMENT_CENTER, 180.0, 30, col)
+		var text := ("+%d 냠!" % fx[2]) if mode == Mode.PICNIC else "+%d G" % fx[2]
+		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_CENTER, 180.0, 30, col)
 
 
 func _draw_fever(w: float) -> void:
@@ -1433,6 +1568,23 @@ func _draw_fever(w: float) -> void:
 	draw_rect(bar, Color(1, 1, 1, 0.35), false, 2.0)
 	draw_string(ThemeDB.fallback_font, Vector2(bar.position.x, bar.position.y - 8.0),
 			"FEVER", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.95, 0.82, 0.75))
+
+
+## Jelly-fish snacks bobbing in place, glowing faintly like little exit lights.
+func _draw_snacks() -> void:
+	const BODY_COLS: Array[Color] = [Color("f2c94c"), Color("bfe8d5"), Color("f6cdd8")]
+	for c: Vector2i in snacks:
+		var p := _cell_rect(c).get_center() \
+				+ Vector2(0.0, sin(lava_phase * 3.0 + (c.x * 7 + c.y) * 1.3) * 5.0)
+		var col: Color = BODY_COLS[int(snacks[c]) % BODY_COLS.size()]
+		var pulse := 0.5 + 0.5 * sin(lava_phase * 4.0 + c.x)
+		draw_circle(p, 24.0 + 3.0 * pulse, Color(1.0, 0.95, 0.82, 0.10))
+		# Fish: round body, triangular tail, one content little eye.
+		draw_circle(p + Vector2(-3.0, 0.0), 13.0, col)
+		draw_colored_polygon(PackedVector2Array([
+			p + Vector2(7.0, 0.0), p + Vector2(19.0, -10.0), p + Vector2(19.0, 10.0),
+		]), col.darkened(0.15))
+		draw_circle(p + Vector2(-8.0, -3.0), 2.4, Color("2a2230"))
 
 
 func _draw_cell(c: Vector2i, color: Color) -> void:

@@ -80,16 +80,17 @@ func _ready() -> void:
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var versus := GameState.mode == GameState.MODE_VERSUS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
-	level_title.visible = not endless and not versus
-	level_label.visible = not endless and not versus
+	var picnic := GameState.mode == GameState.MODE_PICNIC
+	level_title.visible = not endless and not versus and not picnic
+	level_label.visible = not endless and not versus and not picnic
 	score_title.visible = not endless and not versus
 	score_label.visible = not endless and not versus
-	lines_title.visible = not endless and not versus
-	lines_label.visible = not endless and not versus
-	height_title.visible = endless
-	height_label.visible = endless
-	best_title.visible = endless
-	best_label.visible = endless
+	lines_title.visible = not endless and not versus and not picnic
+	lines_label.visible = not endless and not versus and not picnic
+	height_title.visible = endless or picnic
+	height_label.visible = endless or picnic
+	best_title.visible = endless or picnic
+	best_label.visible = endless or picnic
 	if classic:
 		level_title.text = "STAGE"
 		goal_label.text = "고전 오락실 테트리스!
@@ -99,6 +100,21 @@ func _ready() -> void:
 싱글 40 · 더블 100 · 트리플 300
 테트리스 1200 × 스테이지"
 		EventBus.level_changed.connect(_on_classic_stage)
+	if picnic:
+		# Casual mode: the big number slot becomes the countdown timer.
+		height_title.text = "남은 시간"
+		best_title.text = "최고 점수"
+		if get_viewport_rect().size.x > get_viewport_rect().size.y:
+			# Landscape: score shares the timer's slot — slide it below BEST.
+			# (Portrait already spreads them: timer top-center, score right column.)
+			score_title.position = Vector2(1360.0, 460.0)
+			score_label.position = Vector2(1360.0, 488.0)
+		goal_label.text = "느긋한 2분 젤리 피크닉!
+아무도 죽지 않는 편안한 모드 —
+깔려도 젤리처럼 팡! 하고 빠져나온다
+블록을 쌓고 밟고 올라가서
+둥둥 떠 있는 젤리 생선을 모으자
+생선 1마리 100점 · 줄 클리어 보너스"
 	if endless:
 		goal_label.text = "블록을 쌓고 밟으며
 끝없이 위로 올라가자!
@@ -152,7 +168,8 @@ func _on_game_started() -> void:
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
-	best_label.text = "%d층" % GameState.best_height
+	best_label.text = ("%d점" % GameState.picnic_best) \
+			if GameState.mode == GameState.MODE_PICNIC else "%d층" % GameState.best_height
 	best_label.modulate = Color.WHITE
 	height_label.modulate = Color.WHITE
 	height_label.scale = Vector2.ONE
@@ -264,6 +281,7 @@ func _on_game_over() -> void:
 	var stats := ""
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
+	var picnic := GameState.mode == GameState.MODE_PICNIC
 	if endless:
 		var weekly_up := GameState.record_weekly("endless", height)
 		was_record = GameState.record_height(height)
@@ -281,6 +299,14 @@ func _on_game_over() -> void:
 			Replays.save_replay("classic", board.rec_export())
 		if weekly_up and not was_record:
 			Ranks.submit("classic", GameState.classic_best)
+	elif picnic:
+		var weekly_up := GameState.record_weekly("picnic", GameState.score)
+		was_record = GameState.record_picnic(GameState.score)
+		stats = "SCORE %d      젤리 생선 %d마리" % [GameState.score, board.picnic_snacks]
+		if was_record:
+			Replays.save_replay("picnic", board.rec_export())
+		if weekly_up and not was_record:
+			Ranks.submit("picnic", GameState.picnic_best)
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 		# Track consecutive deaths on the same stage for the skip offer.
@@ -291,14 +317,16 @@ func _on_game_over() -> void:
 			stage_fails = 1
 	var earned := _award_run_rewards(was_record)
 	var cost := _revive_cost()
-	var show_skip: bool = not endless and not classic and stage_fails >= 3 \
-			and GameState.story_stage < StoryStages.TOTAL
+	var show_skip: bool = not endless and not classic and not picnic \
+			and stage_fails >= 3 and GameState.story_stage < StoryStages.TOTAL
 	# Let the death sink in for a beat before the popup slides up.
+	# Picnic ends on the clock, not in defeat: no revive, cheerier title.
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record, earned, cost, endless, show_skip))
+			death_popup.open(stats, was_record, earned, cost, endless, show_skip,
+					not picnic, "냠냠 피크닉 종료!" if picnic else ""))
 
 
 ## Gems the next revive costs right now (0 = free). Endless and classic use
@@ -322,6 +350,9 @@ func _award_run_rewards(was_record: bool) -> String:
 		# harder and gems come from stage depth.
 		run_gold = GameState.score / 40
 		run_gems = mini((board.level - 1) / 5, 3)
+	elif GameState.mode == GameState.MODE_PICNIC:
+		run_gold = GameState.score / 20
+		run_gems = mini(GameState.score / 1500, 2)
 	else:
 		run_gold = GameState.score / 20
 		run_gems = mini(board.level - 1, 3)
@@ -420,6 +451,10 @@ func _build_split() -> void:
 
 
 func _process(_delta: float) -> void:
+	if GameState.mode == GameState.MODE_PICNIC and not GameState.split:
+		var t := ceili(board.picnic_time)
+		height_label.text = "%d:%02d" % [t / 60, t % 60]
+		height_label.modulate = Color(1.0, 0.5, 0.45) if t <= 10 else Color.WHITE
 	if split_labels.is_empty():
 		return
 	for i in range(2):

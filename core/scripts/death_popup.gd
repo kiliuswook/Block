@@ -13,6 +13,7 @@ const GOLD := Color(1.0, 0.85, 0.35)
 const INK := Color("2a2230")
 
 var _panel: PanelContainer
+var _title: Label
 var _record_label: Label
 var _stats_label: Label
 var _reward_label: Label
@@ -65,14 +66,14 @@ func _ready() -> void:
 		cat.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE))
 	v.add_child(cat)
 
-	var title := Label.new()
-	title.text = "냐옹... 쓰러졌다!"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 52)
-	title.add_theme_color_override("font_color", Color(1.0, 0.42, 0.4))
-	title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	title.add_theme_constant_override("outline_size", 10)
-	v.add_child(title)
+	_title = Label.new()
+	_title.text = "냐옹... 쓰러졌다!"
+	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_title.add_theme_font_size_override("font_size", 52)
+	_title.add_theme_color_override("font_color", Color(1.0, 0.42, 0.4))
+	_title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_title.add_theme_constant_override("outline_size", 10)
+	v.add_child(_title)
 
 	_record_label = Label.new()
 	_record_label.text = "☆ 신기록 달성! ☆"
@@ -146,8 +147,16 @@ func _ready() -> void:
 
 ## revive_cost: gems this revive costs (0 = free). show_boosts: endless-only
 ## next-run boost chips. show_skip: story skip offer after repeated failures.
+## show_continue=false + title_text: timed modes end on the clock, not in
+## death — no revive option and a cheerier headline.
 func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
-		show_boosts := false, show_skip := false) -> void:
+		show_boosts := false, show_skip := false, show_continue := true,
+		title_text := "") -> void:
+	_title.text = title_text if title_text != "" else "냐옹... 쓰러졌다!"
+	_title.add_theme_color_override("font_color",
+			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
+	_cont.visible = show_continue
+	_hint.visible = show_continue
 	_stats_label.text = stats
 	_record_label.visible = new_record
 	_reward_label.text = earned

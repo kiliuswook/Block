@@ -52,6 +52,8 @@ func _ready() -> void:
 	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic.png")
+	GameState.mode = GameState.MODE_PICNIC
+	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
@@ -109,6 +111,9 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
+			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	GameState.mode = GameState.MODE_PICNIC
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_picnic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	get_tree().quit()
 
