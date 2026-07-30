@@ -29,6 +29,19 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex())
 	GameState.keycaps = saved_caps
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_custom.png",
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("custom")))
+	var saved_custom: Dictionary = GameState.custom_cat.duplicate()
+	GameState.custom_cat = {"body": 8, "ear": 8, "eyes": 5, "eye_col": 4, "nose": 1,
+			"mouth": 7, "whisker": 8, "pattern": 8, "pattern_col": 3, "tail": 9,
+			"paws": 3, "blush": 4, "mark": 6, "extra": 3}
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer.png",
+			func(inst: Node) -> void: inst._customizer.open())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer_eyes.png",
+			func(inst: Node) -> void:
+				inst._customizer._cur = 2  # 눈 탭 — 스타일 타일(미니 냥이) 확인용
+				inst._customizer.open())
+	GameState.custom_cat = saved_custom
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
 				var rep := {"v": 1, "mode": 1, "cat": "mint", "rows": 20, "door": 0,
@@ -115,6 +128,8 @@ func _ready() -> void:
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex())
 	GameState.keycaps = saved_caps
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
+			func(inst: Node) -> void: inst._customizer.open())
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

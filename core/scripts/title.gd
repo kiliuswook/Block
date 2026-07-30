@@ -8,6 +8,7 @@ const GEM_COL := Color(0.55, 0.85, 1.0)
 const INK := Color("2a2230")
 
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
+const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
 const TILE_SIZE := Vector2(128.0, 168.0)
 const TILE_GAP := 14.0
 const POPUP_SIZE := Vector2(620.0, 700.0)
@@ -41,7 +42,9 @@ var _popup_face: Control
 var _popup_action: Button
 var _popup_close: Button
 var _popup_feed: Button
+var _popup_custom: Button
 var _popup_cat: Dictionary = {}
+var _customizer: Control
 var _settings: Control
 var _shop: Control
 var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
@@ -86,6 +89,12 @@ func _ready() -> void:
 	_build_shop()
 	_build_ranks()
 	_build_keycap_dex()
+	_customizer = CAT_CUSTOMIZER.new()
+	$UI.add_child(_customizer)
+	_customizer.changed.connect(func() -> void:
+		_refresh_tiles()
+		if _popup and _popup.visible:
+			_popup_face.queue_redraw())
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
 		if _ranks and _ranks.visible:
 			_refresh_rank_list())
@@ -202,6 +211,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_keycap_dex.visible = false
+		return
+	if _customizer and _customizer.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_customizer.close()
 		return
 	if _replay_viewer and _replay_viewer.visible:
 		if event is InputEventKey and event.pressed \
@@ -980,6 +994,12 @@ func _build_popup() -> void:
 	_popup_feed = _make_popup_button(panel, false)
 	_popup_feed.add_theme_font_size_override("font_size", 19)
 	_popup_feed.pressed.connect(_on_popup_feed)
+	_popup_custom = _make_popup_button(panel, false)
+	_popup_custom.text = "🎨 꾸미기"
+	_popup_custom.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_close_popup()
+		_customizer.open())
 
 
 func _make_popup_button(panel: Control, accent: bool) -> Button:
@@ -1016,17 +1036,25 @@ func _open_popup(cat: Dictionary) -> void:
 	else:
 		_popup_action.visible = false
 	_refresh_feed_button()
-	# Bottom row: action + close side by side, or close alone centered.
+	# 나만의 냥은 하단에 꾸미기 버튼이 함께 선다.
+	_popup_custom.visible = cat.id == "custom" and unlocked
+	# Bottom row: visible buttons side by side, centered.
 	var y := POPUP_SIZE.y - 70.0
+	var row: Array = []
 	if _popup_action.visible:
-		_popup_action.size = Vector2(240.0, 52.0)
-		_popup_close.size = Vector2(160.0, 52.0)
-		var total := 240.0 + 24.0 + 160.0
-		_popup_action.position = Vector2((POPUP_SIZE.x - total) / 2.0, y)
-		_popup_close.position = _popup_action.position + Vector2(240.0 + 24.0, 0.0)
-	else:
-		_popup_close.size = Vector2(200.0, 52.0)
-		_popup_close.position = Vector2((POPUP_SIZE.x - 200.0) / 2.0, y)
+		row.append([_popup_action, 220.0])
+	if _popup_custom.visible:
+		row.append([_popup_custom, 180.0])
+	row.append([_popup_close, 200.0 if row.is_empty() else 150.0])
+	var total := -20.0
+	for entry: Array in row:
+		total += entry[1] + 20.0
+	var x := (POPUP_SIZE.x - total) / 2.0
+	for entry: Array in row:
+		var b: Button = entry[0]
+		b.size = Vector2(entry[1], 52.0)
+		b.position = Vector2(x, y)
+		x += entry[1] + 20.0
 	_popup.visible = true
 	_popup_face.queue_redraw()
 

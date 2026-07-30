@@ -56,6 +56,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - 사운드도 에셋 파일 없이 전부 코드 합성: `core/autoload/sfx.gd`(autoload `Sfx`)가 시작 시 SFX를, 첫 재생 시 BGM 루프("title"/"game")를 렌더. `Sfx.play("이름")`/`Sfx.play_bgm()` 호출. 버스는 Master/BGM/SFX(런타임 생성), 볼륨은 `GameState.vol_*`(save.json)에 저장, UI는 `core/scripts/settings_panel.gd`(타이틀 ⚙ 버튼 + 인게임 일시정지 메뉴 겸용)
 - 아트 규칙(Cat-Tris): 빛은 항상 위에서(블록 윗면만 하이라이트), 가장 따뜻한 것 = 플레이어(크림 #f4e3c8), 가장 밝은 것 = 출구의 빛(#fff3d0). 무한의 계단은 높이 오를수록 배경이 밝아짐. 큐브 고양이 렌더는 `Player.paint_cat()` 정적 함수 — 타이틀 등 어디서든 재사용
 - 알파벳 키캡 수집: 플레이 중 배치된 블록 하나가 주기적으로 고양이 키캡(A~Z)으로 변하고, 그 줄을 지우면 획득 (`escape_board.gd`의 `KEYCAP_*` 상수 — **현재 테스트용 고빈도(6초/60%), 릴리스 전 낮출 것**). 중복 수집 가능, 저장은 `GameState.keycaps`(save.json). 타이틀 좌측 "▦ 키캡" 버튼 → 키보드 도감 오버레이(`title.gd`). 키캡 렌더는 `EscapeBoard.paint_keycap()` 정적 함수(도감과 공유)
+- 나만의 냥(커스텀 캐릭터): CATS의 `custom` 슬롯(무료·밸런스 스탯). 부위 카탈로그(15개 부위 ~150 옵션, 희귀도 `r`·플레이버 `d`)·팔레트는 `core/scripts/custom_cat.gd`(class_name 없음, preload로 참조), 선택값은 `GameState.custom_cat`(save.json). 렌더는 `paint_cat`의 `skin["custom"]` 분기. 꾸미기 UI는 "냥이 크리에이터 3000"(`core/scripts/cat_customizer.gd`, 타이틀 캐릭터 팝업의 🎨 꾸미기 버튼) — AAA 흉내 B급 감성의 풀스크린 오버레이(스포트라이트 무대·유전자 스캔·싱크로율 게이지)
 - 캐릭터/재화: 스킨 9종·해금 조건(골드/보석/무한 높이/스토리 스테이지/플레이 수)·골드/보석 지갑은 `GameState`(CATS 상수, save.json 저장), 선택 UI는 타이틀(`core/scripts/title.gd`), 보상 지급은 `main.gd._award_run_rewards()` — 스킨 색은 `paint_cat()`의 `skin` 파라미터로 전달
 - 씬 스크린샷 캡처: `& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn` → `.tmp_shots/`에 저장
 - 새 `class_name` 추가 시 헤드리스 실행 전 `--import`로 전역 클래스 캐시 갱신 필요

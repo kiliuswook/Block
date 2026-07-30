@@ -47,7 +47,13 @@ const CATS: Array[Dictionary] = [
 	{"id": "gold", "name": "황금", "body": Color("f7d354"), "ear": Color("c9982a"),
 		"unlock": {"type": "gems", "amount": 20}, "trait": "올라운더",
 		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05, "push": 3}},
+	# 나만의 냥: 외형은 CustomCat 카탈로그(custom_cat 저장값)로 결정되는 커스텀 슬롯.
+	{"id": "custom", "name": "나만의 냥", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
+		"unlock": {"type": "free"}, "trait": "커스텀",
+		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 ]
+
+const CustomCat := preload("res://core/scripts/custom_cat.gd")
 
 ## Procedural accessories, drawn by Player.paint_cat on top of the skin.
 ## Two independent slots (head / neck), purely cosmetic — no stat effects.
@@ -136,6 +142,7 @@ var affection: Dictionary = {}  # cat id -> total snacks fed
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # collected alphabet keycaps: "A".."Z" -> count
+var custom_cat: Dictionary = {}  # 나만의 냥 part picks: part key -> option index
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
 # Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
 var vol_master: float = 1.0
@@ -445,6 +452,24 @@ func feed_cat(id: String) -> bool:
 	return true
 
 
+# --- Custom cat (나만의 냥) ------------------------------------------------------
+
+
+func custom_idx(key: String) -> int:
+	return CustomCat.pick(custom_cat, key)
+
+
+func set_custom_part(key: String, idx: int) -> void:
+	custom_cat[key] = idx
+	save_game()
+
+
+## Replaces the whole selection at once (랜덤/초기화 buttons).
+func set_custom_all(sel: Dictionary) -> void:
+	custom_cat = sel
+	save_game()
+
+
 func get_cat(id: String) -> Dictionary:
 	for cat in CATS:
 		if cat.id == id:
@@ -467,9 +492,13 @@ func cat_stats(id: String) -> Dictionary:
 ## carries its equipped accessory defs under "acc".
 func cat_skin(id: String) -> Dictionary:
 	var cat := get_cat(id)
-	var skin := {"body": cat.body, "ear": cat.ear}
-	if cat.has("ink"):
-		skin["ink"] = cat.ink
+	var skin: Dictionary
+	if id == "custom":
+		skin = CustomCat.build_skin(custom_cat)
+	else:
+		skin = {"body": cat.body, "ear": cat.ear}
+		if cat.has("ink"):
+			skin["ink"] = cat.ink
 	var accs := equipped_accs(id)
 	if not accs.is_empty():
 		skin["acc"] = accs
@@ -540,6 +569,7 @@ func save_game() -> void:
 		"pending_boosts": pending_boosts,
 		"skipped_stages": skipped_stages,
 		"keycaps": keycaps,
+		"custom_cat": custom_cat,
 		"last_daily": last_daily,
 		"vol_master": vol_master,
 		"vol_bgm": vol_bgm,
@@ -605,6 +635,11 @@ func load_game() -> void:
 			keycaps = {}
 			for k in caps:
 				keycaps[str(k)] = int(caps[k])
+		var cst: Variant = data.get("custom_cat", {})
+		if cst is Dictionary:
+			custom_cat = {}
+			for k in cst:
+				custom_cat[str(k)] = int(cst[k])
 		last_daily = str(data.get("last_daily", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
 		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)
