@@ -22,6 +22,13 @@ func has_replay(mode_key: String) -> bool:
 	return FileAccess.file_exists(_path(mode_key))
 
 
+## Deletes every saved best-run replay. Used by 설정 > 게임 초기화.
+func clear_all() -> void:
+	for m: String in Ranks.MODES:
+		if has_replay(m):
+			DirAccess.remove_absolute(_path(m))
+
+
 func load_replay(mode_key: String) -> Dictionary:
 	if not has_replay(mode_key):
 		return {}

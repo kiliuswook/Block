@@ -249,19 +249,6 @@ func _draw_preview() -> void:
 	ci.draw_string(font, Vector2(34.0, 88.0),
 			"CAT CREATOR 3000™ — ULTIMATE EDITION  v9.99 (정품)",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.45))
-	# 냥자인 싱크로율 (은근히 절대 100%가 안 된다).
-	var changed_parts := 0
-	for p in CustomCat.PARTS:
-		if CustomCat.pick(GameState.custom_cat, str(p.key)) != 0:
-			changed_parts += 1
-	var sync := minf(99.9, 40.0 + changed_parts * 4.0 + sin(_t * 1.7) * 0.05)
-	ci.draw_string(font, Vector2(32.0, 122.0), "냥자인 싱크로율",
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.6))
-	ci.draw_rect(Rect2(170.0, 110.0, 200.0, 13.0), Color(1, 1, 1, 0.1))
-	ci.draw_rect(Rect2(170.0, 110.0, 200.0 * sync / 100.0, 13.0),
-			Color(0.5, 0.9, 0.95, 0.85))
-	ci.draw_string(font, Vector2(380.0, 122.0), "%.1f%%" % sync,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.5, 0.9, 0.95))
 	# 플레이버 텍스트 (마지막 선택 파츠).
 	var fw := font.get_string_size(_flavor, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x
 	ci.draw_string(font, Vector2(pcx - fw / 2.0, pcy + 74.0), _flavor,

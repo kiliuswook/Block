@@ -180,6 +180,34 @@ func reset() -> void:
 	score = 0
 
 
+## Full progress wipe (설정 > 게임 초기화): records, story progress, wallet,
+## unlocked cats, accessories, affection, keycaps, custom cat, weekly bests.
+## Keeps the volume settings, nickname and player_id (same board identity).
+func reset_all() -> void:
+	score = 0
+	best_height = 0
+	classic_best = 0
+	picnic_best = 0
+	story_stage = 0
+	games_played = 0
+	gold = 0
+	gems = 0
+	selected_cat = "cream"
+	weekly = {}
+	weekly_claimed = 0
+	purchased = []
+	acc_owned = []
+	acc_head = ""
+	acc_neck = ""
+	affection = {}
+	pending_boosts = []
+	skipped_stages = []
+	keycaps = {}
+	custom_cat = {}
+	last_daily = ""
+	save_game()
+
+
 ## Records a cleared story stage (progress only ever moves forward).
 ## A first-time clear pays a reward: 20~50 gold scaling with the stage, plus
 ## 2 gems at every 10-stage boss. Announced via EventBus.story_reward.

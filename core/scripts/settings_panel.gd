@@ -6,11 +6,13 @@ extends Control
 signal closed
 
 const CREAM := Color("f4e3c8")
-const PANEL_SIZE := Vector2(640.0, 470.0)
+const PANEL_SIZE := Vector2(640.0, 560.0)
 const ROWS := [["전체 음량", "master"], ["배경 음악", "bgm"], ["효과음", "sfx"]]
 
 var _title_label: Label
 var _close_btn: Button
+var _reset_btn: Button
+var _reset_armed := false  # 첫 탭 = 확인 문구, 둘째 탭 = 실제 초기화
 var _sliders := {}  # kind -> HSlider
 
 
@@ -66,6 +68,25 @@ func _ready() -> void:
 	_close_btn.add_theme_stylebox_override("pressed", sb)
 	_close_btn.pressed.connect(close)
 	panel.add_child(_close_btn)
+	# 게임 초기화 (타이틀의 설정에서만 노출 — 인게임 일시정지에서는 숨김).
+	_reset_btn = Button.new()
+	_reset_btn.size = Vector2(440.0, 52.0)
+	_reset_btn.position = Vector2((PANEL_SIZE.x - 440.0) / 2.0, PANEL_SIZE.y - 168.0)
+	_reset_btn.add_theme_font_size_override("font_size", 20)
+	_reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var danger := StyleBoxFlat.new()
+	danger.set_corner_radius_all(12)
+	danger.bg_color = Color(0.75, 0.3, 0.3, 0.14)
+	danger.set_border_width_all(2)
+	danger.border_color = Color(0.85, 0.4, 0.4, 0.8)
+	_reset_btn.add_theme_stylebox_override("normal", danger)
+	var danger_hover: StyleBoxFlat = danger.duplicate()
+	danger_hover.bg_color = Color(0.75, 0.3, 0.3, 0.28)
+	_reset_btn.add_theme_stylebox_override("hover", danger_hover)
+	_reset_btn.add_theme_stylebox_override("pressed", danger)
+	_reset_btn.add_theme_color_override("font_color", Color(0.95, 0.6, 0.6))
+	_reset_btn.pressed.connect(_on_reset_pressed)
+	panel.add_child(_reset_btn)
 
 
 func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
@@ -107,10 +128,32 @@ func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
 func open(title_text := "설정", close_text := "닫기") -> void:
 	_title_label.text = title_text
 	_close_btn.text = close_text
+	# 초기화는 타이틀(제목 "설정")에서만 — 인게임 도중 리셋은 상태가 꼬인다.
+	_reset_btn.visible = title_text == "설정"
+	_reset_armed = false
+	_reset_btn.disabled = false
+	_reset_btn.text = "⚠ 게임 초기화  (기록·재화·해금 전부 삭제)"
 	for kind: String in _sliders:
 		_sliders[kind].set_value_no_signal(Sfx.get_volume(kind))
 	move_to_front()
 	visible = true
+
+
+## 두 번 눌러 확정: 스토리 진행·기록·재화·해금·랭킹(온라인 보드 포함)·
+## 리플레이를 지우고 타이틀을 새로 연다. 볼륨·닉네임은 유지.
+func _on_reset_pressed() -> void:
+	if not _reset_armed:
+		_reset_armed = true
+		_reset_btn.text = "정말 초기화할까요?  다시 누르면 삭제됩니다!"
+		Sfx.play("error")
+		return
+	_reset_btn.disabled = true
+	_reset_btn.text = "초기화 중..."
+	await Ranks.wipe_mine()  # 온라인 보드에서 내 기록 제거 (오프라인이면 즉시 통과)
+	GameState.reset_all()
+	Replays.clear_all()
+	Sfx.play("click")
+	get_tree().reload_current_scene()
 
 
 func close() -> void:

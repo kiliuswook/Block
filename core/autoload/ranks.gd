@@ -115,6 +115,26 @@ func submit(mode_key: String, value: int) -> void:
 	_claim_rewards()
 
 
+## Removes every entry of mine (all modes: all-time / weekly / last-week)
+## from the shared board. Used by 설정 > 게임 초기화.
+func wipe_mine() -> void:
+	if not online():
+		return
+	while _submitting:
+		await get_tree().process_frame
+	_submitting = true
+	var data: Variant = await _http(HTTPClient.METHOD_GET)
+	if data is Dictionary:
+		for m: String in MODES:
+			for key in [m, "wk_" + m, "lw_" + m]:
+				if data.has(key) and data[key] is Array:
+					data[key] = (data[key] as Array).filter(func(e: Variant) -> bool:
+						return e is Dictionary and str(e.get("id")) != GameState.player_id)
+		board = data
+		await _http(HTTPClient.METHOD_PUT, JSON.stringify(data))
+	_submitting = false
+
+
 ## Replaces my entry in one board list; replays ride only on the all-time
 ## boards (top 10 keep theirs — they are heavy).
 func _merge_mine(data: Dictionary, key: String, value: int, with_replay: bool) -> void:
