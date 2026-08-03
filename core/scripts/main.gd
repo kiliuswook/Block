@@ -8,6 +8,7 @@ const VERSUS_TARGET := 3  # first to this many round wins takes the match
 
 const BOARD_SCENE := preload("res://core/scenes/board.tscn")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
+const GOAL_METER := preload("res://core/scripts/goal_meter.gd")
 const HALF_W := 960.0  # split screen: width of each player's viewport
 
 @onready var board: EscapeBoard = $Board
@@ -43,6 +44,7 @@ var intro_name: Label
 var intro_hint: Label
 var intro_prompt: Label
 var stage_header := ""
+var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
 # Rewards already paid out this run — a revived player only earns the delta.
 var gold_awarded := 0
 var gems_awarded := 0
@@ -81,25 +83,35 @@ func _ready() -> void:
 	var versus := GameState.mode == GameState.MODE_VERSUS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
 	var picnic := GameState.mode == GameState.MODE_PICNIC
-	level_title.visible = not endless and not versus and not picnic
-	level_label.visible = not endless and not versus and not picnic
+	level_title.visible = not endless and not versus and not picnic and not classic
+	level_label.visible = not endless and not versus and not picnic and not classic
 	score_title.visible = not endless and not versus
 	score_label.visible = not endless and not versus
 	lines_title.visible = not endless and not versus and not picnic
 	lines_label.visible = not endless and not versus and not picnic
-	height_title.visible = endless or picnic
-	height_label.visible = endless or picnic
-	best_title.visible = endless or picnic
-	best_label.visible = endless or picnic
+	height_title.visible = endless or picnic or classic
+	height_label.visible = endless or picnic or classic
+	best_title.visible = endless or picnic or classic
+	best_label.visible = endless or picnic or classic
 	if classic:
-		level_title.text = "STAGE"
-		goal_label.text = "고전 오락실 테트리스!
-출구는 없다 — 라인을 지우며 살아남자
-10줄마다 스테이지 상승, 점점 빨라진다
-대시로 블록을 밀고, 2회 타격으로 파괴
-싱글 40 · 더블 100 · 트리플 300
-테트리스 1200 × 스테이지"
-		EventBus.level_changed.connect(_on_classic_stage)
+		# Arcade cabinet HUD: LEVEL is the board you're on, TOP is the high score,
+		# and LINES is a rack of tiles rather than a number.
+		height_title.text = "LEVEL"
+		best_title.text = "TOP"
+		lines_title.text = "LINES"
+		goal_label.text = "고전 오락실 테트리스 — LEVEL 하나 = 판 하나
+목표 줄을 지우면 셔터가 내려온다
+(LEVEL 1은 3줄, 판마다 +1줄, 최대 10줄)
+셔터가 지나는 빈 줄마다 보너스 100 × LEVEL
+— 낮게 쌓을수록 보너스가 커진다
+두 판마다 · 오래 버틸수록 낙하 속도 ↑
+LEVEL 5부터 바닥에 방해 블록
+싱글 40 · 더블 100 · 트리플 300 · 테트리스 1200 × LEVEL"
+		_build_goal_meter()
+		_build_skip_level_button()
+		EventBus.classic_level_started.connect(_on_classic_level_started)
+		EventBus.classic_level_progress.connect(_on_classic_level_progress)
+		EventBus.classic_level_cleared.connect(_on_classic_level_cleared)
 	if picnic:
 		# Casual mode: the big number slot becomes the countdown timer.
 		height_title.text = "남은 시간"
@@ -119,6 +131,7 @@ func _ready() -> void:
 		goal_label.text = "블록을 쌓고 밟으며
 끝없이 위로 올라가자!
 아래에서 용암이 올라온다 — 닿으면 사망
+높이 오를수록, 오래 버틸수록 블록이 빨라진다
 블록이 떨어지기 시작하면 회전 불가 —
 그리고 다음 블록이 바로 등장!
 대시/점프 2회 타격으로 블록 파괴
@@ -170,14 +183,21 @@ func _on_game_started() -> void:
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
-	best_label.text = ("%d점" % GameState.picnic_best) \
-			if GameState.mode == GameState.MODE_PICNIC else "%d층" % GameState.best_height
+	match GameState.mode:
+		GameState.MODE_PICNIC:
+			best_label.text = "%d점" % GameState.picnic_best
+		GameState.MODE_CLASSIC:
+			best_label.text = "%d점" % GameState.classic_best
+		_:
+			best_label.text = "%d층" % GameState.best_height
 	best_label.modulate = Color.WHITE
 	height_label.modulate = Color.WHITE
 	height_label.scale = Vector2.ONE
 
 
 func _on_height_changed(v: int) -> void:
+	if GameState.mode == GameState.MODE_CLASSIC:
+		return  # classic owns the big-number slot for the LEVEL counter
 	var prev := height
 	height = v
 	height_label.text = "%d층" % v
@@ -295,7 +315,7 @@ func _on_game_over() -> void:
 	elif classic:
 		var weekly_up := GameState.record_weekly("classic", GameState.score)
 		was_record = GameState.record_classic(GameState.score)
-		stats = "SCORE %d      STAGE %d      LINES %d" \
+		stats = "SCORE %d      LEVEL %d      LINES %d" \
 				% [GameState.score, board.level, board.total_lines]
 		if was_record:
 			Replays.save_replay("classic", board.rec_export())
@@ -328,7 +348,8 @@ func _on_game_over() -> void:
 	tw.tween_callback(func() -> void:
 		if not board.playing:
 			death_popup.open(stats, was_record, earned, cost, endless, show_skip,
-					not picnic, "냠냠 피크닉 종료!" if picnic else ""))
+					not picnic, "냠냠 피크닉 종료!" if picnic else "",
+					"LEVEL %d 처음부터" % board.level if classic else ""))
 
 
 ## Gems the next revive costs right now (0 = free). Endless and classic use
@@ -348,10 +369,10 @@ func _award_run_rewards(was_record: bool) -> String:
 		run_gold = int(height * 3 * board.gold_mult)  # lucky jelly boost applies
 		run_gems = mini(height / 30, 3)
 	elif GameState.mode == GameState.MODE_CLASSIC:
-		# Arcade scores swing bigger (1200 × stage tetrises), so gold divides
-		# harder and gems come from stage depth.
+		# Arcade scores swing bigger (1200 × level tetrises + shutter bonuses),
+		# so gold divides harder and gems come from how many levels fell.
 		run_gold = GameState.score / 40
-		run_gems = mini((board.level - 1) / 5, 3)
+		run_gems = mini((board.level - 1) / 2, 3)
 	elif GameState.mode == GameState.MODE_PICNIC:
 		run_gold = GameState.score / 20
 		run_gems = mini(GameState.score / 1500, 2)
@@ -631,18 +652,86 @@ func _fit_board() -> void:
 		help_label.visible = false
 
 
-## Classic: every stage-up gets the milestone slam.
-func _on_classic_stage(new_stage: int) -> void:
-	if new_stage <= 1:
-		return
-	milestone_label.text = "STAGE %d" % new_stage
-	if new_stage >= 30:
-		milestone_label.text = "STAGE %d — 킬 스크린!!" % new_stage
-	elif new_stage >= 20:
-		milestone_label.text = "STAGE %d — 최고 속도!" % new_stage
-	Sfx.play("milestone")
-	_pop_milestone()
-	_screen_flash(0.16)
+# --- Classic level (arcade B-type) ----------------------------------------------
+
+
+## LINES goal as a rack of tiles: it sits under the LINES readout, and the
+## column geometry differs per orientation (portrait's stat column is narrow).
+func _build_goal_meter() -> void:
+	var vp := get_viewport_rect().size
+	goal_meter = GOAL_METER.new()
+	$UI.add_child(goal_meter)
+	if vp.x > vp.y:
+		# Landscape: LEVEL takes the endless big-number slot, so the stat column
+		# slides down past it and the meter gets a wide 5x2 rack.
+		for pair: Array in [[score_title, score_label, 340.0],
+				[best_title, best_label, 440.0],
+				[lines_title, lines_label, 540.0]]:
+			pair[0].position = Vector2(1360.0, pair[2])
+			pair[1].position = Vector2(1360.0, pair[2] + 28.0)
+		# The endless big-number font is sized for "23층"; "LEVEL 12" over a
+		# full stat column needs to be a touch smaller to clear the SCORE row.
+		height_label.add_theme_font_size_override("font_size", 60)
+		goal_meter.position = Vector2(1360.0, 628.0)
+		goal_meter.size = Vector2(260.0, 106.0)
+		goal_meter.per_row = 5
+		goal_label.position = Vector2(1360.0, 762.0)
+	else:
+		# Portrait: LEVEL rides top-center with the rack in one wide row beneath
+		# it — the right column is too narrow to read ten tiles.
+		lines_title.position = Vector2(912.0, 440.0)
+		lines_label.position = Vector2(912.0, 468.0)
+		goal_meter.position = Vector2(300.0, 140.0)
+		goal_meter.size = Vector2(480.0, 44.0)
+		goal_meter.per_row = 10
+		goal_meter.centered = true
+
+
+## Test affordance: clears the current level (shutter and all) so the later
+## boards can be reached without playing through. Keyboard equivalent: N.
+func _build_skip_level_button() -> void:
+	var vp := get_viewport_rect().size
+	var btn := Button.new()
+	btn.text = "▶  다음 LEVEL (테스트)"
+	btn.tooltip_text = "테스트용: 현재 LEVEL을 즉시 클리어한다 (단축키 N)"
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_size_override("font_size", 20)
+	btn.add_theme_color_override("font_color", Color(CREAM, 0.75))
+	btn.modulate.a = 0.7
+	if vp.x > vp.y:
+		btn.position = Vector2(40.0, 40.0)
+		btn.size = Vector2(240.0, 48.0)
+	else:
+		# Portrait: down the left margin, clear of the NEXT panel and the well.
+		btn.add_theme_font_size_override("font_size", 24)
+		btn.position = Vector2(24.0, 400.0)
+		btn.size = Vector2(186.0, 64.0)
+	btn.pressed.connect(func() -> void:
+		if board.classic_skip_level():
+			Sfx.play("click"))
+	$UI.add_child(btn)
+
+
+## A new board was dealt. No banner — the shutter lifting is the announcement;
+## the HUD just rolls over to the new level.
+func _on_classic_level_started(level: int, quota: int, _garbage: int) -> void:
+	height_label.text = "%d" % level
+	lines_label.text = "0 / %d" % quota
+	goal_meter.set_goal(0, quota)
+	if level > 1:
+		_punch_height_label()
+
+
+func _on_classic_level_progress(cleared: int, quota: int) -> void:
+	lines_label.text = "%d / %d" % [cleared, quota]
+	goal_meter.set_goal(cleared, quota)
+
+
+## The shutter finished paying out: flash the well, nothing to read.
+func _on_classic_level_cleared(_level: int, bonus: int) -> void:
+	if bonus > 0:
+		Sfx.play("record")
+	_screen_flash(0.25)
 
 
 func _on_escaped(new_level: int) -> void:

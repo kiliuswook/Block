@@ -97,7 +97,7 @@ offset_bottom = 660.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "고전 오락실 난이도 그대로 — 고양이로 라인을 지우며 살아남아라!"
+text = "고전 오락실 규칙 그대로 — 10줄마다 셔터가 내려오는 LEVEL 승부!"
 
 [node name="PicnicBtn" type="Button" parent="UI"]
 offset_left = 710.0

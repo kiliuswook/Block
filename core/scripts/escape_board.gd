@@ -74,6 +74,17 @@ const KEYCAP_INTERVAL := 6.0  # spawn roll every this many seconds
 const KEYCAP_CHANCE := 0.6  # chance a roll actually spawns one
 const KEYCAP_MAX_ACTIVE := 2  # keycaps sitting in the pit at once
 const KEYCAP_FX_TIME := 1.3
+# Classic level-clear shutter (Atari B-type): a steel curtain rolls down over
+# the well, paying a bonus for every empty row it passes at the top, holds shut
+# while the next level's board is dealt behind it, then rolls back up.
+const SHUTTER_CLOSE_STEP := 0.075  # seconds per row on the way down
+const SHUTTER_OPEN_STEP := 0.028  # the curtain snaps back up faster
+const SHUTTER_HOLD := 0.4  # beat with the well fully covered
+const SHUTTER_POP_TIME := 0.18  # the tally flares each time it ticks up
+# Marathon creep (classic / endless): every stretch of survived play adds a
+# gravity step on top of the mode's own ramp, so a long run keeps tightening.
+const SPEED_CREEP_TIME := 45.0  # seconds of play per extra step
+const SPEED_CREEP_MAX := 8  # the creep alone never exceeds this many steps
 const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
 const P2_DAS_REPEAT := 0.06
 const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
@@ -92,6 +103,18 @@ var fall_timer := 0.0
 var land_timer := 0.0
 var level := 1
 var total_lines := 0
+var run_time := 0.0  # seconds of active play this run — drives the speed creep
+# Classic (arcade B-type): `level` is the board number. These track its line
+# goal and the shutter sequence that closes it out.
+enum Shutter { NONE, CLOSING, HOLD, OPENING }
+var level_lines := 0  # lines banked toward this level's quota
+var level_garbage := 0  # garbage rows this level started with (spawn sits above)
+var shutter_phase: Shutter = Shutter.NONE
+var shutter_row := 0  # rows of the well the curtain currently covers
+var shutter_timer := 0.0
+var shutter_bonus := 0  # empty-row payout tallied by the closing curtain
+var shutter_bonus_done := false  # curtain reached the stack: no more empty rows
+var shutter_pop := 0.0  # flare left on the tally after its latest tick
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
@@ -162,6 +185,12 @@ func start_game() -> void:
 	next_type = ""
 	level = 1
 	total_lines = 0
+	run_time = 0.0
+	level_lines = 0
+	level_garbage = 0
+	shutter_phase = Shutter.NONE
+	shutter_bonus = 0
+	shutter_pop = 0.0
 	best_height = 0
 	versus_pieces = 0
 	p2_das_timer = 0.0
@@ -198,10 +227,11 @@ func start_game() -> void:
 		level = GameState.story_stage % StoryStages.TOTAL + 1
 		_apply_stage()
 	elif mode == Mode.CLASSIC:
-		# Arcade pit: both exits sealed — clear lines and survive with the
-		# usual cat controls; every 10 lines is a stage (arcade level).
+		# Arcade pit: both exits sealed — clear the level's 10 lines and survive
+		# with the usual cat controls. Each level is a fresh, harder board.
 		door_left = false
 		door_right = false
+		_classic_setup_level(1)
 	elif mode == Mode.PICNIC:
 		# Sealed jelly pit: no exits, no death — just a timed snack hunt.
 		door_left = false
@@ -220,6 +250,7 @@ func start_game() -> void:
 				"lucky":
 					gold_mult = 1.5
 	player.respawn(_spawn_point())
+	player.visible = true  # a restart mid-shutter must not leave the cat hidden
 	_spawn_piece()
 	playing = true
 	_rec_reset()
@@ -228,6 +259,8 @@ func start_game() -> void:
 		EventBus.lines_changed.emit(0)
 		EventBus.level_changed.emit(level)
 		EventBus.height_changed.emit(0)
+		if mode == Mode.CLASSIC:
+			_classic_announce_level()
 	queue_redraw()
 
 
@@ -274,6 +307,19 @@ func _set_doors(open: bool) -> void:
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
+	if _shutter_on():
+		# Classic 레벨 클리어 연출: 셔터가 내려오는 동안 조작·낙하·판정 정지.
+		_update_shutter(delta)
+		shutter_pop = maxf(shutter_pop - delta / SHUTTER_POP_TIME, 0.0)
+		for fx in break_fx:
+			fx[1] += delta
+		break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+		for fx in keycap_fx:
+			fx[1] += delta
+		keycap_fx = keycap_fx.filter(func(fx: Array) -> bool: return fx[1] < KEYCAP_FX_TIME)
+		queue_redraw()
+		return
+	run_time += delta  # only ticks while the board is actually being played
 	if fever_active:
 		fever_timer -= delta
 		if fever_timer <= 0.0:
@@ -892,14 +938,12 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 		if mode == Mode.ENDLESS:
 			_endless_line_reward(cleared)
 		elif mode == Mode.CLASSIC:
-			# Arcade level design: every 10 lines advances the stage.
-			var new_stage := total_lines / 10 + 1
-			if new_stage != level:
-				level = new_stage
-				EventBus.level_changed.emit(level)
+			_classic_line_progress(cleared)
 		_story_add_progress("lines", cleared)
 		if not split:
 			EventBus.lines_changed.emit(total_lines)
+		if _shutter_on():
+			return true  # 레벨 클리어 연출 중: 깔림 판정 없이 셔터가 내려온다
 		if not _free_player_from_grid():
 			return false
 	if mode == Mode.PICNIC:
@@ -932,6 +976,176 @@ func _endless_line_reward(cleared: int) -> void:
 	GameState.add_currency(g, 0)
 	gold_fx.append([Vector2(player.position.x, player.position.y - CELL), 0.0, g])
 	Sfx.play("gold")
+
+
+# --- Classic level (arcade B-type) ------------------------------------------------
+
+
+## Deals the board for level `n`: bare field plus its garbage floor. Does not
+## touch the player or the piece — callers follow with respawn/_spawn_piece.
+func _classic_setup_level(n: int) -> void:
+	level = n
+	level_lines = 0
+	level_garbage = Board.classic_garbage(n)
+	grid.clear()
+	cracked.clear()
+	keycaps.clear()
+	loose.clear()
+	piece_type = ""
+	_fill_garbage(level_garbage)
+
+
+## Tells the HUD which board is up (start of run and every new level).
+func _classic_announce_level() -> void:
+	EventBus.classic_level_started.emit(level, Board.classic_quota(level), level_garbage)
+	EventBus.classic_level_progress.emit(level_lines, Board.classic_quota(level))
+	EventBus.level_changed.emit(level)
+
+
+## Game Boy Type-B style garbage: `count` rows of debris on the floor, each
+## with a hole or two so no row is already complete and the holes never stack
+## into one free column.
+func _fill_garbage(count: int) -> void:
+	if count <= 0:
+		return
+	var hole := randi() % COLS
+	for i in range(count):
+		var y := rows - 1 - i
+		# Walk the hole sideways every row: no straight chimney, no full line.
+		hole = (hole + 1 + randi() % (COLS - 1)) % COLS
+		var holes := {hole: true}
+		if i % 3 == 2:  # deeper rows occasionally get a second gap to dig into
+			holes[(hole + 2 + randi() % (COLS - 3)) % COLS] = true
+		for x in range(COLS):
+			if holes.has(x):
+				continue
+			grid[Vector2i(x, y)] = Board.PIECES[randi() % Board.PIECES.size()]
+
+
+## A clear landed in classic: bank it toward this level's 10 lines. Meeting the
+## quota rolls the shutter down and closes the board out.
+func _classic_line_progress(cleared: int) -> void:
+	level_lines += cleared
+	var quota := Board.classic_quota(level)
+	EventBus.classic_level_progress.emit(mini(level_lines, quota), quota)
+	if level_lines >= quota:
+		_classic_start_shutter()
+
+
+## True while the level-clear curtain owns the board: no input, no gravity,
+## no crush checks.
+func _shutter_on() -> bool:
+	return shutter_phase != Shutter.NONE
+
+
+## Test affordance: clear the current level on the spot. The shutter runs its
+## normal course, so the empty-row bonus still reflects how the board stands.
+func classic_skip_level() -> bool:
+	if mode != Mode.CLASSIC or not playing or is_paused or _shutter_on():
+		return false
+	level_lines = Board.classic_quota(level)
+	EventBus.classic_level_progress.emit(level_lines, level_lines)
+	_classic_start_shutter()
+	return true
+
+
+## Quota met: freeze play and start rolling the shutter down.
+func _classic_start_shutter() -> void:
+	shutter_phase = Shutter.CLOSING
+	shutter_row = 0
+	shutter_timer = 0.0
+	shutter_bonus = 0
+	shutter_bonus_done = false
+	piece_type = ""  # the tracking piece bows out
+	loose.clear()
+	Sfx.play("shutter")
+	queue_redraw()
+
+
+## Shutter tick. CLOSING pays the empty-row bonus row by row on the way down,
+## HOLD deals the next board behind the curtain, OPENING reveals it and hands
+## control back to the player.
+func _update_shutter(delta: float) -> void:
+	if player:
+		# The cat disappears behind the curtain as it passes, and is revealed
+		# again on the way up.
+		player.visible = shutter_row * CELL < player.position.y - Player.SIZE / 2.0
+	shutter_timer -= delta
+	if shutter_timer > 0.0:
+		return
+	match shutter_phase:
+		Shutter.CLOSING:
+			# The curtain only comes down as far as the stack: it stops on the
+			# first row holding a block, so how far it travels is exactly what
+			# the level pays out.
+			if not _shutter_pay_row(shutter_row):
+				_classic_shutter_landed()
+				queue_redraw()
+				return
+			shutter_timer = SHUTTER_CLOSE_STEP
+			shutter_row += 1
+			if shutter_row > rows:  # swept a bare well, ceiling to floor
+				_classic_shutter_landed()
+		Shutter.HOLD:
+			shutter_phase = Shutter.OPENING
+			shutter_timer = SHUTTER_OPEN_STEP
+			Sfx.play("shutter", 1.3)
+		Shutter.OPENING:
+			shutter_timer = SHUTTER_OPEN_STEP
+			shutter_row -= 1
+			if shutter_row <= 0:
+				shutter_row = 0
+				shutter_phase = Shutter.NONE
+				if player:
+					player.visible = true
+	queue_redraw()
+
+
+## Atari B-type payout: every empty row at the top of the well is worth
+## CLASSIC_EMPTY_ROW_BONUS × level as the curtain passes it. Returns false when
+## the row is blocked (or the well is exhausted) — that's where the curtain
+## stops, so a low stack pays more and closes faster.
+func _shutter_pay_row(y: int) -> bool:
+	if y >= rows:
+		return false
+	for x in range(COLS):
+		if grid.has(Vector2i(x, y)):
+			shutter_bonus_done = true
+			return false
+	var pay := Board.CLASSIC_EMPTY_ROW_BONUS * level
+	shutter_bonus += pay
+	GameState.score += pay
+	shutter_pop = 1.0
+	Sfx.play("gold", 1.0 + 0.04 * y)
+	return true
+
+
+## The curtain has come to rest on the stack: it flattens whatever is left
+## (bursting the blocks, banking any keycaps) and the next board is dealt.
+func _classic_shutter_landed() -> void:
+	for c: Vector2i in keycaps.keys():
+		_collect_keycap(c)
+	for c: Vector2i in grid:
+		break_fx.append([c, 0.0])
+	if not grid.is_empty():
+		Sfx.play("break", 0.75)
+	EventBus.classic_level_cleared.emit(level, shutter_bonus)
+	_classic_deal_next_level()
+	shutter_phase = Shutter.HOLD
+	shutter_timer = SHUTTER_HOLD
+
+
+## Deals the next level's field under the curtain. The cat is left to fall
+## onto the fresh floor on its own — it only gets moved if the new garbage
+## would swallow it.
+func _classic_deal_next_level() -> void:
+	_classic_setup_level(level + 1)
+	for c: Vector2i in grid:
+		break_fx.append([c, 0.0])  # the new debris puffs into place
+	if rect_hits_solid(player.rect()):
+		player.respawn(_spawn_point())
+	_spawn_piece()
+	_classic_announce_level()
 
 
 # --- Alphabet keycaps -----------------------------------------------------------
@@ -1305,6 +1519,23 @@ func _escape() -> void:
 ## never free-falls straight back into it.
 func revive_player() -> void:
 	loose.clear()  # mid-air pieces vanish too — no instant re-crush
+	if mode == Mode.CLASSIC:
+		# Arcade continue: the level restarts from its opening board — same
+		# LEVEL, fresh garbage floor, line goal back to zero. Score is kept.
+		shutter_phase = Shutter.NONE
+		shutter_row = 0
+		shutter_bonus = 0
+		shutter_pop = 0.0
+		_classic_setup_level(level)
+		player.respawn(_spawn_point())
+		player.visible = true
+		playing = true
+		is_paused = false
+		_spawn_piece()
+		_classic_announce_level()
+		Sfx.play("revive")
+		queue_redraw()
+		return
 	var center := Vector2i((player.position / CELL).floor())
 	if mode == Mode.ENDLESS:
 		_blast_all_cells(center)
@@ -1398,6 +1629,8 @@ func _erase_cell(c: Vector2i) -> void:
 
 
 func _kill_player() -> void:
+	if _shutter_on():
+		return  # 셔터 연출 중엔 아무도 죽지 않는다
 	if mode == Mode.PICNIC:
 		# Nobody dies at a picnic — pop the offending jelly and play on.
 		_picnic_rescue()
@@ -1428,16 +1661,32 @@ func _difficulty() -> int:
 	return 1 + best_height / 8
 
 
+## Extra gravity steps earned purely by staying alive. Classic and endless are
+## marathons, so a long run keeps tightening even while the level (or the
+## climb) stalls. Story is curated, versus has its own ramp, picnic never
+## speeds up — all three opt out.
+func _speed_creep() -> int:
+	if mode != Mode.CLASSIC and mode != Mode.ENDLESS:
+		return 0
+	return mini(int(run_time / SPEED_CREEP_TIME), SPEED_CREEP_MAX)
+
+
+## Difficulty driving piece speed only: the mode's own driver plus the creep.
+## (The lava keeps to _difficulty — it already chases the climb.)
+func _fall_difficulty() -> int:
+	return _difficulty() + _speed_creep()
+
+
 func _track_time() -> float:
 	if mode == Mode.PICNIC:
 		return PICNIC_TRACK_TIME
 	if mode == Mode.CLASSIC:
-		# The NES gravity table scales our tracking window: stage 1 keeps the
+		# The NES gravity table scales our tracking window: level 1 keeps the
 		# full 5s, the plateaus tighten it, the kill screen pins it at 1s.
 		return clampf(TRACK_TIME_BASE * _classic_frames() / 48.0, 1.0, TRACK_TIME_BASE)
 	if _story() and stage.has("track_time"):
 		return float(stage.track_time)
-	return maxf(TRACK_TIME_BASE - (_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
+	return maxf(TRACK_TIME_BASE - (_fall_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
 
 
 func _fall_interval() -> float:
@@ -1450,12 +1699,15 @@ func _fall_interval() -> float:
 				0.03, FALL_INTERVAL_BASE)
 	if _story() and stage.has("fall_interval"):
 		return float(stage.fall_interval)
-	return maxf(FALL_INTERVAL_BASE - (_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
+	return maxf(FALL_INTERVAL_BASE - (_fall_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
-## NES frames-per-row for the current stage (Board.CLASSIC_FRAMES, 1-based).
+## NES frames-per-row for the current level. The gravity step advances every
+## other level (Board.classic_speed) plus one per stretch of time survived, so
+## the well never outruns the cat but a long run always tightens.
 func _classic_frames() -> float:
-	return float(Board.CLASSIC_FRAMES[clampi(level, 1, Board.CLASSIC_FRAMES.size()) - 1])
+	var step := Board.classic_speed(maxi(level, 1)) + _speed_creep()
+	return float(Board.CLASSIC_FRAMES[clampi(step, 1, Board.CLASSIC_FRAMES.size()) - 1])
 
 
 func _lava_speed() -> float:
@@ -1465,11 +1717,15 @@ func _lava_speed() -> float:
 # --- Fever time (endless) -----------------------------------------------------
 
 
-## Test hotkey: F fills the gauge instantly and kicks off fever (endless only).
+## Test hotkeys: F fills the fever gauge (endless), N clears the current level
+## on the spot (classic).
 func _unhandled_key_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo \
-			and event.keycode == KEY_F and playing and not is_paused:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if event.keycode == KEY_F and playing and not is_paused:
 		_add_fever(1.0)
+	elif event.keycode == KEY_N:
+		classic_skip_level()
 
 
 func _add_fever(amount: float) -> void:
@@ -1563,7 +1819,9 @@ func _spawn_point() -> Vector2:
 	var col := COLS / 2.0
 	if _story():
 		col = float(stage.get("spawn_col", col))
-	return Vector2(col * CELL, rows * CELL - Player.SIZE / 2.0)
+	# Classic levels deal a garbage floor — the cat starts on top of it, not in it.
+	var floor_row := rows - (level_garbage if mode == Mode.CLASSIC else 0)
+	return Vector2(col * CELL, floor_row * CELL - Player.SIZE / 2.0)
 
 
 func _cells(type: String, rot: int, pos: Vector2i) -> Array:
@@ -1604,8 +1862,8 @@ func _draw() -> void:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
-	if mode != Mode.ENDLESS and mode != Mode.PICNIC:
-		_draw_doors()
+	if mode != Mode.ENDLESS and mode != Mode.PICNIC and mode != Mode.CLASSIC:
+		_draw_doors()  # the arcade well has no exit at all — nothing to draw
 	if mode == Mode.PICNIC:
 		_draw_snacks()
 	_draw_keycap_fx()
@@ -1613,10 +1871,11 @@ func _draw() -> void:
 	if piece_type != "":
 		_draw_piece()
 	var border := Color(1, 1, 1, 0.35)
-	if mode == Mode.PICNIC:
-		# Sealed jelly pit: unbroken walls all around, no doors to draw.
+	if mode == Mode.PICNIC or mode == Mode.CLASSIC:
+		# Sealed pit: unbroken walls all around, no exits to draw.
 		draw_rect(Rect2(-2.0, -2.0, w + 4.0, h + 4.0), border, false, 2.0)
-		_draw_gold_fx()
+		if mode == Mode.PICNIC:
+			_draw_gold_fx()
 	elif mode != Mode.ENDLESS:
 		# Side walls open at the exit rows: draw them with a gap at the doors.
 		var door_top := door_row * CELL
@@ -1634,6 +1893,38 @@ func _draw() -> void:
 		_draw_lava(w)
 		_draw_fever(w)
 		_draw_gold_fx()
+	if shutter_row > 0:
+		_draw_shutter(w)
+
+
+## Level-clear curtain: slatted steel rolling down over the well, lit from
+## above like everything else in the pit, with a warm lip on the leading edge.
+## The running bonus is stamped on the closed section as it tallies up.
+func _draw_shutter(w: float) -> void:
+	var h := minf(shutter_row * CELL, rows * CELL)
+	draw_rect(Rect2(0.0, 0.0, w, h), Color("14161d"))
+	var slat := CELL * 0.5
+	var y := 0.0
+	while y < h:
+		var band := minf(slat * 0.52, h - y)
+		draw_rect(Rect2(0.0, y, w, band), Color("1d2029"))
+		draw_line(Vector2(0.0, y + 1.0), Vector2(w, y + 1.0), Color(1, 1, 1, 0.07), 2.0)
+		y += slat
+	# Rivets down both edges sell the steel.
+	var dot := 0.0
+	while dot < h:
+		for rx in [CELL * 0.35, w - CELL * 0.35]:
+			draw_circle(Vector2(rx, dot + slat * 0.5), 3.0, Color(1, 1, 1, 0.10))
+		dot += slat * 2.0
+	draw_rect(Rect2(0.0, h - 7.0, w, 7.0), Color("f4e3c8"))
+	draw_rect(Rect2(0.0, h, w, 14.0), Color(0, 0, 0, 0.4))
+	if shutter_bonus > 0 and h > CELL * 2.5:
+		# The tally the curtain is racking up, flaring on every empty row.
+		var font := ThemeDB.fallback_font
+		var y_at := minf(h - CELL * 1.2, rows * CELL * 0.42)
+		draw_string(font, Vector2(0.0, y_at), "+%d" % shutter_bonus,
+				HORIZONTAL_ALIGNMENT_CENTER, w, int(66 + 14 * shutter_pop),
+				Color("fff3d0"))
 
 
 ## Pit backdrop: daylight seeps in from above, darkness pools below. In

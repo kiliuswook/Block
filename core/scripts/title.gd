@@ -129,7 +129,7 @@ func _refresh_story_desc() -> void:
 func _refresh_classic_desc() -> void:
 	if GameState.classic_best > 0:
 		($UI/ClassicDesc as Label).text = \
-				"고전 오락실 난이도 그대로 — 최고 기록  %d점" % GameState.classic_best
+				"고전 오락실 LEVEL 승부 — 최고 기록  %d점" % GameState.classic_best
 
 
 ## Picnic subtitle carries the snack-hunt high score.

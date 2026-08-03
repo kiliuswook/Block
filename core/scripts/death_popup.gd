@@ -151,8 +151,10 @@ func _ready() -> void:
 ## death — no revive option and a cheerier headline.
 func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 		show_boosts := false, show_skip := false, show_continue := true,
-		title_text := "") -> void:
+		title_text := "", continue_text := "") -> void:
 	_title.text = title_text if title_text != "" else "냐옹... 쓰러졌다!"
+	# Classic revives restart the level, so its button says so.
+	_cont.text = continue_text if continue_text != "" else "이어서 하기"
 	_title.add_theme_color_override("font_color",
 			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
 	_cont.visible = show_continue

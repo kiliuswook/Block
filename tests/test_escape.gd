@@ -529,14 +529,38 @@ func _ready() -> void:
 	# NES gravity mapping: stage 1 keeps base pacing, deep stages hit the floor.
 	_check(absf(cl._track_time() - EscapeBoard.TRACK_TIME_BASE) < 0.01,
 			"classic: stage 1 keeps the full tracking window")
-	cl.level = 9
-	_check(cl._track_time() <= 1.01, "classic: stage 9 tracking window bottoms out")
-	_check(cl._fall_interval() <= 0.05, "classic: stage 9 pieces slam down")
-	cl.level = 30
-	_check(cl._fall_interval() <= 0.031, "classic: stage 30 kill screen speed")
-	# Arcade scoring (40 x stage) and the 10-line stage-up, via the lock path.
+	_check(Board.classic_speed(1) == 1 and Board.classic_speed(2) == 1
+			and Board.classic_speed(3) == 2,
+			"classic: gravity steps up every other level")
+	cl.level = 17
+	_check(cl._track_time() <= 1.01, "classic: deep levels bottom out the window")
+	_check(cl._fall_interval() <= 0.05, "classic: deep levels slam pieces down")
+	cl.level = 59
+	_check(cl._fall_interval() <= 0.031, "classic: the kill-screen speed still lands")
+	# Marathon creep: time survived tightens gravity on top of the level ramp.
 	cl.level = 1
-	cl.total_lines = 9
+	cl.run_time = 0.0
+	var fresh_fall: float = cl._fall_interval()
+	cl.run_time = EscapeBoard.SPEED_CREEP_TIME * 3.0
+	_check(cl._speed_creep() == 3, "classic: the creep adds a step per stretch played")
+	_check(cl._fall_interval() < fresh_fall,
+			"classic: a long run falls faster at the same level")
+	cl.run_time = EscapeBoard.SPEED_CREEP_TIME * 999.0
+	_check(cl._speed_creep() == EscapeBoard.SPEED_CREEP_MAX,
+			"classic: the creep is capped")
+	cl.run_time = 0.0
+	# Level structure (Atari B-type): level 1 is a clean board, 3 lines to clear.
+	cl.level = 1
+	_check(Board.classic_quota(1) == 3 and Board.classic_quota(2) == 4
+			and Board.classic_quota(99) == Board.CLASSIC_QUOTA_MAX,
+			"classic: the line goal eases in from 3 up to the arcade's 10")
+	_check(cl.level_lines == 0 and cl.level_garbage == 0 and cl.grid.is_empty(),
+			"classic: level 1 deals a clean board")
+	_check(Board.classic_garbage(1) == 0 and Board.classic_garbage(6) > 0
+			and Board.classic_garbage(99) == Board.CLASSIC_GARBAGE_MAX,
+			"classic: later levels deal a deeper garbage floor, capped")
+	# Arcade scoring (40 x level) and quota progress, via the lock path.
+	cl.level_lines = 0
 	for x in range(EscapeBoard.COLS):
 		cl.grid[Vector2i(x, cl.rows - 1)] = "O"
 	cl.piece_type = "O"
@@ -544,13 +568,96 @@ func _ready() -> void:
 	cl.piece_pos = Vector2i(0, 9)
 	var classic_score: int = GameState.score
 	cl._lock_piece()
-	# 10 x stage placement score (house rule) + the arcade single (40 x stage).
+	# 10 x level placement score (house rule) + the arcade single (40 x level).
 	_check(GameState.score == classic_score + 10 + 40,
-			"classic: single pays the arcade 40 x stage")
-	_check(cl.total_lines == 10, "classic: line total advanced")
-	_check(cl.level == 2, "classic: 10th line advances the stage")
+			"classic: single pays the arcade 40 x level")
+	_check(cl.level_lines == 1, "classic: the clear counts toward the level quota")
+	_check(not cl._shutter_on(), "classic: the level runs on until its quota is met")
 	_check(not cl.door_left and not cl.door_right,
-			"classic: stage up never opens the doors")
+			"classic: clears never open the doors")
+	# Quota met: the shutter rolls down, paying for every empty row it passes.
+	cl.level_lines = Board.classic_quota(cl.level) - 1
+	for x in range(EscapeBoard.COLS):
+		cl.grid[Vector2i(x, cl.rows - 1)] = "O"
+	cl.piece_type = "O"
+	cl.piece_rot = 0
+	cl.piece_pos = Vector2i(0, 9)
+	var before_bonus: int = GameState.score
+	cl._lock_piece()
+	_check(cl._shutter_on(), "classic: meeting the quota rolls the shutter down")
+	_check(cl.shutter_phase == EscapeBoard.Shutter.CLOSING,
+			"classic: the shutter starts closing")
+	# Every row above the stack pays out; the rows at and below it pay nothing.
+	var stack_top: int = cl.rows
+	for gc: Vector2i in cl.grid:
+		stack_top = mini(stack_top, gc.y)
+	var expect_bonus: int = maxi(stack_top, 0) * Board.CLASSIC_EMPTY_ROW_BONUS * cl.level
+	var shutter_guard := 0
+	while cl.shutter_phase == EscapeBoard.Shutter.CLOSING and shutter_guard < 200:
+		cl._update_shutter(1.0)
+		shutter_guard += 1
+	_check(cl.shutter_bonus == expect_bonus,
+			"classic: the shutter pays 100 x level per empty row")
+	_check(cl.shutter_row == stack_top,
+			"classic: the curtain stops on the stack, covering only the empty rows")
+	_check(GameState.score == before_bonus + 10 + 40 + expect_bonus,
+			"classic: the empty-row bonus lands on the score")
+	_check(cl.shutter_bonus_done, "classic: the tally stops at the stack")
+	# The next board is dealt behind the closed curtain, then it lifts.
+	_check(cl.level == 2 and cl.level_lines == 0 and cl.piece_type != "",
+			"classic: the next level is dealt behind the shutter")
+	_check(cl.level_garbage == Board.classic_garbage(2),
+			"classic: the new board carries its own garbage floor")
+	shutter_guard = 0
+	while cl._shutter_on() and shutter_guard < 400:
+		cl._update_shutter(1.0)
+		shutter_guard += 1
+	_check(cl.shutter_phase == EscapeBoard.Shutter.NONE and cl.shutter_row == 0,
+			"classic: the shutter opens again and hands play back")
+	_check(cl.player.visible, "classic: the cat is revealed by the rising shutter")
+	# Deep levels: a garbage floor with holes, and a spawn that sits on top of it.
+	cl._classic_setup_level(6)
+	_check(cl.level_garbage == Board.classic_garbage(6) and not cl.grid.is_empty(),
+			"classic: deep levels deal a garbage floor")
+	var garbage_full := false
+	for y in range(cl.rows - cl.level_garbage, cl.rows):
+		var filled := 0
+		for x in range(EscapeBoard.COLS):
+			if cl.grid.has(Vector2i(x, y)):
+				filled += 1
+		if filled >= EscapeBoard.COLS:
+			garbage_full = true
+	_check(not garbage_full, "classic: garbage rows always leave a hole")
+	_check(cl._spawn_point().y < (cl.rows - cl.level_garbage + 1) * c,
+			"classic: the cat spawns on top of the garbage")
+	# Test affordance: the skip button/hotkey clears the level on the spot.
+	cl._classic_setup_level(3)
+	cl.playing = true
+	cl.is_paused = false
+	_check(cl.classic_skip_level(), "classic: the level-skip test button fires")
+	_check(cl._shutter_on() and cl.level_lines >= Board.classic_quota(3),
+			"classic: skipping runs the normal shutter clear")
+	_check(not cl.classic_skip_level(),
+			"classic: skipping again mid-shutter does nothing")
+	var skip_guard := 0
+	while cl._shutter_on() and skip_guard < 400:
+		cl._update_shutter(1.0)
+		skip_guard += 1
+	_check(cl.level == 4, "classic: the skip lands on the next level")
+	# Continue: the arcade revive restarts the level from its opening board.
+	cl._classic_setup_level(6)
+	cl.level_lines = 6
+	cl.grid[Vector2i(3, 4)] = "T"
+	var revive_score: int = GameState.score
+	cl.playing = false
+	cl.revive_player()
+	_check(cl.playing and cl.level == 6 and cl.level_lines == 0,
+			"classic: revive restarts the same level from zero lines")
+	_check(not cl.grid.has(Vector2i(3, 4)) and GameState.score == revive_score,
+			"classic: revive deals a fresh board and keeps the score")
+	cl._classic_setup_level(1)
+	cl.piece_type = "O"
+	cl.grid[Vector2i(0, cl.rows - 1)] = "O"  # the replay diff needs a live grid
 
 	# --- Replay recording -------------------------------------------------------
 	cl._rec_tick(0.25)
@@ -575,6 +682,15 @@ func _ready() -> void:
 	b6.add_child(cam6)
 	add_child(b6)
 	b6.start_game()
+	# Endless creeps too: the climb drives it, and so does time survived.
+	var endless_fresh: float = b6._fall_interval()
+	var endless_lava: float = b6._lava_speed()
+	b6.run_time = EscapeBoard.SPEED_CREEP_TIME * 4.0
+	_check(b6._fall_interval() < endless_fresh,
+			"endless: a long run falls faster at the same height")
+	_check(is_equal_approx(b6._lava_speed(), endless_lava),
+			"endless: the creep leaves the lava on the climb-based difficulty")
+	b6.run_time = 0.0
 	b6.piece_type = "O"
 	b6.piece_rot = 0
 	b6.piece_state = b6.PieceState.TRACKING

@@ -231,6 +231,12 @@ func _build_sounds() -> void:
 	# Escape fanfare.
 	_sounds["escape"] = _jingle([523.25, 659.25, 783.99, 1046.5, 0.0, 1318.5],
 			0.09, SQUARE, 0.18, 3.0)
+	# Arcade level-clear shutter: slatted steel rolling down the well.
+	b = _buf(0.55)
+	_add_tone(b, 0.0, 0.55, 0.0, 0.0, 0.22, NOISE, 1.6)
+	_add_tone(b, 0.0, 0.5, 280.0, 90.0, 0.16, SQUARE)
+	_add_tone(b, 0.42, 0.13, 150.0, 70.0, 0.3, SINE)  # the clunk at the bottom
+	_sounds["shutter"] = _wav(b)
 	# Story doors unlock: warm two-note chime.
 	b = _buf(0.7)
 	_add_tone(b, 0.0, 0.5, 783.99, 783.99, 0.18, TRIANGLE)

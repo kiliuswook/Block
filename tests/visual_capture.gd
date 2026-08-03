@@ -79,6 +79,30 @@ func _ready() -> void:
 				b.keycaps[Vector2i(2, 19)] = "K"
 				b.keycap_fx.append([Vector2(6.5 * 64.0, 16.0 * 64.0), 0.0, "M"])
 				b.queue_redraw())
+	# Level structure: a deep board with its garbage floor and a half-filled
+	# LINES rack, then the clear shutter mid-descent with its bonus tally.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_level5.png",
+			func(inst: Node) -> void:
+				var b: Node = inst.get_node("Board")
+				b._classic_setup_level(5)
+				b.level_lines = 4
+				b._spawn_piece()
+				inst._on_classic_level_started(5, Board.classic_quota(5), b.level_garbage)
+				inst._on_classic_level_progress(4, Board.classic_quota(5)))
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_shutter.png",
+			func(inst: Node) -> void:
+				var b: Node = inst.get_node("Board")
+				b._classic_setup_level(4)
+				b.level_lines = Board.classic_quota(4)
+				# A stack five rows deep: the curtain should stop right on it.
+				for y in range(15, 20):
+					for x in range(EscapeBoard.COLS):
+						if (x + y) % 4 != 0:
+							b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
+				inst._on_classic_level_started(4, Board.classic_quota(4), b.level_garbage)
+				b._classic_start_shutter()
+				for i in range(12):
+					b._update_shutter(1.0))
 	GameState.mode = GameState.MODE_PICNIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS

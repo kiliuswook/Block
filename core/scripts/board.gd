@@ -29,6 +29,38 @@ const CLASSIC_FRAMES := [48, 43, 38, 33, 28, 23, 18, 13, 8, 6,
 # Arcade scoring: single/double/triple/tetris × level.
 const CLASSIC_SCORES := [0, 40, 100, 300, 1200]
 
+# --- Classic LEVEL design (Atari Tetris B-type) --------------------------------
+# The arcade structure the cabinets actually shipped: a LEVEL is one board.
+# Clear its 10 lines and the shutter comes down, paying a bonus for every empty
+# row left at the top of the well; the next LEVEL then opens on a fresh field —
+# faster (CLASSIC_FRAMES) and dirtier (Game Boy Type-B garbage height).
+# Death ends the whole run.
+# The line goal eases in: the first boards are short so a run gets going fast,
+# and only the later ones ask for the arcade's full 10.
+const CLASSIC_QUOTA_BASE := 3  # level 1 clears in three lines
+const CLASSIC_QUOTA_MAX := 10  # Atari B-type: "cleared after 10 lines"
+# Gravity advances every other level, so the speed ramp is half as steep as
+# the level counter — the cat needs room to climb its own stack.
+const CLASSIC_LEVELS_PER_SPEED := 2
+const CLASSIC_GARBAGE_FROM := 5  # levels 1-4 are clean boards
+const CLASSIC_GARBAGE_MAX := 6  # never bury more than 6 of the 20 rows
+const CLASSIC_EMPTY_ROW_BONUS := 100  # × level, per empty row the shutter passes
+
+
+## Lines needed to clear `level` (1-based): 3, 4, 5 ... up to the arcade's 10.
+static func classic_quota(level: int) -> int:
+	return mini(CLASSIC_QUOTA_BASE + level - 1, CLASSIC_QUOTA_MAX)
+
+
+## Gravity step (CLASSIC_FRAMES index, 1-based) `level` falls at.
+static func classic_speed(level: int) -> int:
+	return mini(1 + (level - 1) / CLASSIC_LEVELS_PER_SPEED, CLASSIC_FRAMES.size())
+
+
+## Garbage rows prefilled at the bottom when `level` begins.
+static func classic_garbage(level: int) -> int:
+	return clampi(level - CLASSIC_GARBAGE_FROM + 1, 0, CLASSIC_GARBAGE_MAX)
+
 # Cat-Tris palette: classic tetromino hues, deepened so blocks read as
 # cold pit debris and never outshine the warm cream cat.
 const COLORS := {
