@@ -115,7 +115,7 @@ theme_override_colors/font_color = Color(0.956863, 0.890196, 0.784314, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/outline_size = 10
 theme_override_font_sizes/font_size = 96
-text = "0층"
+text = "0"
 
 [node name="BestTitle" type="Label" parent="UI" unique_id=1008219458]
 visible = false
@@ -135,7 +135,7 @@ offset_right = 1720.0
 offset_bottom = 452.0
 theme_override_colors/font_color = Color(1, 0.92, 0.65, 1)
 theme_override_font_sizes/font_size = 44
-text = "0층"
+text = "0"
 
 [node name="RecordLabel" type="Label" parent="UI" unique_id=975859800]
 visible = false
@@ -170,7 +170,7 @@ theme_override_colors/font_color = Color(1, 0.952941, 0.815686, 1)
 theme_override_colors/font_outline_color = Color(0.15, 0.08, 0.04, 1)
 theme_override_constants/outline_size = 16
 theme_override_font_sizes/font_size = 100
-text = "10층 돌파!"
+text = ""
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -181,10 +181,7 @@ offset_right = 1880.0
 offset_bottom = 700.0
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 theme_override_font_sizes/font_size = 20
-text = "블록을 밟고 올라가
-좌우 벽 꼭대기의 출구로 탈출!
-낙하 블록에 깔리면 사망 (부딪히는 건 OK)
-대시로 옆 블록, 점프로 머리 위 블록 파괴!"
+text = "TUT_ESCAPE"
 
 [node name="HelpLabel" type="Label" parent="UI" unique_id=400001218]
 offset_left = 160.0
@@ -193,7 +190,7 @@ offset_right = 1760.0
 offset_bottom = 1060.0
 theme_override_colors/font_color = Color(1, 1, 1, 0.45)
 theme_override_font_sizes/font_size = 18
-text = "< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀"
+text = "TUT_KEYS_ESCAPE"
 horizontal_alignment = 1
 
 [node name="EscapeLabel" type="Label" parent="UI" unique_id=2045193657]
@@ -238,7 +235,7 @@ offset_right = 220.0
 offset_bottom = 110.0
 script = ExtResource("5_tbtn")
 action = "to_title"
-label = "타이틀"
+label = "TOUCH_TITLE"
 font_size = 28
 
 [node name="LeftButton" type="Control" parent="TouchControls" unique_id=275474246]
@@ -272,7 +269,7 @@ offset_right = 1650.0
 offset_bottom = 760.0
 script = ExtResource("5_tbtn")
 action = "rotate_ccw"
-label = "◀ 회전"
+label = "TOUCH_ROT_CCW"
 font_size = 36
 
 [node name="RotCWButton" type="Control" parent="TouchControls" unique_id=1827866527]
@@ -284,7 +281,7 @@ offset_right = 1860.0
 offset_bottom = 760.0
 script = ExtResource("5_tbtn")
 action = "rotate_cw"
-label = "회전 ▶"
+label = "TOUCH_ROT_CW"
 font_size = 36
 
 [node name="DropButton" type="Control" parent="TouchControls" unique_id=56780192]
@@ -307,7 +304,7 @@ offset_right = 1860.0
 offset_bottom = 1030.0
 script = ExtResource("5_tbtn")
 action = "jump"
-label = "점프"
+label = "TOUCH_JUMP"
 font_size = 44
 
 [node name="PopupLayer" type="CanvasLayer" parent="." unique_id=841536777]

@@ -1,0 +1,268 @@
+keys,en,ko,en_XA
+SET_TITLE,Settings,설정,[Şéţţïńğş ——————]
+SET_PAUSE_TITLE,Paused,일시정지,[Þàüşéð ————]
+SET_RESUME,Resume,계속하기,[Řéşüɱé ————]
+SET_CLOSE,Close,닫기,[Çłôşé ————]
+SET_VOL_MASTER,Master,전체 음량,[Ṁàşţéř ————]
+SET_VOL_BGM,Music,배경 음악,[Ṁüşïç ————]
+SET_VOL_SFX,Sound,효과음,[Şôüńð ————]
+SET_LANGUAGE,Language,언어,[Łàńğüàğé ——————]
+SET_RESET,"⚠ Reset Game  (erases records, currency, unlocks)",⚠ 게임 초기화  (기록·재화·해금 전부 삭제),"[⚠ Řéşéţ Ğàɱé  (éřàşéş řéçôřðş, çüřřéńçÿ, üńłôçķş) ———————————————————————————————————————]"
+SET_RESET_CONFIRM,Really reset?  Press again to delete!,정말 초기화할까요?  다시 누르면 삭제됩니다!,[Řéàłłÿ řéşéţ?  Þřéşş àğàïń ţô ðéłéţé! —————————————————————————————]
+SET_RESETTING,Resetting...,초기화 중...,[Řéşéţţïńğ... —————————]
+POP_DEAD_TITLE,Meow... down you go!,냐옹... 쓰러졌다!,[Ṁéôŵ... ðôŵń ÿôü ğô! ————————————————]
+POP_NEW_RECORD,☆ New Record! ☆,☆ 신기록 달성! ☆,[☆ Ńéŵ Řéçôřð! ☆ ————————————]
+POP_CONTINUE,Continue,이어서 하기,[Çôńţïńüé ——————]
+POP_CONTINUE_LEVEL,Restart LEVEL {level},LEVEL {level} 처음부터,[Řéşţàřţ ŁÉṼÉŁ {level} ————————————————]
+POP_RESTART,Start Over,처음부터 다시하기,[Şţàřţ Ôṽéř ————————]
+POP_TO_TITLE,Back to Title,타이틀로 나가기,[Ɓàçķ ţô Ţïţłé ——————————]
+POP_REVIVE_FREE,◆ Revive Jelly  ·  Free this time!,◆ 부활 젤리  ·  이번엔 무료!,[◆ Řéṽïṽé Ĵéłłÿ  ·  Ƒřéé ţĥïş ţïɱé! ———————————————————————————]
+POP_REVIVE_USE,◆ Use {cost} Revive Jelly  (you have ◆ {gems}),◆ 부활 젤리 {cost}개 사용  (보유 ◆ {gems}),[◆ Üşé {cost} Řéṽïṽé Ĵéłłÿ  (ÿôü ĥàṽé ◆ {gems}) ————————————————————————————————————]
+POP_REVIVE_LACK,Revive needs ◆ {cost}  (you have ◆ {gems} — not enough),부활에 ◆ {cost} 필요  (보유 ◆ {gems} — 부족),[Řéṽïṽé ńééðş ◆ {cost}  (ÿôü ĥàṽé ◆ {gems} — ńôţ éńôüğĥ) ————————————————————————————————————————————]
+POP_BOOST_LABEL,Boosts for the next run  (you have {gold} G),다음 판 부스트  (보유 {gold} G),[Ɓôôşţş ƒôř ţĥé ńéẋţ řüń  (ÿôü ĥàṽé {gold} Ğ) ———————————————————————————————————]
+POP_SKIP_STAGE,◆ {cost}  Skip this stage,◆ {cost}  이 스테이지 건너뛰기,[◆ {cost}  Şķïþ ţĥïş şţàğé ————————————————————]
+POP_PICNIC_END,Picnic over — nom nom!,냠냠 피크닉 종료!,[Þïçńïç ôṽéř — ńôɱ ńôɱ! —————————————————]
+HUD_FLOOR,{n} F,{n}층,[{n} Ƒ ————]
+HUD_POINTS,{n} pts,{n}점,[{n} þţş —————]
+HUD_HEIGHT,HEIGHT,높이,[ĤÉÏĞĤŢ ————]
+HUD_BEST,BEST,최고 기록,[ƁÉŞŢ ———]
+HUD_BEST_SCORE,BEST SCORE,최고 점수,[ƁÉŞŢ ŞÇÔŘÉ ————————]
+HUD_TIME_LEFT,TIME LEFT,남은 시간,[ŢÏṀÉ ŁÉƑŢ ———————]
+HUD_MILESTONE,{n} F reached!,{n}층 돌파!,[{n} Ƒ řéàçĥéð! ———————————]
+HUD_MILESTONE_BIG,Amazing! {n} F reached!!,대기록! {n}층 돌파!!,[Åɱàżïńğ! {n} Ƒ řéàçĥéð!! ———————————————————]
+HUD_STAGE_CLEAR,STAGE {n} CLEAR!,STAGE {n} 클리어!,[ŞŢÅĞÉ {n} ÇŁÉÅŘ! ————————————]
+HUD_TAP_TO_START,Tap or press any key to start!,탭 또는 아무 키나 눌러 시작!,[Ţàþ ôř þřéşş àńÿ ķéÿ ţô şţàřţ! ————————————————————————]
+HUD_STATS_ENDLESS,Reached {height} F      Best {best} F,도달 높이 {height}층      최고 기록 {best}층,[Řéàçĥéð {height} Ƒ      Ɓéşţ {best} Ƒ —————————————————————————————]
+HUD_STATS_PICNIC,SCORE {score}      Jelly fish {snacks},SCORE {score}      젤리 생선 {snacks}마리,[ŞÇÔŘÉ {score}      Ĵéłłÿ ƒïşĥ {snacks} ——————————————————————————————]
+HUD_EARNED,Earned   +{gold} G,획득   +{gold} G,[Éàřńéð   +{gold} Ğ ——————————————]
+HUD_DAILY_DOUBLE,First run today — double!   ,오늘 첫 판 2배!   ,[Ƒïřşţ řüń ţôðàÿ — ðôüƀłé!    ——————————————————————]
+HUD_STORY_REWARD,First clear bonus  +{gold} G,첫 클리어 보상  +{gold} G,[Ƒïřşţ çłéàř ƀôńüş  +{gold} Ğ ——————————————————————]
+HUD_NEXT_LEVEL_TEST,▶  Next LEVEL (test),▶  다음 LEVEL (테스트),[▶  Ńéẋţ ŁÉṼÉŁ (ţéşţ) ————————————————]
+HUD_NEXT_LEVEL_TEST_TIP,Test only: clears the current LEVEL instantly (shortcut N),테스트용: 현재 LEVEL을 즉시 클리어한다 (단축키 N),[Ţéşţ ôńłÿ: çłéàřş ţĥé çüřřéńţ ŁÉṼÉŁ ïńşţàńţłÿ (şĥôřţçüţ Ń) ——————————————————————————————————————————————]
+TUT_ESCAPE,"Climb the falling blocks
+and escape through the exit atop either wall!
+Getting crushed by a block is death (bumps are fine)
+Dash to break side blocks, jump to break blocks overhead!","블록을 밟고 올라가
+좌우 벽 꼭대기의 출구로 탈출!
+낙하 블록에 깔리면 사망 (부딪히는 건 OK)
+대시로 옆 블록, 점프로 머리 위 블록 파괴!","[Çłïɱƀ ţĥé ƒàłłïńğ ƀłôçķş ———————————————————]
+[àńð éşçàþé ţĥřôüğĥ ţĥé éẋïţ àţôþ éïţĥéř ŵàłł! ————————————————————————————————————]
+[Ğéţţïńğ çřüşĥéð ƀÿ à ƀłôçķ ïş ðéàţĥ (ƀüɱþş àřé ƒïńé) —————————————————————————————————————————]
+[Ðàşĥ ţô ƀřéàķ şïðé ƀłôçķş, ĵüɱþ ţô ƀřéàķ ƀłôçķş ôṽéřĥéàð! —————————————————————————————————————————————]"
+TUT_KEYS_ESCAPE,< >  Move (double tap: dash)      ^ / SPACE  Jump · jump again while sliding on a wall = one wall jump      v  Speed up block fall      Z / X  Rotate block      P  Pause      R  Restart      ESC  Title,< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀,[< >  Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)      ^ / ŞÞÅÇÉ  Ĵüɱþ · ĵüɱþ àğàïń ŵĥïłé şłïðïńğ ôń à ŵàłł = ôńé ŵàłł ĵüɱþ      ṽ  Şþééð üþ ƀłôçķ ƒàłł      Ż / Ẋ  Řôţàţé ƀłôçķ      Þ  Þàüşé      Ř  Řéşţàřţ      ÉŞÇ  Ţïţłé ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]
+TUT_CLASSIC,"Old-school arcade Tetris — one LEVEL = one board
+Clear the goal lines and the shutter comes down
+(LEVEL 1 is 3 lines, +1 per board, up to 10)
+Every empty row the shutter passes pays 100 × LEVEL
+— the lower you stack, the bigger the bonus
+Every two boards · the longer you last, the faster blocks fall
+Garbage blocks appear at the bottom from LEVEL 5
+Single 40 · Double 100 · Triple 300 · Tetris 1200 × LEVEL","고전 오락실 테트리스 — LEVEL 하나 = 판 하나
+목표 줄을 지우면 셔터가 내려온다
+(LEVEL 1은 3줄, 판마다 +1줄, 최대 10줄)
+셔터가 지나는 빈 줄마다 보너스 100 × LEVEL
+— 낮게 쌓을수록 보너스가 커진다
+두 판마다 · 오래 버틸수록 낙하 속도 ↑
+LEVEL 5부터 바닥에 방해 블록
+싱글 40 · 더블 100 · 트리플 300 · 테트리스 1200 × LEVEL","[Ôłð-şçĥôôł àřçàðé Ţéţřïş — ôńé ŁÉṼÉŁ = ôńé ƀôàřð ——————————————————————————————————————]
+[Çłéàř ţĥé ğôàł łïńéş àńð ţĥé şĥüţţéř çôɱéş ðôŵń —————————————————————————————————————]
+[(ŁÉṼÉŁ 1 ïş 3 łïńéş, +1 þéř ƀôàřð, üþ ţô 10) ———————————————————————————————————]
+[Éṽéřÿ éɱþţÿ řôŵ ţĥé şĥüţţéř þàşşéş þàÿş 100 × ŁÉṼÉŁ ————————————————————————————————————————]
+[— ţĥé łôŵéř ÿôü şţàçķ, ţĥé ƀïğğéř ţĥé ƀôńüş ——————————————————————————————————]
+[Éṽéřÿ ţŵô ƀôàřðş · ţĥé łôńğéř ÿôü łàşţ, ţĥé ƒàşţéř ƀłôçķş ƒàłł —————————————————————————————————————————————————]
+[Ğàřƀàğé ƀłôçķş àþþéàř àţ ţĥé ƀôţţôɱ ƒřôɱ ŁÉṼÉŁ 5 ——————————————————————————————————————]
+[Şïńğłé 40 · Ðôüƀłé 100 · Ţřïþłé 300 · Ţéţřïş 1200 × ŁÉṼÉŁ —————————————————————————————————————————————]"
+TUT_ENDLESS,"Stack blocks, step on them
+and climb forever upward!
+Lava rises from below — touching it is death
+The higher and longer you go, the faster blocks fall
+Once a block starts falling it can't rotate —
+and the next block shows up right away!
+Break blocks with a dash or two jump hits
+Clearing lines pushes the lava back down
+(footholds hold up even when a line vanishes)
+Gold veins inside blocks pay out when cleared or broken!
+Rotate to shake loose the nuggets riding on a block
+Line clears charge the FEVER gauge —
+during fever you're invincible, double jump, gold rain,
+so ride the pouring blocks up and grab the gold!","블록을 쌓고 밟으며
+끝없이 위로 올라가자!
+아래에서 용암이 올라온다 — 닿으면 사망
+높이 오를수록, 오래 버틸수록 블록이 빨라진다
+블록이 떨어지기 시작하면 회전 불가 —
+그리고 다음 블록이 바로 등장!
+대시/점프 2회 타격으로 블록 파괴
+줄을 지우면 용암을 밀어낸다
+(줄이 사라져도 발판은 안 무너진다)
+블록 속 금맥은 줄을 지우거나 부수면 골드!
+블록 위에 얹힌 금덩이는 회전으로 떨어뜨려 줍자
+줄 클리어로 FEVER 게이지 충전 —
+피버 중엔 무적 + 2배 점프 + 골드 비,
+쏟아지는 블록을 밟고 금을 주우며 상승!","[Şţàçķ ƀłôçķş, şţéþ ôń ţĥéɱ ————————————————————]
+[àńð çłïɱƀ ƒôřéṽéř üþŵàřð! ————————————————————]
+[Łàṽà řïşéş ƒřôɱ ƀéłôŵ — ţôüçĥïńğ ïţ ïş ðéàţĥ ———————————————————————————————————]
+[Ţĥé ĥïğĥéř àńð łôńğéř ÿôü ğô, ţĥé ƒàşţéř ƀłôçķş ƒàłł —————————————————————————————————————————]
+[Ôńçé à ƀłôçķ şţàřţş ƒàłłïńğ ïţ çàń'ţ řôţàţé — ————————————————————————————————————]
+[àńð ţĥé ńéẋţ ƀłôçķ şĥôŵş üþ řïğĥţ àŵàÿ! ———————————————————————————————]
+[Ɓřéàķ ƀłôçķş ŵïţĥ à ðàşĥ ôř ţŵô ĵüɱþ ĥïţş ————————————————————————————————]
+[Çłéàřïńğ łïńéş þüşĥéş ţĥé łàṽà ƀàçķ ðôŵń ————————————————————————————————]
+[(ƒôôţĥôłðş ĥôłð üþ éṽéń ŵĥéń à łïńé ṽàńïşĥéş) ————————————————————————————————————]
+[Ğôłð ṽéïńş ïńşïðé ƀłôçķş þàÿ ôüţ ŵĥéń çłéàřéð ôř ƀřôķéń! ————————————————————————————————————————————]
+[Řôţàţé ţô şĥàķé łôôşé ţĥé ńüğğéţş řïðïńğ ôń à ƀłôçķ ————————————————————————————————————————]
+[Łïńé çłéàřş çĥàřğé ţĥé ƑÉṼÉŘ ğàüğé — ————————————————————————————]
+[ðüřïńğ ƒéṽéř ÿôü'řé ïńṽïńçïƀłé, ðôüƀłé ĵüɱþ, ğôłð řàïń, ————————————————————————————————————————————]
+[şô řïðé ţĥé þôüřïńğ ƀłôçķş üþ àńð ğřàƀ ţĥé ğôłð! ——————————————————————————————————————]"
+TUT_PICNIC,"A laid-back 2-minute jelly picnic!
+Nobody dies in this cozy mode —
+get squashed and you pop out like jelly
+Stack blocks, step up and climb
+to collect the floating jelly fish
+100 points a fish · line clear bonus","느긋한 2분 젤리 피크닉!
+아무도 죽지 않는 편안한 모드 —
+깔려도 젤리처럼 팡! 하고 빠져나온다
+블록을 쌓고 밟고 올라가서
+둥둥 떠 있는 젤리 생선을 모으자
+생선 1마리 100점 · 줄 클리어 보너스","[Å łàïð-ƀàçķ 2-ɱïńüţé ĵéłłÿ þïçńïç! ———————————————————————————]
+[Ńôƀôðÿ ðïéş ïń ţĥïş çôżÿ ɱôðé — ————————————————————————]
+[ğéţ şɋüàşĥéð àńð ÿôü þôþ ôüţ łïķé ĵéłłÿ ———————————————————————————————]
+[Şţàçķ ƀłôçķş, şţéþ üþ àńð çłïɱƀ ————————————————————————]
+[ţô çôłłéçţ ţĥé ƒłôàţïńğ ĵéłłÿ ƒïşĥ ———————————————————————————]
+[100 þôïńţş à ƒïşĥ · łïńé çłéàř ƀôńüş ————————————————————————————]"
+TUT_VERSUS,"2P Versus  —  first to {target} wins
+P1 cat: escape through the exit to win
+P2 blocks: crush the cat to win
+Stack all the way to the top and P2 loses!","2P 대전  —  {target}선승
+P1 고양이: 출구로 탈출하면 승리
+P2 블록: 고양이를 깔아뭉개면 승리
+꼭대기까지 쌓아버리면 P2 패배!","[2Þ Ṽéřşüş  —  ƒïřşţ ţô {target} ŵïńş ————————————————————————————]
+[Þ1 çàţ: éşçàþé ţĥřôüğĥ ţĥé éẋïţ ţô ŵïń ——————————————————————————————]
+[Þ2 ƀłôçķş: çřüşĥ ţĥé çàţ ţô ŵïń ————————————————————————]
+[Şţàçķ àłł ţĥé ŵàÿ ţô ţĥé ţôþ àńð Þ2 łôşéş! —————————————————————————————————]"
+TUT_KEYS_VERSUS,"P1 (cat)  < > Move (double tap: dash)   ^ Jump   v Fast fall        P2 (blocks)  A/D Move   Q/E Rotate   S Drop (double tap: slam, after landing: lock)        R New match   ESC Title","P1(고양이)  < > 이동 (더블탭: 대시)   ^ 점프   v 빠른 낙하        P2(블록)  A/D 이동   Q/E 회전   S 낙하 (더블탭: 슬램, 착지 후: 고정)        R 새 대결   ESC 타이틀","[Þ1 (çàţ)  < > Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)   ^ Ĵüɱþ   ṽ Ƒàşţ ƒàłł        Þ2 (ƀłôçķş)  Å/Ð Ṁôṽé   Ɋ/É Řôţàţé   Ş Ðřôþ (ðôüƀłé ţàþ: şłàɱ, àƒţéř łàńðïńğ: łôçķ)        Ř Ńéŵ ɱàţçĥ   ÉŞÇ Ţïţłé —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]"
+TUT_KEYS_SPLIT,"P1 (left)  A/D Move (double tap: dash)   W Jump   S Fall   Q/E Rotate   Ctrl Dash        P2 (right)  < > Move   ^ Jump   v Fall   , . Rotate   Shift Dash        R New match   ESC Title","P1(왼쪽)  A/D 이동 (더블탭: 대시)   W 점프   S 낙하   Q/E 회전   Ctrl 대시        P2(오른쪽)  < > 이동   ^ 점프   v 낙하   , . 회전   Shift 대시        R 새 대결   ESC 타이틀","[Þ1 (łéƒţ)  Å/Ð Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)   Ŵ Ĵüɱþ   Ş Ƒàłł   Ɋ/É Řôţàţé   Çţřł Ðàşĥ        Þ2 (řïğĥţ)  < > Ṁôṽé   ^ Ĵüɱþ   ṽ Ƒàłł   , . Řôţàţé   Şĥïƒţ Ðàşĥ        Ř Ńéŵ ɱàţçĥ   ÉŞÇ Ţïţłé ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]"
+TOUCH_TITLE,Title,타이틀,[Ţïţłé ————]
+TOUCH_ROT_CCW,◀ Rotate,◀ 회전,[◀ Řôţàţé ——————]
+TOUCH_ROT_CW,Rotate ▶,회전 ▶,[Řôţàţé ▶ ——————]
+TOUCH_JUMP,Jump,점프,[Ĵüɱþ ———]
+VS_TALLY,P1 Cat  {p1} : {p2}  Blocks P2,P1 고양이  {p1} : {p2}  블록 P2,[Þ1 Çàţ  {p1} : {p2}  Ɓłôçķş Þ2 ————————————————————————]
+VS_CAT,Cat (P1),고양이 (P1),[Çàţ (Þ1) ——————]
+VS_BLOCKS,Blocks (P2),블록 (P2),[Ɓłôçķş (Þ2) ————————]
+VS_ROUND_WIN,{who} wins the round!,{who} 라운드 승리!,[{who} ŵïńş ţĥé řôüńð! ————————————————]
+VS_MATCH_WIN,"{who} wins the match!
+{p1} : {p2}
+
+R New match  ·  ESC Title","{who} 최종 승리!
+{p1} : {p2}
+
+R 새 대결  ·  ESC 타이틀","[{who} ŵïńş ţĥé ɱàţçĥ! ————————————————]
+[{p1} : {p2} ————————]
+[]
+[Ř Ńéŵ ɱàţçĥ  ·  ÉŞÇ Ţïţłé ————————————————————]"
+SPLIT_SCORE,P{n}   {floors} F,P{n}   {floors}층,[Þ{n}   {floors} Ƒ —————————————]
+MENU_TAGLINE,A cube cat's great escape from the pit,구덩이에 빠진 큐브 고양이의 탈출극,[Å çüƀé çàţ'ş ğřéàţ éşçàþé ƒřôɱ ţĥé þïţ ——————————————————————————————]
+MENU_MODE_SELECT,Select Mode,모드 선택,[Şéłéçţ Ṁôðé ————————]
+MENU_CHARACTER,🐱  Character,🐱  캐릭터,[🐱  Çĥàřàçţéř —————————]
+MENU_SHOP,🛍  Shop,🛍  상점,[🛍  Şĥôþ —————]
+MENU_RANKING,🏆  Ranking,🏆  랭킹,[🏆  Řàńķïńğ ————————]
+MENU_SETTINGS,⚙  Settings,⚙  설정,[⚙  Şéţţïńğş ————————]
+MENU_KEYCAP_DEX,▦  Keycap Dex,▦  키캡 도감,[▦  Ķéÿçàþ Ðéẋ ——————————]
+MENU_WEEKLY_PRIZE,Last week's ranking prize!  +{gold} G,지난주 랭킹 보상!  +{gold} G,[Łàşţ ŵééķ'ş řàńķïńğ þřïżé!  +{gold} Ğ —————————————————————————————]
+MENU_HINT,Click / tap a button  or press 1 ~ 7   (6 · 7 = split-screen 2P),버튼 클릭 / 터치  또는  1 ~ 7 키로 선택   (6 · 7 = 화면 분할 2인),[Çłïçķ / ţàþ à ƀüţţôń  ôř þřéşş 1 ~ 7   (6 · 7 = şþłïţ-şçřééń 2Þ) ———————————————————————————————————————————————————]
+MODE_STORY,Story Mode,스토리 모드,[Şţôřÿ Ṁôðé ————————]
+MODE_STORY_DESC,Learn the cat's escape story stage by stage — starting from the tutorial!,스테이지를 깨며 배우는 고양이의 탈출 이야기 — 튜토리얼부터 차근차근!,[Łéàřń ţĥé çàţ'ş éşçàþé şţôřÿ şţàğé ƀÿ şţàğé — şţàřţïńğ ƒřôɱ ţĥé ţüţôřïàł! ——————————————————————————————————————————————————————————]
+MODE_ENDLESS,Endless Stairs,무한의 계단,[Éńðłéşş Şţàïřş ———————————]
+MODE_ENDLESS_DESC,Stack blocks forever and climb as high as you can!,끝없이 블록을 쌓으며 최대한 높이 올라가자!,[Şţàçķ ƀłôçķş ƒôřéṽéř àńð çłïɱƀ àş ĥïğĥ àş ÿôü çàń! ————————————————————————————————————————]
+MODE_VERSUS,2P Versus,2P 대전 모드,[2Þ Ṽéřşüş ———————]
+MODE_VERSUS_DESC,"P1 the cat escapes, P2 the blocks crush — one keyboard duel!","P1 고양이는 탈출, P2 블록은 뭉개기 — 한 키보드 대결!","[Þ1 ţĥé çàţ éşçàþéş, Þ2 ţĥé ƀłôçķş çřüşĥ — ôńé ķéÿƀôàřð ðüéł! ————————————————————————————————————————————————]"
+MODE_CLASSIC,Stage Mode,스테이지 모드,[Şţàğé Ṁôðé ————————]
+MODE_CLASSIC_DESC,Clear the goal lines and the shutter drops for the next board — one LEVEL is one stage!,목표 줄을 지우면 셔터가 내려오고 다음 판 — LEVEL 하나가 스테이지 하나!,[Çłéàř ţĥé ğôàł łïńéş àńð ţĥé şĥüţţéř ðřôþş ƒôř ţĥé ńéẋţ ƀôàřð — ôńé ŁÉṼÉŁ ïş ôńé şţàğé! —————————————————————————————————————————————————————————————————————]
+MODE_CLASSIC_DESC_BEST,One LEVEL is one board — best score  {best} pts,LEVEL 하나가 판 하나 — 최고 기록  {best}점,[Ôńé ŁÉṼÉŁ ïş ôńé ƀôàřð — ƀéşţ şçôřé  {best} þţş —————————————————————————————————————]
+MODE_PICNIC,Jelly Picnic  ♥ Cozy,젤리 피크닉  ♥ 편안함,[Ĵéłłÿ Þïçńïç  ♥ Çôżÿ ————————————————]
+MODE_PICNIC_DESC,A healing mode where nobody dies — nom up jelly fish for 2 minutes!,아무도 죽지 않는 힐링 모드 — 2분 동안 젤리 생선을 냠냠 모으자!,[Å ĥéàłïńğ ɱôðé ŵĥéřé ńôƀôðÿ ðïéş — ńôɱ üþ ĵéłłÿ ƒïşĥ ƒôř 2 ɱïńüţéş! —————————————————————————————————————————————————————]
+MODE_SPLIT_6,Split-screen 2P,2인 분할,[Şþłïţ-şçřééń 2Þ ————————————]
+MODE_SPLIT_7,Split-screen 2P,2인 분할,[Şþłïţ-şçřééń 2Þ ————————————]
+CHAR_SELECT,Select Character,캐릭터 선택,[Şéłéçţ Çĥàřàçţéř ————————————]
+CHAR_UNLOCK_HEIGHT,Endless {n} F,무한 {n}층,[Éńðłéşş {n} Ƒ ——————————]
+CHAR_UNLOCK_SCORE,Stage {n} pts,스테이지 {n}점,[Şţàğé {n} þţş ——————————]
+CHAR_UNLOCK_PLAYS,{n} plays,{n}판 플레이,[{n} þłàÿş ———————]
+CHAR_EQUIPPED,Equipped,장착 중,[Éɋüïþþéð ——————]
+CHAR_SELECT_BTN,Select,선택하기,[Şéłéçţ ————]
+CHAR_BUY_GOLD,Buy  {amount} G,구매  {amount} G,[Ɓüÿ  {amount} Ğ ————————————]
+CHAR_BUY_GEMS,Buy  ◆ {amount},구매  ◆ {amount},[Ɓüÿ  ◆ {amount} ————————————]
+CHAR_CUSTOMIZE,🎨 Customize,🎨 꾸미기,[🎨 Çüşţôɱïżé ————————]
+CHAR_AFFECTION,Affection Lv.{level}   {hearts},애정도 Lv.{level}   {hearts},[Åƒƒéçţïôń Łṽ.{level}   {hearts} ————————————————————————]
+CHAR_AFFECTION_BONUS,   Stats +{pct}%,   능력 +{pct}%,[   Şţàţş +{pct}% ————————————]
+CHAR_FEED_MAX,Affection MAX  ·  Best friends!,애정도 MAX  ·  최고의 단짝!,[Åƒƒéçţïôń ṀÅẊ  ·  Ɓéşţ ƒřïéńðş! ————————————————————————]
+CHAR_FEED,Feed a snack  {price} G   ({left} more to next level),간식 주기  {price} G   (다음 레벨까지 {left}개),[Ƒééð à şńàçķ  {price} Ğ   ({left} ɱôřé ţô ńéẋţ łéṽéł) ——————————————————————————————————————————]
+CHAR_FEED_HAPPY,{name} loves it! ♥,{name} (이)가 좋아한다냥! ♥,[{name} łôṽéş ïţ! ♥ ——————————————]
+CHAR_FEED_LEVEL,Affection level up!  Lv.{level} — stats +{pct}%,애정도 레벨 업!  Lv.{level} — 능력 +{pct}%,[Åƒƒéçţïôń łéṽéł üþ!  Łṽ.{level} — şţàţş +{pct}% —————————————————————————————————————]
+CHAR_FEED_EVOLVE,{name} has transformed!! Lv.{level},{name} (이)의 모습이 변했다!! Lv.{level},[{name} ĥàş ţřàńşƒôřɱéð!! Łṽ.{level} ————————————————————————————]
+CHAR_RECRUITED,{name} joined the crew!,{name} 냥이 영입 완료!,[{name} ĵôïńéð ţĥé çřéŵ! ——————————————————]
+CHAR_HAVE_GOLD,Gold on hand  {gold} G,보유 골드  {gold} G,[Ğôłð ôń ĥàńð  {gold} Ğ —————————————————]
+CHAR_HAVE_GEMS,Gems on hand  ◆ {gems},보유 보석  ◆ {gems},[Ğéɱş ôń ĥàńð  ◆ {gems} —————————————————]
+CHAR_LOCK_HEIGHT,Unlocks at Endless {need} F  (best {best} F),무한의 계단 {need}층 도달 시 해금  (최고 {best}층),[Üńłôçķş àţ Éńðłéşş {need} Ƒ  (ƀéşţ {best} Ƒ) ———————————————————————————————————]
+CHAR_LOCK_SCORE,Unlocks at Stage Mode {need} pts  (best {best} pts),스테이지 모드 {need}점 달성 시 해금  (최고 {best}점),[Üńłôçķş àţ Şţàğé Ṁôðé {need} þţş  (ƀéşţ {best} þţş) ————————————————————————————————————————]
+CHAR_LOCK_PLAYS,Unlocks after {need} plays  (now {now}),총 {need}판 플레이 시 해금  (현재 {now}판),[Üńłôçķş àƒţéř {need} þłàÿş  (ńôŵ {now}) ———————————————————————————————]
+STAT_SPEED,Speed,이동,[Şþééð ————]
+STAT_JUMP,Jump,점프,[Ĵüɱþ ———]
+STAT_DASH,Dash,대시,[Ðàşĥ ———]
+STAT_WEIGHT,Weight,무게,[Ŵéïğĥţ ————]
+STAT_PUSH,Push,밀기,[Þüşĥ ———]
+SHOP_TITLE,🛍  Meow Meow Shop,🛍  냥냥 상점,[🛍  Ṁéôŵ Ṁéôŵ Şĥôþ —————————————]
+SHOP_HEAD,Head Accessories,머리 장식,[Ĥéàð Åççéşşôřïéş ————————————]
+SHOP_NECK,Neck Accessories,목 장식,[Ńéçķ Åççéşşôřïéş ————————————]
+SHOP_BOOSTS,Next-run boosts  ·  one Endless run each,다음 판 부스트  ·  무한의 계단 1판 소모,[Ńéẋţ-řüń ƀôôşţş  ·  ôńé Éńðłéşş řüń éàçĥ ————————————————————————————————]
+SHOP_WALLET,On hand   {gold} G      ◆ {gems},보유   {gold} G      ◆ {gems},[Ôń ĥàńð   {gold} Ğ      ◆ {gems} —————————————————————————]
+SHOP_OWNED,Owned · tap to equip,보유 · 눌러서 장착,[Ôŵńéð · ţàþ ţô éɋüïþ ————————————————]
+SHOP_BOUGHT,Bought {name}!,{name} 구매 완료!,[Ɓôüğĥţ {name}! ———————————]
+SHOP_NO_GOLD,Not enough gold!,골드가 부족해요!,[Ńôţ éńôüğĥ ğôłð! ————————————]
+SHOP_NO_GEMS,Not enough gems!,보석이 부족해요!,[Ńôţ éńôüğĥ ğéɱş! ————————————]
+SHOP_BOOST_READY,Ready! (press again to refund),준비 완료! (다시 누르면 환불),[Řéàðÿ! (þřéşş àğàïń ţô řéƒüńð) ————————————————————————]
+SHOP_BOOST_BUY,Press to buy,누르면 구매,[Þřéşş ţô ƀüÿ —————————]
+RANK_TITLE,🏆  Ranking,🏆  랭킹,[🏆  Řàńķïńğ ————————]
+RANK_MY_NAME,My Name,내 이름,[Ṁÿ Ńàɱé —————]
+RANK_RENAME,Change,변경,[Çĥàńğé ————]
+RANK_RENAMED,Your name is now '{name}'!,이름이 '{name}' (으)로 바뀌었어요!,[Ÿôüř ńàɱé ïş ńôŵ '{name}'! ————————————————————]
+RANK_WEEKLY,Weekly,주간 랭킹,[Ŵééķłÿ ————]
+RANK_ALLTIME,All-time,누적 랭킹,[Åłł-ţïɱé ——————]
+RANK_RESET_IN,Resets in {time}   ·   Top 3 prizes  ◆5+500G / ◆3+300G / ◆2+200G,초기화까지 {time}   ·   1~3위 보상  ◆5+500G / ◆3+300G / ◆2+200G,[Řéşéţş ïń {time}   ·   Ţôþ 3 þřïżéş  ◆5+500Ğ / ◆3+300Ğ / ◆2+200Ğ ———————————————————————————————————————————————————]
+RANK_LOADING,Loading...,불러오는 중...,[Łôàðïńğ... ————————]
+RANK_SCOPE_WEEK,This week's,이번 주,[Ţĥïş ŵééķ'ş ————————]
+RANK_SCOPE_MINE,My,내,[Ṁÿ]
+RANK_MY_RANK,{scope} rank  #{rank}  ·  {value},{scope} 순위  {rank}위  ·  {value},[{scope} řàńķ  #{rank}  ·  {value} ——————————————————————————]
+RANK_MY_RANK_MOCK,{scope} rank  #{rank}  ·  {value}   (other players are placeholder data),{scope} 순위  {rank}위  ·  {value}   (다른 유저는 임시 데이터),[{scope} řàńķ  #{rank}  ·  {value}   (ôţĥéř þłàÿéřş àřé þłàçéĥôłðéř ðàţà) —————————————————————————————————————————————————————————]
+RANK_NONE_MOCK,No record yet — finish one run to register!   (other players are placeholder data),아직 내 기록 없음 — 한 판 달리면 자동 등록!   (다른 유저는 임시 데이터),[Ńô řéçôřð ÿéţ — ƒïńïşĥ ôńé řüń ţô řéğïşţéř!   (ôţĥéř þłàÿéřş àřé þłàçéĥôłðéř ðàţà) —————————————————————————————————————————————————————————————————]
+RANK_NONE,No rank yet — set a record and you're in!,아직 순위 없음 — 기록을 세우면 자동 등록!,[Ńô řàńķ ÿéţ — şéţ à řéçôřð àńð ÿôü'řé ïń! ————————————————————————————————]
+RANK_SUBMITTING,Submitting... try refreshing in a moment,등록 중... 잠시 후 새로고침해 보세요,[Şüƀɱïţţïńğ... ţřÿ řéƒřéşĥïńğ ïń à ɱôɱéńţ ————————————————————————————————]
+RANK_BE_FIRST,Be the very first record holder!,첫 기록의 주인공이 되어보자냥!,[Ɓé ţĥé ṽéřÿ ƒïřşţ řéçôřð ĥôłðéř! —————————————————————————]
+RANK_POSITION,#{rank},{rank}위,[#{rank} —————]
+RANK_MY_RECORD,My record,내 기록,[Ṁÿ řéçôřð ———————]
+RANK_ME_MARK,   ◀ me,   ◀ 나,[   ◀ ɱé —————]
+RANK_REPLAY_FAIL,Couldn't load that replay,리플레이를 불러올 수 없어요,[Çôüłðń'ţ łôàð ţĥàţ řéþłàÿ ————————————————————]
+KEYCAP_TITLE,▦ Keycap Dex,▦ 키캡 도감,[▦ Ķéÿçàþ Ðéẋ —————————]
+KEYCAP_HINT,Clear a line holding a keycap block and the keycap is yours!,블록에 나타난 키캡이 있는 줄을 지우면 키캡을 모을 수 있다냥!,[Çłéàř à łïńé ĥôłðïńğ à ķéÿçàþ ƀłôçķ àńð ţĥé ķéÿçàþ ïş ÿôüřş! ————————————————————————————————————————————————]
+KEYCAP_STATS,Collected  {kinds} / 26 kinds   ·   {total} total,모은 키캡  {kinds} / 26 종   ·   총 {total}개,[Çôłłéçţéð  {kinds} / 26 ķïńðş   ·   {total} ţôţàł ———————————————————————————————————————]
+HUD_EXIT_OPEN,The exit is open!,출구가 열렸다!,[Ţĥé éẋïţ ïş ôþéń! —————————————]
+STORY_ALL_CLEAR,All stages cleared,모든 스테이지 클리어,[Åłł şţàğéş çłéàřéð ——————————————]
+STORY_COMPLETE,Story complete!,스토리 완주!,[Şţôřÿ çôɱþłéţé! ————————————]
+STORY_COMPLETE_DESC,Congrats! Now take on the Endless Stairs,축하해냥! 이제 무한의 계단에 도전해보자,[Çôńğřàţş! Ńôŵ ţàķé ôń ţĥé Éńðłéşş Şţàïřş ————————————————————————————————]
+STORY_TAP_TO_TITLE,Tap or any key → Title,탭 또는 아무 키 → 타이틀로,[Ţàþ ôř àńÿ ķéÿ → Ţïţłé —————————————————]
+TUT_KEYS_MOBILE,Left ◀ ▶ move · ▼ drop   |   Right rotate · ▲ jump,왼쪽 ◀ ▶ 이동 · ▼ 낙하   |   오른쪽 회전 · ▲ 점프,[Łéƒţ ◀ ▶ ɱôṽé · ▼ ðřôþ   |   Řïğĥţ řôţàţé · ▲ ĵüɱþ ————————————————————————————————————————]
+TOUCH_ROT_M,⟳ Rotate,⟳ 회전,[⟳ Řôţàţé ——————]
+TOUCH_JUMP_M,▲ Jump,▲ 점프,[▲ Ĵüɱþ ————]
+RANK_DUR_DH,{d}d {h}h,{d}일 {h}시간,[{d}ð {h}ĥ ———————]
+RANK_DUR_HM,{h}h {m}m,{h}시간 {m}분,[{h}ĥ {m}ɱ ———————]
+RANK_DUR_M,{m}m,{m}분,[{m}ɱ ———]
+CC_TITLE,CAT CREATOR 3000,냥이 크리에이터 3000,[ÇÅŢ ÇŘÉÅŢÔŘ 3000 ————————————]
+CC_SUBTITLE,CAT CREATOR 3000™ — ULTIMATE EDITION  v9.99 (genuine),CAT CREATOR 3000™ — ULTIMATE EDITION  v9.99 (정품),[ÇÅŢ ÇŘÉÅŢÔŘ 3000™ — ÜŁŢÏṀÅŢÉ ÉÐÏŢÏÔŃ  ṽ9.99 (ğéńüïńé) ——————————————————————————————————————————]
+CC_ENGINE_LINE,CAT-RENDER ENGINE v9.99 · running feline-dynamics simulation,CAT-RENDER ENGINE v9.99 · 냥체역학 시뮬레이션 가동 중,[ÇÅŢ-ŘÉŃÐÉŘ ÉŃĞÏŃÉ ṽ9.99 · řüńńïńğ ƒéłïńé-ðÿńàɱïçş şïɱüłàţïôń ————————————————————————————————————————————————]
+CC_SCANNING,Scanning genome,유전자 스캔 중,[Şçàńńïńğ ğéńôɱé ————————————]
+CC_RESET,Factory Reset,공장 초기화,[Ƒàçţôřÿ Řéşéţ ——————————]
+CC_CONFIRM,✔ Deploy this look!,✔ 이 모습으로 출격!,[✔ Ðéþłôÿ ţĥïş łôôķ! ———————————————]
+CC_JOKE,※ Cats are 2D and therefore have no back side,※ 냥이는 2D이므로 뒷모습이 존재하지 않습니다,[※ Çàţş àřé 2Ð àńð ţĥéřéƒôřé ĥàṽé ńô ƀàçķ şïðé ————————————————————————————————————]
+CC_FLAVOR_WELCOME,Welcome to the Cat Creator.,냥이 크리에이터에 오신 것을 환영합니다.,[Ŵéłçôɱé ţô ţĥé Çàţ Çřéàţôř. —————————————————————]
+CC_FLAVOR_OPEN,Scanning genome... prepare for the perfect catsign.,유전자 스캔 중... 완벽한 냥자인을 준비하세요.,[Şçàńńïńğ ğéńôɱé... þřéþàřé ƒôř ţĥé þéřƒéçţ çàţşïğń. ————————————————————————————————————————]
+CC_FLAVOR_RANDOM,Random gene splice complete!! We take no responsibility.,유전자 무작위 재조합 완료!! 결과는 책임지지 않습니다.,[Řàńðôɱ ğéńé şþłïçé çôɱþłéţé!! Ŵé ţàķé ńô řéşþôńşïƀïłïţÿ. ————————————————————————————————————————————]
+CC_FLAVOR_RESET,Factory reset done. (The cat's memories are intact.),공장 초기화 완료. (냥이의 기억은 무사합니다),[Ƒàçţôřÿ řéşéţ ðôńé. (Ţĥé çàţ'ş ɱéɱôřïéş àřé ïńţàçţ.) —————————————————————————————————————————]
+CC_FLAVOR_COLOR,Color gene injected.,빛깔 유전자 주입 완료.,[Çôłôř ğéńé ïńĵéçţéð. ————————————————]
+CC_RANDOM,🎲 Roll a Catsign,🎲 운명의 냥자인,[🎲 Řôłł à Çàţşïğń ————————————]

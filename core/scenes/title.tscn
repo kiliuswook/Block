@@ -25,7 +25,7 @@ offset_bottom = 292.0
 theme_override_font_sizes/font_size = 28
 theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 horizontal_alignment = 1
-text = "구덩이에 빠진 큐브 고양이의 탈출극"
+text = "MENU_TAGLINE"
 
 [node name="EscapeBtn" type="Button" parent="UI"]
 offset_left = 710.0
@@ -33,7 +33,7 @@ offset_top = 304.0
 offset_right = 1210.0
 offset_bottom = 364.0
 theme_override_font_sizes/font_size = 32
-text = "1.  스토리 모드"
+text = "MODE_STORY"
 
 [node name="EscapeDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -43,7 +43,7 @@ offset_bottom = 390.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "스테이지를 깨며 배우는 고양이의 탈출 이야기 — 튜토리얼부터 차근차근!"
+text = "MODE_STORY_DESC"
 
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0
@@ -51,7 +51,7 @@ offset_top = 394.0
 offset_right = 1210.0
 offset_bottom = 454.0
 theme_override_font_sizes/font_size = 32
-text = "2.  무한의 계단 모드"
+text = "MODE_ENDLESS"
 
 [node name="EndlessDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -61,7 +61,7 @@ offset_bottom = 480.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "끝없이 블록을 쌓으며 최대한 높이 올라가자!"
+text = "MODE_ENDLESS_DESC"
 
 [node name="VersusBtn" type="Button" parent="UI"]
 offset_left = 710.0
@@ -69,7 +69,7 @@ offset_top = 484.0
 offset_right = 1210.0
 offset_bottom = 544.0
 theme_override_font_sizes/font_size = 32
-text = "3.  2P 대전 모드"
+text = "MODE_VERSUS"
 
 [node name="VersusDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -79,7 +79,7 @@ offset_bottom = 570.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "P1 고양이는 탈출, P2 블록은 뭉개기 — 한 키보드 대결!"
+text = "MODE_VERSUS_DESC"
 
 [node name="ClassicBtn" type="Button" parent="UI"]
 offset_left = 710.0
@@ -87,7 +87,7 @@ offset_top = 574.0
 offset_right = 1210.0
 offset_bottom = 634.0
 theme_override_font_sizes/font_size = 32
-text = "4.  클래식 테트리스"
+text = "MODE_CLASSIC"
 
 [node name="ClassicDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -97,7 +97,7 @@ offset_bottom = 660.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "고전 오락실 규칙 그대로 — 10줄마다 셔터가 내려오는 LEVEL 승부!"
+text = "MODE_CLASSIC_DESC"
 
 [node name="PicnicBtn" type="Button" parent="UI"]
 offset_left = 710.0
@@ -106,7 +106,7 @@ offset_right = 1210.0
 offset_bottom = 724.0
 theme_override_font_sizes/font_size = 32
 theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 1)
-text = "5.  젤리 피크닉  ♥ 편안함"
+text = "MODE_PICNIC"
 
 [node name="PicnicDesc" type="Label" parent="UI"]
 offset_left = 710.0
@@ -116,7 +116,7 @@ offset_bottom = 750.0
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
-text = "아무도 죽지 않는 힐링 모드 — 2분 동안 젤리 생선을 냠냠 모으자!"
+text = "MODE_PICNIC_DESC"
 
 [node name="Escape2Btn" type="Button" parent="UI"]
 offset_left = 1226.0
@@ -124,7 +124,7 @@ offset_top = 304.0
 offset_right = 1400.0
 offset_bottom = 364.0
 theme_override_font_sizes/font_size = 24
-text = "6. 2인 분할"
+text = "MODE_SPLIT_6"
 
 [node name="Endless2Btn" type="Button" parent="UI"]
 offset_left = 1226.0
@@ -132,7 +132,7 @@ offset_top = 394.0
 offset_right = 1400.0
 offset_bottom = 454.0
 theme_override_font_sizes/font_size = 24
-text = "7. 2인 분할"
+text = "MODE_SPLIT_7"
 
 [node name="HintLabel" type="Label" parent="UI"]
 offset_left = 460.0
@@ -142,4 +142,4 @@ offset_bottom = 1040.0
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 0.4)
 horizontal_alignment = 1
-text = "버튼 클릭 / 터치  또는  1 ~ 7 키로 선택   (6 · 7 = 화면 분할 2인)"
+text = "MENU_HINT"

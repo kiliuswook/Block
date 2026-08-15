@@ -97,7 +97,7 @@ offset_top = 1330.0
 offset_right = 1040.0
 offset_bottom = 1370.0
 theme_override_font_sizes/font_size = 22
-text = "왼쪽 ◀ ▶ 이동 · ▼ 낙하   |   오른쪽 회전 · ▲ 점프"
+text = "TUT_KEYS_MOBILE"
 
 [node name="TouchControls" parent="."]
 script = ExtResource("2_touch")
@@ -144,7 +144,7 @@ offset_left = 600.0
 offset_top = 1430.0
 offset_right = 1050.0
 offset_bottom = 1610.0
-label = "⟳ 회전"
+label = "TOUCH_ROT_M"
 font_size = 40
 
 [node name="DropButton" parent="TouchControls"]
@@ -158,5 +158,5 @@ offset_left = 600.0
 offset_top = 1650.0
 offset_right = 1050.0
 offset_bottom = 1870.0
-label = "▲ 점프"
+label = "TOUCH_JUMP_M"
 font_size = 40

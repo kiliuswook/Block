@@ -225,6 +225,7 @@ func _ready() -> void:
 	b2.grid[Vector2i(4, 5)] = "T"
 	b2.cracked[Vector2i(4, 5)] = true
 	b2.lava_y = 2000.0
+	b2.ore[Vector2i(2, 6)] = EscapeBoard.ORE_VALUE  # a seam sitting in that row
 	var gold_before: int = GameState.gold
 	var lava_pushed_from: float = b2.lava_y
 	var endless_cleared: int = b2._clear_lines()
@@ -232,10 +233,57 @@ func _ready() -> void:
 	_check(not b2.grid.has(Vector2i(0, 6)), "cleared row is gone")
 	_check(b2.grid.has(Vector2i(4, 5)), "endless clear leaves the stack floating")
 	_check(b2.cracked.has(Vector2i(4, 5)), "endless clear keeps the crack in place")
+	_check(GameState.gold == gold_before + EscapeBoard.ORE_VALUE,
+			"clearing a line banks the ore that was in it")
+	_check(b2.ore.is_empty(), "the cashed-in seam is gone")
 	b2._endless_line_reward(endless_cleared)
 	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
-	_check(GameState.gold == gold_before + EscapeBoard.GOLD_PER_CLEAR[1],
-			"line clear pays gold on the spot")
+
+	# --- Gold: seams in blocks, riders on pieces, loose nuggets ----------------
+	b2.grid.clear()
+	b2.cracked.clear()
+	b2.ore.clear()
+	b2.nuggets.clear()
+	b2.playing = true
+	p2.alive = true
+	GameState.gold = 0
+	# Smashing an ore block open banks what was inside it.
+	b2.grid[Vector2i(3, 8)] = "T"
+	b2.cracked[Vector2i(3, 8)] = true
+	b2.ore[Vector2i(3, 8)] = EscapeBoard.ORE_VALUE
+	b2.break_cell_in_rect(b2._cell_rect(Vector2i(3, 8)))
+	_check(GameState.gold == EscapeBoard.ORE_VALUE and b2.ore.is_empty(),
+			"breaking an ore block banks the gold")
+	# A piece carrying ore leaves the seam behind when it locks.
+	b2.grid.clear()
+	b2.cracked.clear()
+	b2._merge_piece("O", 0, Vector2i(0, 8), 0)
+	_check(b2.ore.size() == 1, "a locked piece leaves its seam in the stack")
+	# The perched nugget loses its footing the moment the piece turns.
+	b2.grid.clear()
+	b2.ore.clear()
+	b2.nuggets.clear()
+	b2.piece_type = "T"
+	b2.piece_rot = 0
+	b2.piece_pos = Vector2i(3, 2)
+	b2.piece_state = b2.PieceState.TRACKING
+	b2.rider = {"col": 1, "amount": EscapeBoard.RIDER_VALUE}
+	b2._try_rotate(1)
+	_check(b2.rider.is_empty() and b2.nuggets.size() == 1,
+			"rotating shakes the perched nugget loose")
+	# Walking into a loose nugget banks it.
+	GameState.gold = 0
+	b2.nuggets[0].pos = p2.position
+	b2._update_nuggets(0.016)
+	_check(b2.nuggets.is_empty() and GameState.gold == EscapeBoard.RIDER_VALUE,
+			"the cat picks nuggets up by touch")
+	# Fever turns the pit into a downpour of gold.
+	b2.fever_active = true
+	b2.fever_rain_timer = 0.0
+	b2._update_fever_rain(0.01)
+	_check(b2.nuggets.size() == 1, "fever rains nuggets from above")
+	b2.fever_active = false
+	b2.nuggets.clear()
 	b2.grid.clear()
 	b2.cracked.clear()
 	b2.lava_y = p2.position.y  # restore the lava-death state for the revive tests

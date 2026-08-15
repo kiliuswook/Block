@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c1d3jpb7qxywt"
+
+[deps]
+
+files=["res://shared/locale/flavor.en.translation", "res://shared/locale/flavor.ko.translation", "res://shared/locale/flavor.en_XA.translation"]
+
+source_file="res://shared/locale/flavor.csv"
+dest_files=["res://shared/locale/flavor.en.translation", "res://shared/locale/flavor.ko.translation", "res://shared/locale/flavor.en_XA.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

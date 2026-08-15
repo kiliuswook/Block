@@ -2,19 +2,21 @@ extends Node2D
 ## Title screen: pick a game mode with the buttons or the 1 / 2 keys,
 ## and pick / buy a cube-cat skin in the character row at the bottom.
 
-const CREAM := Color("f4e3c8")
-const GOLD_COL := Color(1.0, 0.85, 0.35)
-const GEM_COL := Color(0.55, 0.85, 1.0)
-const INK := Color("2a2230")
+const UiKit := preload("res://core/scripts/ui_kit.gd")
+
+const CREAM := UiKit.CREAM
+const GOLD_COL := UiKit.GOLD_DEEP  # 흰 패널 위에서도 읽히는 진한 금색
+const GEM_COL := UiKit.CYAN_DEEP
+const INK := UiKit.INK
 
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
-const TILE_SIZE := Vector2(128.0, 168.0)
+const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
 const POPUP_SIZE := Vector2(620.0, 700.0)
 const SHOP_TILE := Vector2(200.0, 210.0)
-const STAT_ROWS := [["이동", "speed"], ["점프", "jump"], ["대시", "dash"],
-		["무게", "weight"], ["밀기", "push"]]
+const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
+		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 const KEY_GAP := 8.0
 
@@ -25,6 +27,12 @@ const KEY_GAP := 8.0
 @onready var picnic_btn: Button = $UI/PicnicBtn
 @onready var escape2_btn: Button = $UI/Escape2Btn
 @onready var endless2_btn: Button = $UI/Endless2Btn
+# 설명 라벨은 모드 오버레이 안으로 옮겨지므로 참조를 미리 잡아 둔다.
+@onready var escape_desc: Label = $UI/EscapeDesc
+@onready var endless_desc: Label = $UI/EndlessDesc
+@onready var versus_desc: Label = $UI/VersusDesc
+@onready var classic_desc: Label = $UI/ClassicDesc
+@onready var picnic_desc: Label = $UI/PicnicDesc
 
 # 레이아웃은 뷰포트 크기 기준으로 계산 — 모바일(세로 1080×1920)도 같은 코드를 쓴다.
 var vw := 1920.0
@@ -51,13 +59,20 @@ var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
 var _boost_chips := {}  # boost id -> Button
 var _shop_wallet: Label
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
+var _modes: Control  # PLAY로 여는 모드 선택 오버레이
+var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
+var _char_rows: Control  # 캐릭터 타일이 놓이는 컨테이너
+var _cat_anchor := Vector2(1420.0, 660.0)  # 타이틀 큐브 고양이 자리
+var _cat_size := 300.0
+var _logo_top := 90.0
+var _logo_cell := 46.0
 var _keycap_dex: Control
 var _keycap_board: Control
 var _keycap_stats: Label
 var _ranks: Control
 var _rank_tabs := {}  # mode key -> Button
 var _rank_scopes := {}  # true (주간) / false (누적) -> Button
-var _rank_mode := "endless"
+var _rank_mode := "classic"
 var _rank_weekly := true
 var _rank_list: VBoxContainer
 var _rank_status: Label
@@ -71,26 +86,31 @@ func _ready() -> void:
 	preload("res://core/scripts/boot.gd").dev_platform = ""
 	vw = get_viewport_rect().size.x
 	vh = get_viewport_rect().size.y
-	escape_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY))
-	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
-	versus_btn.pressed.connect(func() -> void: _start(GameState.MODE_VERSUS))
+	UiKit.apply_theme($UI)
+	# 로고는 코드로 그린다 — 씬의 텍스트 타이틀은 숨긴다.
+	$UI/TitleLabel.visible = false
+	$UI/SubtitleLabel.visible = false
+	$UI/HintLabel.visible = false
 	classic_btn.pressed.connect(func() -> void: _start(GameState.MODE_CLASSIC))
-	picnic_btn.pressed.connect(func() -> void: _start(GameState.MODE_PICNIC))
-	escape2_btn.pressed.connect(func() -> void: _start(GameState.MODE_STORY, true))
-	endless2_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS, true))
+	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
 	_refresh_classic_desc()
-	_refresh_picnic_desc()
-	_refresh_story_desc()
+	_compute_layout()
 	_build_currency_display()
 	_build_character_row()
 	_build_popup()
 	_build_toast()
 	_build_settings()
+	_build_mode_select()
+	_build_menu()
 	_build_shop()
 	_build_ranks()
 	_build_keycap_dex()
 	_customizer = CAT_CUSTOMIZER.new()
 	$UI.add_child(_customizer)
+	UiKit.apply_theme($UI)  # 코드로 만든 오버레이까지 컨셉 테마를 덮는다
+	# 냥이 크리에이터·리플레이 뷰어는 의도적으로 어두운 무대 연출 — 테마 제외.
+	_customizer.theme = null
+	_replay_viewer.theme = null
 	_customizer.changed.connect(func() -> void:
 		_refresh_tiles()
 		if _popup and _popup.visible:
@@ -100,7 +120,7 @@ func _ready() -> void:
 			_refresh_rank_list())
 	Ranks.weekly_reward.connect(func(g: int, gm: int) -> void:
 		Sfx.play("record")
-		var line := "지난주 랭킹 보상!  +%d G" % g
+		var line := tr("MENU_WEEKLY_PRIZE").format({"gold": g})
 		if gm > 0:
 			line += "  +%d ◆" % gm
 		_show_toast(line, GOLD_COL)
@@ -115,28 +135,11 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 
-## Story button subtitle mirrors the saved progress.
-func _refresh_story_desc() -> void:
-	var total := StoryStages.TOTAL
-	var desc: Label = $UI/EscapeDesc
-	if GameState.story_stage >= total:
-		desc.text = "전 스테이지 클리어! 처음부터 다시 도전할 수 있다"
-	elif GameState.story_stage > 0:
-		desc.text = "이어서 도전  —  STAGE %d / %d" % [GameState.story_stage + 1, total]
-
-
-## Classic-mode subtitle carries the arcade high score.
+## 스테이지 모드 설명줄에 최고 기록을 얹는다.
 func _refresh_classic_desc() -> void:
 	if GameState.classic_best > 0:
-		($UI/ClassicDesc as Label).text = \
-				"고전 오락실 LEVEL 승부 — 최고 기록  %d점" % GameState.classic_best
-
-
-## Picnic subtitle carries the snack-hunt high score.
-func _refresh_picnic_desc() -> void:
-	if GameState.picnic_best > 0:
-		($UI/PicnicDesc as Label).text = \
-				"아무도 죽지 않는 힐링 모드 — 최고 기록  %d점" % GameState.picnic_best
+		classic_desc.text = \
+				tr("MODE_CLASSIC_DESC_BEST").format({"best": GameState.classic_best})
 
 
 func _start(mode: int, split := false) -> void:
@@ -146,50 +149,187 @@ func _start(mode: int, split := false) -> void:
 	get_tree().change_scene_to_file(main_scene)
 
 
-## 설정 버튼(좌상단) + 볼륨 설정 패널.
 func _build_settings() -> void:
-	var b := Button.new()
-	b.text = "⚙ 설정"
-	b.position = Vector2(30.0, 30.0)
-	b.size = Vector2(150.0, 56.0)
-	b.add_theme_font_size_override("font_size", 24)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	b.pressed.connect(func() -> void:
-		Sfx.play("click")
-		_settings.open())
-	$UI.add_child(b)
 	_settings = SETTINGS_PANEL.new()
 	$UI.add_child(_settings)
-	var shop_btn := Button.new()
-	shop_btn.text = "★ 상점"
-	shop_btn.position = Vector2(30.0, 100.0)
-	shop_btn.size = Vector2(150.0, 56.0)
-	shop_btn.add_theme_font_size_override("font_size", 24)
-	shop_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	shop_btn.pressed.connect(func() -> void:
+
+
+# --- 메인 메뉴 (컨셉: PLAY 한 방 + 카드 4장) ------------------------------------
+
+
+## 화면 비율(가로/세로)에 따라 로고·메뉴·고양이 자리를 정한다.
+func _compute_layout() -> void:
+	if vh > vw:  # 모바일 세로
+		_logo_cell = minf(44.0, (vw - 80.0) / 30.0)
+		_logo_top = vh * 0.09
+		_cat_anchor = Vector2(vw / 2.0, vh * 0.36)
+		_cat_size = vw * 0.32
+	else:
+		_logo_cell = minf(48.0, (vw - 200.0) / 32.0)
+		_logo_top = vh * 0.09
+		_cat_anchor = Vector2(vw * 0.74, vh * 0.62)
+		_cat_size = minf(vh * 0.28, 320.0)
+
+
+## 메뉴 블록의 좌상단과 폭 — PLAY / 카드 4장 / 키캡 줄이 여기에 쌓인다.
+func _menu_rect() -> Rect2:
+	if vh > vw:
+		var w := minf(vw - 80.0, 880.0)
+		return Rect2((vw - w) / 2.0, vh * 0.52, w, vh * 0.38)
+	var lw := minf(vw * 0.40, 700.0)
+	return Rect2(vw * 0.30 - lw / 2.0, vh * 0.42, lw, vh * 0.46)
+
+
+func _build_menu() -> void:
+	var area := _menu_rect()
+	var gap := 16.0
+	var card_w := (area.size.x - gap) / 2.0
+	var play_h := area.size.y * 0.24
+	var card_h := area.size.y * 0.21
+	var play := Button.new()
+	play.text = "▶   PLAY"
+	play.position = area.position
+	play.size = Vector2(area.size.x, play_h)
+	UiKit.btn_primary(play, int(play_h * 0.42))
+	play.pressed.connect(func() -> void:
 		Sfx.play("click")
-		_open_shop())
-	$UI.add_child(shop_btn)
-	var rank_btn := Button.new()
-	rank_btn.text = "♛ 랭킹"
-	rank_btn.position = Vector2(30.0, 170.0)
-	rank_btn.size = Vector2(150.0, 56.0)
-	rank_btn.add_theme_font_size_override("font_size", 24)
-	rank_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	rank_btn.pressed.connect(func() -> void:
-		Sfx.play("click")
-		_open_ranks())
-	$UI.add_child(rank_btn)
-	var cap_btn := Button.new()
-	cap_btn.text = "▦ 키캡"
-	cap_btn.position = Vector2(30.0, 240.0)
-	cap_btn.size = Vector2(150.0, 56.0)
-	cap_btn.add_theme_font_size_override("font_size", 24)
-	cap_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	cap_btn.pressed.connect(func() -> void:
+		_open_modes())
+	$UI.add_child(play)
+	var cards := [
+		[tr("MENU_CHARACTER"), UiKit.GOLD_DEEP, func() -> void: _open_chars()],
+		[tr("MENU_SHOP"), UiKit.CYAN_DEEP, func() -> void: _open_shop()],
+		[tr("MENU_RANKING"), UiKit.GOLD_DEEP, func() -> void: _open_ranks()],
+		[tr("MENU_SETTINGS"), UiKit.PURPLE_DEEP, func() -> void: _settings.open()],
+	]
+	for i in cards.size():
+		var entry: Array = cards[i]
+		var b := Button.new()
+		b.text = str(entry[0])
+		b.position = area.position + Vector2((i % 2) * (card_w + gap),
+				play_h + gap + (i / 2) * (card_h + gap))
+		b.size = Vector2(card_w, card_h)
+		UiKit.btn_card(b, entry[1], int(card_h * 0.3))
+		var act: Callable = entry[2]
+		b.pressed.connect(func() -> void:
+			Sfx.play("click")
+			act.call())
+		$UI.add_child(b)
+	# 키캡 도감은 한 줄짜리 얇은 알약 버튼으로 카드 아래에.
+	var cap := Button.new()
+	cap.text = tr("MENU_KEYCAP_DEX")
+	cap.position = area.position + Vector2(0.0, play_h + card_h * 2.0 + gap * 3.0)
+	cap.size = Vector2(area.size.x, card_h * 0.62)
+	UiKit.btn_card(cap, UiKit.CYAN_DEEP, int(card_h * 0.24))
+	cap.pressed.connect(func() -> void:
 		Sfx.play("click")
 		_open_keycap_dex())
-	$UI.add_child(cap_btn)
+	$UI.add_child(cap)
+
+
+# --- 모드 선택 오버레이 --------------------------------------------------------
+
+
+## 씬에 있던 모드 버튼들을 흰 패널 오버레이 안으로 옮기고 컨셉 톤으로 다시 칠한다.
+## 플레이 가능한 모드는 스테이지 모드 · 무한의 계단 둘뿐 — 나머지 버튼은 숨긴다.
+func _build_mode_select() -> void:
+	_modes = _make_overlay(tr("MENU_MODE_SELECT"), func() -> void: _modes.visible = false,
+			Vector2(minf(vw - 80.0, 900.0), minf(vh - 140.0, 460.0)))
+	var panel: Control = _modes.get_meta("body")
+	var pw: float = panel.size.x
+	for n: Control in [escape_btn, escape_desc, picnic_btn, picnic_desc,
+			versus_btn, versus_desc, escape2_btn, endless2_btn]:
+		n.visible = false
+	# 버튼 라벨 키를 코드에 명시적으로 들고 간다 — 씬의 text를 번호까지 붙여
+	# 덮어쓰기 때문에, 키가 없으면 자동 번역이 끊긴다. (/i18n 철칙 1)
+	var entries := [
+		[classic_btn, classic_desc, "MODE_CLASSIC", UiKit.GOLD, UiKit.GOLD_DEEP],
+		[endless_btn, endless_desc, "MODE_ENDLESS", UiKit.CYAN, UiKit.CYAN_DEEP],
+	]
+	var row_h := minf(120.0, panel.size.y / entries.size() - 40.0)
+	var y := 8.0
+	for i in entries.size():
+		var e: Array = entries[i]
+		var btn: Button = e[0]
+		# 번호는 화면에 보이는 순서와 맞춘다 (= 데스크톱 단축키 순서).
+		btn.text = "%d.  %s" % [i + 1, tr(str(e[2]))]
+		var desc: Label = e[1]
+		_reparent(btn, panel)
+		btn.position = Vector2(0.0, y)
+		btn.size = Vector2(pw, row_h)
+		UiKit.style_button(btn, e[3], e[4], INK, int(row_h * 0.3), 16)
+		_reparent(desc, panel)
+		desc.position = Vector2(0.0, y + row_h + 4.0)
+		desc.size = Vector2(pw, 26.0)
+		desc.add_theme_font_size_override("font_size", 18)
+		desc.add_theme_color_override("font_color", UiKit.MUTED)
+		y += row_h + 40.0
+	_modes.visible = false
+
+
+## 오버레이를 항상 메뉴 위로 올린다 (형제 순서 = 그리는 순서).
+func _raise(c: Control) -> void:
+	if c != null and c.get_parent() != null:
+		c.get_parent().move_child(c, -1)
+
+
+func _open_modes() -> void:
+	_raise(_modes)
+	_refresh_classic_desc()
+	_modes.visible = true
+
+
+## 어두운 배경 + 흰 패널 + 제목 + 닫기 버튼을 갖춘 공용 오버레이 껍데기.
+## 반환된 Control의 "body" 메타에 내용물을 붙일 빈 Control이 들어 있다.
+func _make_overlay(title_text: String, on_close: Callable,
+		size: Vector2 = Vector2.ZERO) -> Control:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.visible = false
+	$UI.add_child(root)
+	var dim := Button.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var dim_sb := StyleBoxFlat.new()
+	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
+	for st in ["normal", "hover", "pressed", "focus"]:
+		dim.add_theme_stylebox_override(st, dim_sb)
+	dim.pressed.connect(on_close)
+	root.add_child(dim)
+	var pw: float = size.x if size.x > 0.0 else minf(vw - 80.0, 900.0)
+	var ph: float = size.y if size.y > 0.0 else minf(vh - 140.0, 760.0)
+	var card := Panel.new()
+	card.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
+	card.size = Vector2(pw, ph)
+	card.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 26, 0.0))
+	root.add_child(card)
+	var head := Label.new()
+	head.text = title_text
+	head.position = Vector2(0.0, 18.0)
+	head.size = Vector2(pw, 52.0)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 38)
+	head.add_theme_color_override("font_color", INK)
+	card.add_child(head)
+	var close := Button.new()
+	close.text = "✕"
+	close.size = Vector2(56.0, 56.0)
+	close.position = Vector2(pw - 72.0, 16.0)
+	UiKit.btn_ghost(close, 26)
+	close.pressed.connect(on_close)
+	card.add_child(close)
+	var body := Control.new()
+	body.position = Vector2(34.0, 86.0)
+	body.size = Vector2(pw - 68.0, ph - 116.0)
+	card.add_child(body)
+	root.set_meta("body", body)
+	root.set_meta("card", card)
+	return root
+
+
+func _reparent(node: Node, to: Node) -> void:
+	if node.get_parent() == to:
+		return
+	node.get_parent().remove_child(node)
+	to.add_child(node)
 
 
 func _settings_open() -> bool:
@@ -234,22 +374,22 @@ func _unhandled_input(event: InputEvent) -> void:
 				and event.physical_keycode == KEY_ESCAPE:
 			_close_popup()
 		return
+	if _chars and _chars.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_chars.visible = false
+		return
+	# 모드 오버레이는 숫자 단축키를 그대로 통과시킨다 (Esc는 닫기).
+	if _modes and _modes.visible and event is InputEventKey and event.pressed \
+			and event.physical_keycode == KEY_ESCAPE:
+		_modes.visible = false
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_1, KEY_KP_1:
-				_start(GameState.MODE_STORY)
+				_start(GameState.MODE_CLASSIC)
 			KEY_2, KEY_KP_2:
 				_start(GameState.MODE_ENDLESS)
-			KEY_3, KEY_KP_3:
-				_start(GameState.MODE_VERSUS)
-			KEY_4, KEY_KP_4:
-				_start(GameState.MODE_CLASSIC)
-			KEY_5, KEY_KP_5:
-				_start(GameState.MODE_PICNIC)
-			KEY_6, KEY_KP_6:
-				_start(GameState.MODE_STORY, true)
-			KEY_7, KEY_KP_7:
-				_start(GameState.MODE_ENDLESS, true)
 
 
 # --- Shop (accessories + run boosts) ------------------------------------------
@@ -265,7 +405,7 @@ func _build_shop() -> void:
 	var dim := Button.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
 	for st in ["normal", "hover", "pressed", "focus"]:
 		dim.add_theme_stylebox_override(st, dim_sb)
 	dim.pressed.connect(_close_shop)
@@ -275,25 +415,16 @@ func _build_shop() -> void:
 	var panel := PanelContainer.new()
 	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
 	panel.size = Vector2(pw, ph)
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color("1c1a26")
-	box.set_corner_radius_all(18)
-	box.set_border_width_all(3)
-	box.border_color = Color(CREAM, 0.65)
-	box.content_margin_left = 30.0
-	box.content_margin_right = 30.0
-	box.content_margin_top = 22.0
-	box.content_margin_bottom = 22.0
-	panel.add_theme_stylebox_override("panel", box)
+	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 26, 30.0))
 	_shop.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
 	var title := Label.new()
-	title.text = "냥냥 상점"
+	title.text = tr("SHOP_TITLE")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", CREAM)
+	title.add_theme_color_override("font_color", INK)
 	v.add_child(title)
 	_shop_wallet = Label.new()
 	_shop_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -309,8 +440,8 @@ func _build_shop() -> void:
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
 	var per_row := maxi(1, int((pw - 60.0 + TILE_GAP) / (SHOP_TILE.x + TILE_GAP)))
-	for slot: Array in [["head", "머리 장식"], ["neck", "목 장식"]]:
-		list.add_child(_shop_header(str(slot[1])))
+	for slot: Array in [["head", "SHOP_HEAD"], ["neck", "SHOP_NECK"]]:
+		list.add_child(_shop_header(tr(str(slot[1]))))
 		var items := GameState.ACCESSORIES.filter(
 				func(a: Dictionary) -> bool: return a.slot == slot[0])
 		var row: HBoxContainer = null
@@ -320,23 +451,20 @@ func _build_shop() -> void:
 				row.add_theme_constant_override("separation", int(TILE_GAP))
 				list.add_child(row)
 			row.add_child(_make_shop_tile(items[i]))
-	list.add_child(_shop_header("다음 판 부스트  ·  무한의 계단 1판 소모"))
+	list.add_child(_shop_header(tr("SHOP_BOOSTS")))
 	var boost_row := HBoxContainer.new()
 	boost_row.add_theme_constant_override("separation", 14)
 	list.add_child(boost_row)
 	for b: Dictionary in GameState.BOOSTS:
 		var chip := Button.new()
 		chip.custom_minimum_size = Vector2((pw - 88.0) / 3.0, 128.0)
-		chip.add_theme_font_size_override("font_size", 20)
-		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		chip.pressed.connect(_on_boost_chip.bind(b))
 		boost_row.add_child(chip)
 		_boost_chips[b.id] = chip
 	var close := Button.new()
-	close.text = "닫기"
-	close.custom_minimum_size = Vector2(200.0, 52.0)
-	close.add_theme_font_size_override("font_size", 22)
-	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.text = tr("SET_CLOSE")
+	close.custom_minimum_size = Vector2(200.0, 56.0)
+	UiKit.btn_ghost(close, 22)
 	close.pressed.connect(_close_shop)
 	var close_wrap := CenterContainer.new()
 	close_wrap.add_child(close)
@@ -347,24 +475,16 @@ func _shop_header(text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_size_override("font_size", 22)
-	l.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	l.add_theme_color_override("font_color", UiKit.MUTED)
 	return l
 
 
 func _make_shop_tile(acc: Dictionary) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = SHOP_TILE
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(14)
-	sb.bg_color = Color(1, 1, 1, 0.05)
-	sb.set_border_width_all(2)
-	sb.border_color = Color(1, 1, 1, 0.18)
-	b.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = Color(1, 1, 1, 0.12)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", sb)
+	var equipped: bool = GameState.acc_head == acc.id or GameState.acc_neck == acc.id
+	UiKit.style_button(b, Color("fff1cf") if equipped else UiKit.WHITE,
+			UiKit.GOLD_DEEP if equipped else Color("c9c6d0"), INK, 18, 16)
 	b.pressed.connect(_on_shop_item.bind(acc))
 	var face := Control.new()
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -380,14 +500,14 @@ func _draw_shop_tile(ci: Control, acc: Dictionary) -> void:
 	var skin := {"body": Color("f4e3c8"), "ear": Color("d9a05c"), "acc": [acc]}
 	Player.paint_cat(ci, Vector2(SHOP_TILE.x / 2.0, 84.0), 64.0, 0.0, true, false, skin)
 	var font := ThemeDB.fallback_font
-	_draw_center_text(ci, font, str(acc.name), 152.0, 20, Color.WHITE, SHOP_TILE.x)
+	_draw_center_text(ci, font, tr(str(acc.name)), 152.0, 20, INK, SHOP_TILE.x)
 	var owned: bool = acc.id in GameState.acc_owned
 	var equipped: bool = GameState.acc_head == acc.id or GameState.acc_neck == acc.id
 	if equipped:
-		_draw_center_text(ci, font, "장착 중", 184.0, 18, CREAM, SHOP_TILE.x)
+		_draw_center_text(ci, font, tr("CHAR_EQUIPPED"), 184.0, 18, GOLD_COL, SHOP_TILE.x)
 	elif owned:
-		_draw_center_text(ci, font, "보유 · 눌러서 장착", 184.0, 16,
-				Color(1, 1, 1, 0.6), SHOP_TILE.x)
+		_draw_center_text(ci, font, tr("SHOP_OWNED"), 184.0, 16,
+				UiKit.MUTED, SHOP_TILE.x)
 	elif acc.price.type == "gold":
 		_draw_center_text(ci, font, "%d G" % acc.price.amount, 184.0, 18, GOLD_COL,
 				SHOP_TILE.x)
@@ -403,10 +523,10 @@ func _on_shop_item(acc: Dictionary) -> void:
 	elif GameState.try_buy_acc(str(acc.id)):
 		Sfx.play("buy")
 		GameState.toggle_acc(str(acc.id))  # wear it right away
-		_show_toast("%s 구매 완료!" % acc.name, CREAM)
+		_show_toast(tr("SHOP_BOUGHT").format({"name": tr(str(acc.name))}), CREAM)
 	else:
 		Sfx.play("error")
-		_show_toast("골드가 부족해요!" if acc.price.type == "gold" else "보석이 부족해요!",
+		_show_toast(tr("SHOP_NO_GOLD") if acc.price.type == "gold" else tr("SHOP_NO_GEMS"),
 				Color(1.0, 0.55, 0.5))
 		return
 	_refresh_shop()
@@ -418,7 +538,7 @@ func _on_boost_chip(boost: Dictionary) -> void:
 	var had: bool = boost.id in GameState.pending_boosts
 	if not GameState.toggle_boost(str(boost.id)):
 		Sfx.play("error")
-		_show_toast("골드가 부족해요!", Color(1.0, 0.55, 0.5))
+		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
 		return
 	Sfx.play("click" if had else "buy")
 	_refresh_shop()
@@ -426,27 +546,25 @@ func _on_boost_chip(boost: Dictionary) -> void:
 
 
 func _refresh_shop() -> void:
-	_shop_wallet.text = "보유   %d G      ◆ %d" % [GameState.gold, GameState.gems]
+	_shop_wallet.text = tr("SHOP_WALLET").format(
+			{"gold": GameState.gold, "gems": GameState.gems})
 	for id: String in _shop_tiles:
-		_shop_tiles[id].queue_redraw()
+		var face: Control = _shop_tiles[id]
+		face.queue_redraw()
+		var eq: bool = GameState.acc_head == id or GameState.acc_neck == id
+		UiKit.style_button(face.get_parent() as Button,
+				Color("fff1cf") if eq else UiKit.WHITE,
+				UiKit.GOLD_DEEP if eq else Color("c9c6d0"), INK, 18, 16)
 	for b: Dictionary in GameState.BOOSTS:
 		var chip: Button = _boost_chips[b.id]
 		var pending: bool = b.id in GameState.pending_boosts
-		chip.text = "%s  ·  %d G\n%s\n%s" % [b.name, b.price, b.desc,
-				"준비 완료! (다시 누르면 환불)" if pending else "누르면 구매"]
-		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(12)
-		sb.bg_color = Color(CREAM, 0.16) if pending else Color(1, 1, 1, 0.05)
-		sb.set_border_width_all(2)
-		sb.border_color = CREAM if pending else Color(1, 1, 1, 0.2)
-		chip.add_theme_stylebox_override("normal", sb)
-		var hover: StyleBoxFlat = sb.duplicate()
-		hover.bg_color = Color(CREAM, 0.24) if pending else Color(1, 1, 1, 0.11)
-		chip.add_theme_stylebox_override("hover", hover)
-		chip.add_theme_stylebox_override("pressed", sb)
+		chip.text = "%s  ·  %d G\n%s\n%s" % [tr(b.name), b.price, tr(b.desc),
+				tr("SHOP_BOOST_READY") if pending else tr("SHOP_BOOST_BUY")]
+		UiKit.btn_chip(chip, pending, 20)
 
 
 func _open_shop() -> void:
+	_raise(_shop)
 	_refresh_shop()
 	_shop.visible = true
 
@@ -469,7 +587,7 @@ func _build_keycap_dex() -> void:
 	var dim := Button.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
 	for st in ["normal", "hover", "pressed", "focus"]:
 		dim.add_theme_stylebox_override(st, dim_sb)
 	dim.pressed.connect(func() -> void: _keycap_dex.visible = false)
@@ -481,25 +599,16 @@ func _build_keycap_dex() -> void:
 	var panel := PanelContainer.new()
 	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
 	panel.size = Vector2(pw, ph)
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color("1c1a26")
-	box.set_corner_radius_all(18)
-	box.set_border_width_all(3)
-	box.border_color = Color(CREAM, 0.65)
-	box.content_margin_left = 30.0
-	box.content_margin_right = 30.0
-	box.content_margin_top = 22.0
-	box.content_margin_bottom = 22.0
-	panel.add_theme_stylebox_override("panel", box)
+	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 26, 30.0))
 	_keycap_dex.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
 	var title := Label.new()
-	title.text = "▦ 키캡 도감"
+	title.text = tr("KEYCAP_TITLE")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", CREAM)
+	title.add_theme_color_override("font_color", INK)
 	v.add_child(title)
 	_keycap_stats = Label.new()
 	_keycap_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -512,16 +621,15 @@ func _build_keycap_dex() -> void:
 	_keycap_board.draw.connect(_draw_keycap_dex_board)
 	v.add_child(_keycap_board)
 	var hint := Label.new()
-	hint.text = "블록에 나타난 키캡이 있는 줄을 지우면 키캡을 모을 수 있다냥!"
+	hint.text = tr("KEYCAP_HINT")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 18)
-	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	hint.add_theme_color_override("font_color", UiKit.MUTED)
 	v.add_child(hint)
 	var close := Button.new()
-	close.text = "닫기"
-	close.custom_minimum_size = Vector2(200.0, 52.0)
-	close.add_theme_font_size_override("font_size", 22)
-	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.text = tr("SET_CLOSE")
+	close.custom_minimum_size = Vector2(200.0, 56.0)
+	UiKit.btn_ghost(close, 22)
 	close.pressed.connect(func() -> void: _keycap_dex.visible = false)
 	var wrap := CenterContainer.new()
 	wrap.add_child(close)
@@ -529,8 +637,9 @@ func _build_keycap_dex() -> void:
 
 
 func _open_keycap_dex() -> void:
-	_keycap_stats.text = "모은 키캡  %d / 26 종   ·   총 %d개" \
-			% [GameState.keycap_kinds(), GameState.keycap_total()]
+	_raise(_keycap_dex)
+	_keycap_stats.text = tr("KEYCAP_STATS").format(
+			{"kinds": GameState.keycap_kinds(), "total": GameState.keycap_total()})
 	_keycap_board.queue_redraw()
 	_keycap_dex.visible = true
 
@@ -542,12 +651,7 @@ func _draw_keycap_dex_board() -> void:
 	var bw := ci.size.x
 	var key := (bw - KEY_GAP * 9.0) / 10.0
 	var plate := Rect2(0.0, 0.0, bw, key * 3.0 + KEY_GAP * 2.0 + 44.0)
-	var plate_sb := StyleBoxFlat.new()
-	plate_sb.bg_color = Color("12111a")
-	plate_sb.set_corner_radius_all(16)
-	plate_sb.set_border_width_all(2)
-	plate_sb.border_color = Color(1, 1, 1, 0.14)
-	ci.draw_style_box(plate_sb, plate)
+	ci.draw_style_box(UiKit.panel_box(Color("e8f4fb"), 20, 0.0), plate)
 	var font := ThemeDB.fallback_font
 	for r in KEY_ROWS.size():
 		var letters := KEY_ROWS[r]
@@ -569,18 +673,18 @@ func _draw_keycap_dex_board() -> void:
 					ci.draw_string(font, badge + Vector2(-tw / 2.0, 0.0), txt,
 							HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
 			else:
-				# Empty socket: the key's resting hole, letter barely visible.
+				# 빈 소켓: 아직 못 모은 글자 자리.
 				var sock := StyleBoxFlat.new()
-				sock.bg_color = Color(1, 1, 1, 0.04)
+				sock.bg_color = Color(0.72, 0.82, 0.88, 0.55)
 				sock.set_corner_radius_all(int(key * 0.14))
 				sock.set_border_width_all(2)
-				sock.border_color = Color(1, 1, 1, 0.1)
+				sock.border_color = Color(INK, 0.18)
 				ci.draw_style_box(sock, rect.grow(-key * 0.09))
 				var fs := int(key * 0.4)
 				var w := font.get_string_size(letter,
 						HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 				ci.draw_string(font, rect.get_center() + Vector2(-w / 2.0, fs * 0.36),
-						letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.16))
+						letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(INK, 0.3))
 
 
 # --- Rankings (per-mode leaderboards) -------------------------------------------
@@ -596,7 +700,7 @@ func _build_ranks() -> void:
 	var dim := Button.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0, 0, 0, 0.65)
+	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
 	for st in ["normal", "hover", "pressed", "focus"]:
 		dim.add_theme_stylebox_override(st, dim_sb)
 	dim.pressed.connect(func() -> void: _ranks.visible = false)
@@ -606,25 +710,16 @@ func _build_ranks() -> void:
 	var panel := PanelContainer.new()
 	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
 	panel.size = Vector2(pw, ph)
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color("1c1a26")
-	box.set_corner_radius_all(18)
-	box.set_border_width_all(3)
-	box.border_color = Color(CREAM, 0.65)
-	box.content_margin_left = 28.0
-	box.content_margin_right = 28.0
-	box.content_margin_top = 20.0
-	box.content_margin_bottom = 20.0
-	panel.add_theme_stylebox_override("panel", box)
+	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 26, 28.0))
 	_ranks.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
 	var title := Label.new()
-	title.text = "♛ 랭킹"
+	title.text = tr("RANK_TITLE")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 34)
-	title.add_theme_color_override("font_color", CREAM)
+	title.add_theme_color_override("font_color", INK)
 	v.add_child(title)
 	# Nickname row: shown on every board, editable here.
 	var nick_row := HBoxContainer.new()
@@ -632,25 +727,24 @@ func _build_ranks() -> void:
 	nick_row.add_theme_constant_override("separation", 10)
 	v.add_child(nick_row)
 	var nick_title := Label.new()
-	nick_title.text = "내 이름"
+	nick_title.text = tr("RANK_MY_NAME")
 	nick_title.add_theme_font_size_override("font_size", 20)
-	nick_title.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	nick_title.add_theme_color_override("font_color", UiKit.MUTED)
 	nick_row.add_child(nick_title)
 	_nick_edit = LineEdit.new()
-	_nick_edit.custom_minimum_size = Vector2(240.0, 44.0)
+	_nick_edit.custom_minimum_size = Vector2(240.0, 48.0)
 	_nick_edit.max_length = 12
 	_nick_edit.add_theme_font_size_override("font_size", 20)
 	nick_row.add_child(_nick_edit)
 	var nick_save := Button.new()
-	nick_save.text = "변경"
-	nick_save.custom_minimum_size = Vector2(90.0, 44.0)
-	nick_save.add_theme_font_size_override("font_size", 18)
-	nick_save.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	nick_save.text = tr("RANK_RENAME")
+	nick_save.custom_minimum_size = Vector2(96.0, 48.0)
+	UiKit.btn_card(nick_save, UiKit.CYAN_DEEP, 18)
 	nick_save.pressed.connect(func() -> void:
 		Sfx.play("click")
 		GameState.set_nickname(_nick_edit.text)
 		_nick_edit.text = GameState.nickname
-		_show_toast("이름이 '%s' (으)로 바뀌었어요!" % GameState.nickname, CREAM)
+		_show_toast(tr("RANK_RENAMED").format({"name": GameState.nickname}), CREAM)
 		_refresh_rank_list())
 	nick_row.add_child(nick_save)
 	# Scope toggle: weekly (resets Monday 00:00 KST, top 3 win prizes) / all-time.
@@ -658,12 +752,10 @@ func _build_ranks() -> void:
 	scopes.alignment = BoxContainer.ALIGNMENT_CENTER
 	scopes.add_theme_constant_override("separation", 10)
 	v.add_child(scopes)
-	for entry: Array in [[true, "주간 랭킹"], [false, "누적 랭킹"]]:
+	for entry: Array in [[true, tr("RANK_WEEKLY")], [false, tr("RANK_ALLTIME")]]:
 		var sb_btn := Button.new()
 		sb_btn.text = str(entry[1])
-		sb_btn.custom_minimum_size = Vector2((pw - 70.0) / 2.0, 48.0)
-		sb_btn.add_theme_font_size_override("font_size", 20)
-		sb_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		sb_btn.custom_minimum_size = Vector2((pw - 70.0) / 2.0, 52.0)
 		sb_btn.pressed.connect(func() -> void:
 			Sfx.play("click")
 			_rank_weekly = entry[0]
@@ -675,13 +767,11 @@ func _build_ranks() -> void:
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 10)
 	v.add_child(tabs)
-	for entry: Array in [["story", "스토리"], ["endless", "무한의 계단"],
-			["classic", "클래식"], ["picnic", "피크닉"]]:
+	for entry: Array in [["classic", tr("MODE_CLASSIC")],
+			["endless", tr("MODE_ENDLESS")]]:
 		var b := Button.new()
 		b.text = str(entry[1])
-		b.custom_minimum_size = Vector2((pw - 90.0) / 4.0, 50.0)
-		b.add_theme_font_size_override("font_size", 18)
-		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		b.custom_minimum_size = Vector2((pw - 70.0) / 2.0, 54.0)
 		b.pressed.connect(_on_rank_tab.bind(str(entry[0])))
 		tabs.add_child(b)
 		_rank_tabs[entry[0]] = b
@@ -693,7 +783,7 @@ func _build_ranks() -> void:
 	_rank_status = Label.new()
 	_rank_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_rank_status.add_theme_font_size_override("font_size", 16)
-	_rank_status.add_theme_color_override("font_color", Color(1, 1, 1, 0.55))
+	_rank_status.add_theme_color_override("font_color", UiKit.MUTED)
 	v.add_child(_rank_status)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -704,10 +794,9 @@ func _build_ranks() -> void:
 	_rank_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(_rank_list)
 	var close := Button.new()
-	close.text = "닫기"
-	close.custom_minimum_size = Vector2(200.0, 52.0)
-	close.add_theme_font_size_override("font_size", 22)
-	close.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	close.text = tr("SET_CLOSE")
+	close.custom_minimum_size = Vector2(200.0, 56.0)
+	UiKit.btn_ghost(close, 22)
 	close.pressed.connect(func() -> void: _ranks.visible = false)
 	var wrap := CenterContainer.new()
 	wrap.add_child(close)
@@ -717,6 +806,7 @@ func _build_ranks() -> void:
 
 
 func _open_ranks() -> void:
+	_raise(_ranks)
 	_nick_edit.text = GameState.nickname
 	_ranks.visible = true
 	_refresh_rank_list()
@@ -736,8 +826,8 @@ func _refresh_rank_list() -> void:
 		_style_rank_tab(_rank_scopes[scope_key], scope_key == _rank_weekly)
 	_rank_sub.visible = _rank_weekly
 	if _rank_weekly:
-		_rank_sub.text = "초기화까지 %s   ·   1~3위 보상  ◆5+500G / ◆3+300G / ◆2+200G" \
-				% Ranks.week_remaining_text()
+		_rank_sub.text = tr("RANK_RESET_IN").format(
+				{"time": Ranks.week_remaining_text()})
 	for child in _rank_list.get_children():
 		child.queue_free()
 	var mine := GameState.player_id
@@ -745,22 +835,22 @@ func _refresh_rank_list() -> void:
 			else Ranks.local_value(_rank_mode)
 	var list := Ranks.entries(_rank_mode, _rank_weekly)
 	if Ranks.online() and Ranks.busy and list.is_empty():
-		_rank_status.text = "불러오는 중..."
+		_rank_status.text = tr("RANK_LOADING")
 		return
 	var rank := Ranks.my_rank(_rank_mode, _rank_weekly)
-	var scope_txt := "이번 주" if _rank_weekly else "내"
+	var scope_txt := tr("RANK_SCOPE_WEEK") if _rank_weekly else tr("RANK_SCOPE_MINE")
 	if not Ranks.online():
 		# Pre-launch board: bot crowd + my real record mixed in.
-		_rank_status.text = ("%s 순위  %d위  ·  %s   (다른 유저는 임시 데이터)" \
-				% [scope_txt, rank, Ranks.value_text(_rank_mode, local_v)]) if rank > 0 \
-				else "아직 내 기록 없음 — 한 판 달리면 자동 등록!   (다른 유저는 임시 데이터)"
+		_rank_status.text = tr("RANK_MY_RANK_MOCK").format({"scope": scope_txt,
+				"rank": rank, "value": Ranks.value_text(_rank_mode, local_v)}) if rank > 0 \
+				else tr("RANK_NONE_MOCK")
 	else:
-		_rank_status.text = ("%s 순위  %d위  ·  %s" \
-				% [scope_txt, rank, Ranks.value_text(_rank_mode, local_v)]) \
-				if rank > 0 else ("아직 순위 없음 — 기록을 세우면 자동 등록!" if local_v <= 0
-				else "등록 중... 잠시 후 새로고침해 보세요")
+		_rank_status.text = tr("RANK_MY_RANK").format({"scope": scope_txt, "rank": rank,
+				"value": Ranks.value_text(_rank_mode, local_v)}) \
+				if rank > 0 else (tr("RANK_NONE") if local_v <= 0
+				else tr("RANK_SUBMITTING"))
 	if list.is_empty():
-		_rank_list.add_child(_rank_row(0, "첫 기록의 주인공이 되어보자냥!", -1, false))
+		_rank_list.add_child(_rank_row(0, tr("RANK_BE_FIRST"), -1, false))
 	for i in mini(list.size(), 50):
 		var e: Dictionary = list[i]
 		# Replays ride only on the all-time boards.
@@ -770,27 +860,17 @@ func _refresh_rank_list() -> void:
 
 
 func _style_rank_tab(b: Button, active: bool) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(10)
-	sb.bg_color = Color(CREAM, 0.18) if active else Color(1, 1, 1, 0.05)
-	sb.set_border_width_all(2)
-	sb.border_color = CREAM if active else Color(1, 1, 1, 0.2)
-	b.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = Color(CREAM, 0.24) if active else Color(1, 1, 1, 0.11)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", sb)
+	UiKit.btn_chip(b, active, 19)
 
 
 func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 		entry: Dictionary = {}) -> Control:
 	var row := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(8)
-	sb.bg_color = Color(CREAM, 0.14) if mine else Color(1, 1, 1, 0.04)
-	if mine:
-		sb.set_border_width_all(2)
-		sb.border_color = Color(CREAM, 0.8)
+	sb.set_corner_radius_all(12)
+	sb.bg_color = Color("fff1cf") if mine else Color("f2f5f9")
+	sb.set_border_width_all(3 if mine else 2)
+	sb.border_color = UiKit.GOLD_DEEP if mine else Color(INK, 0.12)
 	sb.content_margin_left = 14.0
 	sb.content_margin_right = 14.0
 	sb.content_margin_top = 7.0
@@ -800,17 +880,18 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 	h.add_theme_constant_override("separation", 12)
 	row.add_child(h)
 	var rank_l := Label.new()
-	rank_l.text = ("%d위" % rank) if rank > 0 else ("내 기록" if v >= 0 else "")
+	rank_l.text = tr("RANK_POSITION").format({"rank": rank}) if rank > 0 \
+			else (tr("RANK_MY_RECORD") if v >= 0 else "")
 	rank_l.custom_minimum_size.x = 64.0
 	rank_l.add_theme_font_size_override("font_size", 18)
 	rank_l.add_theme_color_override("font_color",
-			GOLD_COL if rank in [1, 2, 3] else Color(1, 1, 1, 0.6))
+			GOLD_COL if rank in [1, 2, 3] else UiKit.MUTED)
 	h.add_child(rank_l)
 	var name_l := Label.new()
-	name_l.text = name_text + ("   ◀ 나" if mine and rank > 0 else "")
+	name_l.text = name_text + (tr("RANK_ME_MARK") if mine and rank > 0 else "")
 	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_l.add_theme_font_size_override("font_size", 18)
-	name_l.add_theme_color_override("font_color", CREAM if mine else Color(1, 1, 1, 0.85))
+	name_l.add_theme_color_override("font_color", INK if mine else Color(INK, 0.85))
 	h.add_child(name_l)
 	if v >= 0:
 		var val_l := Label.new()
@@ -822,14 +903,13 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 		var mode_key := _rank_mode  # captured: tab may change before the press
 		var play := Button.new()
 		play.text = "▶"
-		play.custom_minimum_size = Vector2(52.0, 30.0)
-		play.add_theme_font_size_override("font_size", 16)
-		play.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		play.custom_minimum_size = Vector2(56.0, 36.0)
+		UiKit.btn_card(play, UiKit.ORANGE_DEEP, 16)
 		play.pressed.connect(func() -> void:
 			Sfx.play("click")
 			var rep: Dictionary = Ranks.replay_for(mode_key, entry)
 			if rep.is_empty():
-				_show_toast("리플레이를 불러올 수 없어요", Color(1.0, 0.55, 0.5))
+				_show_toast(tr("RANK_REPLAY_FAIL"), Color(1.0, 0.55, 0.5))
 				return
 			_replay_viewer.open(rep, "%s  ·  %s" % [name_text,
 					Ranks.value_text(mode_key, v)]))
@@ -840,23 +920,32 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 # --- Character select ---------------------------------------------------------
 
 
+## 캐릭터 선택은 컨셉의 CHARACTER 카드로 여는 오버레이 안에 산다.
 func _build_character_row() -> void:
-	var ui: CanvasLayer = $UI
-	# 화면 폭에 맞춰 줄바꿈: 가로(1920)는 9칸 한 줄, 세로(1080)는 여러 줄.
-	var fit := maxi(1, int((vw - 60.0 + TILE_GAP) / (TILE_SIZE.x + TILE_GAP)))
+	_chars = _make_overlay(tr("CHAR_SELECT"), func() -> void: _chars.visible = false,
+			Vector2(minf(vw - 60.0, 1180.0), minf(vh - 120.0, 560.0)))
+	var body: Control = _chars.get_meta("body")
+	# 패널 폭에 맞춰 줄바꿈 (가로는 한 줄, 세로 화면은 여러 줄).
+	var fit := maxi(1, int((body.size.x + TILE_GAP) / (TILE_SIZE.x + TILE_GAP)))
 	var per_row := mini(mini(fit, max_tiles_per_row), GameState.CATS.size())
 	var rows := ceili(GameState.CATS.size() / float(per_row))
-	tile_y = vh - 300.0 - (rows - 1) * (TILE_SIZE.y + TILE_GAP)
+	tile_y = maxf(0.0, (body.size.y - rows * TILE_SIZE.y - (rows - 1) * TILE_GAP) / 2.0)
 	for r in rows:
 		var chunk: Array = GameState.CATS.slice(r * per_row, (r + 1) * per_row)
 		var total := chunk.size() * TILE_SIZE.x + (chunk.size() - 1) * TILE_GAP
-		var x := (vw - total) / 2.0
+		var x := (body.size.x - total) / 2.0
 		for cat in chunk:
 			var tile := _make_tile(cat)
 			tile.position = Vector2(x, tile_y + r * (TILE_SIZE.y + TILE_GAP))
-			ui.add_child(tile)
+			body.add_child(tile)
 			_tiles[cat.id] = tile
 			x += TILE_SIZE.x + TILE_GAP
+
+
+func _open_chars() -> void:
+	_raise(_chars)
+	_refresh_tiles()
+	_chars.visible = true
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -877,21 +966,10 @@ func _make_tile(cat: Dictionary) -> Button:
 
 func _style_tile(b: Button, cat: Dictionary) -> void:
 	var selected: bool = GameState.selected_cat == cat.id
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(14)
 	if selected:
-		sb.bg_color = Color(CREAM, 0.14)
-		sb.set_border_width_all(3)
-		sb.border_color = CREAM
+		UiKit.style_button(b, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 16)
 	else:
-		sb.bg_color = Color(1, 1, 1, 0.05)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(1, 1, 1, 0.18)
-	b.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = Color(1, 1, 1, 0.12) if not selected else Color(CREAM, 0.2)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", sb)
+		UiKit.style_button(b, UiKit.WHITE, Color("c9c6d0"), INK, 20, 16)
 
 
 func _draw_tile(ci: Control, cat: Dictionary) -> void:
@@ -900,14 +978,13 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 	if unlocked:
 		Player.paint_cat(ci, center, 68.0, 0.0, true, false, GameState.cat_skin(cat.id))
 	else:
-		# Dark silhouette + lock badge for locked cats.
-		var shadow := {"body": Color(0.16, 0.15, 0.2), "ear": Color(0.11, 0.1, 0.14),
-				"ink": Color(0.3, 0.29, 0.35)}
+		# 잠긴 냥이는 실루엣 + 자물쇠 뱃지.
+		var shadow := {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "ink": INK}
 		Player.paint_cat(ci, center, 68.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(34.0, 24.0))
 	var font := ThemeDB.fallback_font
-	var name_col := Color.WHITE if unlocked else Color(1, 1, 1, 0.45)
-	var tile_name := str(cat.name)
+	var name_col := INK if unlocked else UiKit.MUTED
+	var tile_name := tr(str(cat.name))
 	if unlocked and GameState.affection_level(cat.id) >= 10:
 		tile_name = "★" + tile_name
 	_draw_center_text(ci, font, tile_name, 112.0, 22, name_col)
@@ -919,22 +996,27 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 			"gems":
 				_draw_center_text(ci, font, "◆ %d" % u.amount, 144.0, 19, GEM_COL)
 			"height":
-				_draw_center_text(ci, font, "무한 %d층" % u.floors, 144.0, 16,
-						Color(1, 1, 1, 0.55))
-			"story":
-				_draw_center_text(ci, font, "스토리 %d스테이지" % u.stage, 144.0, 16,
-						Color(1, 1, 1, 0.55))
+				_draw_center_text(ci, font, tr("CHAR_UNLOCK_HEIGHT").format({"n": u.floors}),
+						144.0, 16,
+						UiKit.MUTED)
+			"score":
+				_draw_center_text(ci, font, tr("CHAR_UNLOCK_SCORE").format({"n": u.amount}),
+						144.0, 16,
+						UiKit.MUTED)
 			"plays":
-				_draw_center_text(ci, font, "%d판 플레이" % u.count, 144.0, 16,
-						Color(1, 1, 1, 0.55))
+				_draw_center_text(ci, font, tr("CHAR_UNLOCK_PLAYS").format({"n": u.count}),
+						144.0, 16,
+						UiKit.MUTED)
 	else:
-		# Unlocked cats wear their trait tag; the selected one glows cream.
-		var tag_col := CREAM if GameState.selected_cat == cat.id else Color(1, 1, 1, 0.5)
-		_draw_center_text(ci, font, str(cat.get("trait", "")), 144.0, 16, tag_col)
+		# 해금된 냥이는 특성 태그를 달고, 선택된 냥이는 진한 금색.
+		var tag_col := GOLD_COL if GameState.selected_cat == cat.id else UiKit.MUTED
+		_draw_center_text(ci, font, tr(str(cat.get("trait", ""))), 144.0, 16, tag_col)
 
 
 func _draw_center_text(ci: Control, font: Font, text: String, y: float,
 		size: int, col: Color, width: float = TILE_SIZE.x) -> void:
+	# 타일/팝업 폭을 넘기면 글자를 줄여서 맞춘다 (긴 번역 대응).
+	size = UiKit.fit_size(font, text, width - 12.0, size)
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	ci.draw_string(font, Vector2((width - w) / 2.0, y), text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
@@ -949,7 +1031,7 @@ func _stat_pips(key: String, v: float) -> int:
 
 
 func _draw_lock(ci: Control, at: Vector2) -> void:
-	var col := Color(1.0, 0.9, 0.6, 0.9)
+	var col := UiKit.GOLD_DEEP
 	ci.draw_rect(Rect2(at + Vector2(-8.0, -2.0), Vector2(16.0, 13.0)), col)
 	ci.draw_arc(at + Vector2(0.0, -3.0), 5.5, PI, TAU, 10, col, 3.0)
 
@@ -971,7 +1053,7 @@ func _build_popup() -> void:
 	var dim := Button.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0, 0, 0, 0.6)
+	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
 	for st in ["normal", "hover", "pressed", "focus"]:
 		dim.add_theme_stylebox_override(st, dim_sb)
 	dim.pressed.connect(_close_popup)
@@ -989,13 +1071,13 @@ func _build_popup() -> void:
 	_popup_action = _make_popup_button(panel, true)
 	_popup_action.pressed.connect(_on_popup_action)
 	_popup_close = _make_popup_button(panel, false)
-	_popup_close.text = "닫기"
+	_popup_close.text = tr("SET_CLOSE")
 	_popup_close.pressed.connect(_close_popup)
 	_popup_feed = _make_popup_button(panel, false)
 	_popup_feed.add_theme_font_size_override("font_size", 19)
 	_popup_feed.pressed.connect(_on_popup_feed)
 	_popup_custom = _make_popup_button(panel, false)
-	_popup_custom.text = "🎨 꾸미기"
+	_popup_custom.text = tr("CHAR_CUSTOMIZE")
 	_popup_custom.pressed.connect(func() -> void:
 		Sfx.play("click")
 		_close_popup()
@@ -1004,35 +1086,28 @@ func _build_popup() -> void:
 
 func _make_popup_button(panel: Control, accent: bool) -> Button:
 	var b := Button.new()
-	b.add_theme_font_size_override("font_size", 22)
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(12)
-	sb.bg_color = Color(CREAM, 0.16) if accent else Color(1, 1, 1, 0.07)
-	sb.set_border_width_all(2)
-	sb.border_color = CREAM if accent else Color(1, 1, 1, 0.25)
-	b.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = Color(CREAM, 0.28) if accent else Color(1, 1, 1, 0.14)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", sb)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	if accent:
+		UiKit.btn_primary(b, 24)
+	else:
+		UiKit.btn_ghost(b, 22)
 	panel.add_child(b)
 	return b
 
 
 func _open_popup(cat: Dictionary) -> void:
+	_raise(_popup)
 	_popup_cat = cat
 	var unlocked: bool = GameState.is_unlocked(cat.id)
 	var u: Dictionary = cat.unlock
 	if unlocked:
 		_popup_action.visible = GameState.selected_cat != cat.id
-		_popup_action.text = "선택하기"
+		_popup_action.text = tr("CHAR_SELECT_BTN")
 	elif u.type == "gold":
 		_popup_action.visible = true
-		_popup_action.text = "구매  %d G" % u.amount
+		_popup_action.text = tr("CHAR_BUY_GOLD").format({"amount": u.amount})
 	elif u.type == "gems":
 		_popup_action.visible = true
-		_popup_action.text = "구매  ◆ %d" % u.amount
+		_popup_action.text = tr("CHAR_BUY_GEMS").format({"amount": u.amount})
 	else:
 		_popup_action.visible = false
 	_refresh_feed_button()
@@ -1074,11 +1149,11 @@ func _refresh_feed_button() -> void:
 	_popup_feed.position = Vector2((POPUP_SIZE.x - 400.0) / 2.0, POPUP_SIZE.y - 158.0)
 	var to_next := GameState.snacks_to_next(str(cat.id))
 	if to_next == 0:
-		_popup_feed.text = "애정도 MAX  ·  최고의 단짝!"
+		_popup_feed.text = tr("CHAR_FEED_MAX")
 		_popup_feed.disabled = true
 	else:
-		_popup_feed.text = "간식 주기  %d G   (다음 레벨까지 %d개)" \
-				% [GameState.snack_price(str(cat.id)), to_next]
+		_popup_feed.text = tr("CHAR_FEED").format(
+				{"price": GameState.snack_price(str(cat.id)), "left": to_next})
 		_popup_feed.disabled = false
 
 
@@ -1092,22 +1167,24 @@ func _on_popup_feed() -> void:
 		var level := GameState.affection_level(cat.id)
 		if GameState.aff_stage(cat.id) > before_stage:
 			Sfx.play("record")
-			_show_toast("%s (이)의 모습이 변했다!! Lv.%d" % [cat.name, level], GOLD_COL)
+			_show_toast(tr("CHAR_FEED_EVOLVE").format(
+					{"name": tr(str(cat.name)), "level": level}), GOLD_COL)
 		elif level > before_level:
 			Sfx.play("record")
-			_show_toast("애정도 레벨 업!  Lv.%d — 능력 +%d%%" \
-					% [level, roundi(GameState.affection_bonus(cat.id) * 100)],
+			_show_toast(tr("CHAR_FEED_LEVEL").format({"level": level,
+					"pct": roundi(GameState.affection_bonus(cat.id) * 100)}),
 					Color(0.96, 0.62, 0.7))
 		else:
 			Sfx.play("buy")
-			_show_toast("%s (이)가 좋아한다냥! ♥" % cat.name, Color(0.96, 0.62, 0.7))
+			_show_toast(tr("CHAR_FEED_HAPPY").format({"name": tr(str(cat.name))}),
+					Color(0.96, 0.62, 0.7))
 		_refresh_feed_button()
 		_refresh_currency()
 		_popup_face.queue_redraw()
 		_refresh_tiles()
 	else:
 		Sfx.play("error")
-		_show_toast("골드가 부족해요!", Color(1.0, 0.55, 0.5))
+		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
 
 
 func _on_popup_action() -> void:
@@ -1122,13 +1199,13 @@ func _on_popup_action() -> void:
 	var wallet: int = GameState.gold if u.type == "gold" else GameState.gems
 	if wallet < int(u.amount):
 		Sfx.play("error")
-		_show_toast("골드가 부족해요!" if u.type == "gold" else "보석이 부족해요!",
+		_show_toast(tr("SHOP_NO_GOLD") if u.type == "gold" else tr("SHOP_NO_GEMS"),
 				Color(1.0, 0.55, 0.5))
 		return
 	if GameState.try_buy(cat.id):
 		Sfx.play("buy")
 		GameState.select_cat(cat.id)
-		_show_toast("%s 냥이 영입 완료!" % cat.name, CREAM)
+		_show_toast(tr("CHAR_RECRUITED").format({"name": tr(str(cat.name))}), CREAM)
 		_refresh_currency()
 		_refresh_tiles()
 		_close_popup()
@@ -1139,73 +1216,69 @@ func _draw_popup(ci: Control) -> void:
 	if cat.is_empty():
 		return
 	var unlocked: bool = GameState.is_unlocked(cat.id)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("1c1a26")
-	sb.set_corner_radius_all(18)
-	sb.set_border_width_all(3)
-	sb.border_color = Color(CREAM, 0.65)
-	ci.draw_style_box(sb, Rect2(Vector2.ZERO, POPUP_SIZE))
+	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 26, 0.0),
+			Rect2(Vector2.ZERO, POPUP_SIZE))
 	var font := ThemeDB.fallback_font
 	var center := Vector2(POPUP_SIZE.x / 2.0, 118.0)
 	if unlocked:
 		Player.paint_cat(ci, center, 110.0, 0.0, true, false, GameState.cat_skin(cat.id))
 	else:
-		var shadow := {"body": Color(0.16, 0.15, 0.2), "ear": Color(0.11, 0.1, 0.14),
-				"ink": Color(0.3, 0.29, 0.35)}
+		var shadow := {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "ink": INK}
 		Player.paint_cat(ci, center, 110.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(52.0, 38.0))
-	var name_col := Color.WHITE if unlocked else Color(1, 1, 1, 0.6)
-	var pop_name := str(cat.name)
+	var name_col := INK if unlocked else UiKit.MUTED
+	var pop_name := tr(str(cat.name))
 	if unlocked and GameState.affection_level(cat.id) >= 10:
 		pop_name = "★ %s ★" % pop_name
 	_draw_center_text(ci, font, pop_name, 226.0, 34, name_col, POPUP_SIZE.x)
-	_draw_center_text(ci, font, "「%s」" % cat.get("trait", ""), 262.0, 21,
-			Color(CREAM, 0.95), POPUP_SIZE.x)
+	_draw_center_text(ci, font, "「%s」" % tr(str(cat.get("trait", ""))), 262.0, 21,
+			GOLD_COL, POPUP_SIZE.x)
 	# Stat bars.
 	var stats: Dictionary = GameState.cat_stats(cat.id)
 	for i in STAT_ROWS.size():
 		var row_y := 302.0 + i * 40.0
-		ci.draw_string(font, Vector2(150.0, row_y + 14.0), STAT_ROWS[i][0],
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.8))
+		ci.draw_string(font, Vector2(150.0, row_y + 14.0), tr(STAT_ROWS[i][0]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(INK, 0.85))
 		var pips := _stat_pips(STAT_ROWS[i][1], stats.get(STAT_ROWS[i][1], 1.0))
 		for p in 5:
 			var r := Rect2(238.0 + p * 50.0, row_y, 42.0, 16.0)
-			var col := Color(CREAM, 0.95) if p < pips else Color(1, 1, 1, 0.12)
+			var col := UiKit.ORANGE if p < pips else Color(INK, 0.12)
 			ci.draw_rect(r, col)
 	# Affection hearts (snacks fed) — unlocked cats only.
 	if unlocked:
 		var level := GameState.affection_level(cat.id)
 		var hearts := "♥".repeat(level) + "♡".repeat(10 - level)
-		var line := "애정도 Lv.%d   %s" % [level, hearts]
+		var line := tr("CHAR_AFFECTION").format({"level": level, "hearts": hearts})
 		if level > 1:
-			line += "   능력 +%d%%" % roundi(GameState.affection_bonus(cat.id) * 100)
+			line += tr("CHAR_AFFECTION_BONUS").format(
+					{"pct": roundi(GameState.affection_bonus(cat.id) * 100)})
 		_draw_center_text(ci, font, line, 522.0, 20,
-				Color(0.96, 0.62, 0.7), POPUP_SIZE.x)
+				Color("e0578a"), POPUP_SIZE.x)
 	# Status / unlock condition line.
 	var status := ""
-	var status_col := Color(1, 1, 1, 0.7)
+	var status_col := UiKit.MUTED
 	var u: Dictionary = cat.unlock
 	if unlocked:
 		if GameState.selected_cat == cat.id:
-			status = "장착 중"
-			status_col = Color(CREAM, 0.95)
+			status = tr("CHAR_EQUIPPED")
+			status_col = GOLD_COL
 	else:
 		match u.type:
 			"gold":
-				status = "보유 골드  %d G" % GameState.gold
+				status = tr("CHAR_HAVE_GOLD").format({"gold": GameState.gold})
 				status_col = GOLD_COL
 			"gems":
-				status = "보유 보석  ◆ %d" % GameState.gems
+				status = tr("CHAR_HAVE_GEMS").format({"gems": GameState.gems})
 				status_col = GEM_COL
 			"height":
-				status = "무한의 계단 %d층 도달 시 해금  (최고 %d층)" \
-						% [u.floors, GameState.best_height]
-			"story":
-				status = "스토리 %d스테이지 클리어 시 해금  (현재 %d스테이지)" \
-						% [u.stage, GameState.story_stage]
+				status = tr("CHAR_LOCK_HEIGHT").format(
+						{"need": u.floors, "best": GameState.best_height})
+			"score":
+				status = tr("CHAR_LOCK_SCORE").format(
+						{"need": u.amount, "best": GameState.classic_best})
 			"plays":
-				status = "총 %d판 플레이 시 해금  (현재 %d판)" \
-						% [u.count, GameState.games_played]
+				status = tr("CHAR_LOCK_PLAYS").format(
+						{"need": u.count, "now": GameState.games_played})
 	if status != "":
 		_draw_center_text(ci, font, status, POPUP_SIZE.y - 92.0, 19, status_col,
 				POPUP_SIZE.x)
@@ -1221,15 +1294,19 @@ func _refresh_tiles() -> void:
 # --- Currency + toast ---------------------------------------------------------
 
 
+## 우상단 지갑 — 흰 알약 위에 골드/보석.
 func _build_currency_display() -> void:
+	var pill := Panel.new()
+	pill.size = Vector2(320.0, 56.0)
+	pill.position = Vector2(vw - 350.0, 20.0)
+	pill.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 31, 0.0))
+	$UI.add_child(pill)
 	_currency_label = Label.new()
-	_currency_label.position = Vector2(vw - 500.0, 40.0)
-	_currency_label.size = Vector2(440.0, 40.0)
-	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_currency_label.add_theme_font_size_override("font_size", 30)
-	_currency_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	_currency_label.add_theme_constant_override("outline_size", 8)
-	$UI.add_child(_currency_label)
+	_currency_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_currency_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_currency_label.add_theme_font_size_override("font_size", 26)
+	pill.add_child(_currency_label)
 	_refresh_currency()
 
 
@@ -1244,7 +1321,7 @@ func _build_toast() -> void:
 	_toast.size = Vector2(1000.0, 40.0)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.add_theme_font_size_override("font_size", 24)
-	_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_toast.add_theme_color_override("font_outline_color", INK)
 	_toast.add_theme_constant_override("outline_size", 8)
 	_toast.visible = false
 	$UI.add_child(_toast)
@@ -1268,57 +1345,50 @@ func _show_toast(text: String, col: Color) -> void:
 
 func _draw() -> void:
 	var vp := get_viewport_rect().size
-	# Pit backdrop: light seeping down from above.
-	draw_polygon(PackedVector2Array([
-		Vector2.ZERO, Vector2(vp.x, 0), vp, Vector2(0, vp.y),
-	]), PackedColorArray([
-		Color("2a3040"), Color("2a3040"), Color("0b0c12"), Color("0b0c12"),
-	]))
-	var warm := Color(1.0, 0.95, 0.82, 0.08)
-	var faded := Color(1.0, 0.95, 0.82, 0.0)
-	draw_polygon(PackedVector2Array([
-		Vector2(vp.x * 0.32, 0), Vector2(vp.x * 0.68, 0),
-		Vector2(vp.x * 0.78, vp.y), Vector2(vp.x * 0.22, vp.y),
-	]), PackedColorArray([warm, warm, faded, faded]))
-	# Decorative tetromino scatter (viewport-relative so portrait works too).
-	var decos := [
-		["T", Vector2(0.146, 0.241)], ["L", Vector2(0.760, 0.204)],
-		["S", Vector2(0.104, 0.519)], ["I", Vector2(0.792, 0.519)],
-		["Z", Vector2(0.063, 0.352)], ["J", Vector2(0.885, 0.370)],
-	]
-	for d in decos:
-		var color: Color = Board.COLORS[d[0]]
-		color.a = 0.5
-		for c in Board.SHAPES[d[0]][0]:
-			var p := Vector2(d[1].x * vp.x, d[1].y * vp.y) + Vector2(c) * 44.0
-			draw_rect(Rect2(p, Vector2(42.0, 42.0)), color)
-			draw_rect(Rect2(p, Vector2(42.0, 42.0)),
-					Color(1.0, 0.96, 0.84, 0.18), false, 2.0)
-	# The cube cat perched above the title, wearing the selected skin.
-	# High affection (level 5+) earns it a happy idle bounce.
-	var cat_y := 100.0
+	UiKit.paint_backdrop(self, vp)
+	_draw_logo()
+	# 선택한 냥이가 로고 옆(세로 화면은 아래)에 앉아 손님을 맞는다.
+	# 애정도 5 이상이면 기분 좋게 통통 튄다.
+	var at := _cat_anchor
 	if GameState.affection_level(GameState.selected_cat) >= 5:
-		cat_y += sin(_bob * 5.0) * 7.0
-	Player.paint_cat(self, Vector2(vw / 2.0, cat_y), 96.0, 0.0, true, false,
+		at.y += sin(_bob * 5.0) * 7.0
+	# 발밑 그림자 — 밝은 배경에서 캐릭터를 띄워 준다.
+	UiKit.ellipse(self, _cat_anchor + Vector2(0.0, _cat_size * 0.56),
+			Vector2(_cat_size * 0.42, _cat_size * 0.1), Color(0.2, 0.35, 0.45, 0.16))
+	Player.paint_cat(self, at, _cat_size, 0.0, true, false,
 			GameState.cat_skin(GameState.selected_cat))
 	_draw_stat_line()
 
 
-## One-line stat readout for the selected cat, above the character row.
+## 블록 글자 로고 "CAT-TRIS" — 컨셉의 통통한 블록 타이포.
+func _draw_logo() -> void:
+	var text := "CAT-TRIS"
+	var w := UiKit.block_text_width(text, _logo_cell)
+	UiKit.block_text(self, Vector2((vw - w) / 2.0, _logo_top), text, _logo_cell)
+	UiKit.center_text_outlined(self, tr("MENU_TAGLINE"),
+			_logo_top + _logo_cell * 6.6, vw, int(maxf(28.0, _logo_cell * 0.6)),
+			UiKit.WHITE, 0.0, 7)
+
+
+## 선택한 냥이의 한 줄 능력치 — 타이틀 고양이 바로 아래.
 func _draw_stat_line() -> void:
 	var cat := GameState.get_cat(GameState.selected_cat)
 	var stats: Dictionary = GameState.cat_stats(cat.id)
 	var font := ThemeDB.fallback_font
-	var parts: Array[String] = ["%s · %s" % [cat.name, cat.get("trait", "")]]
+	var parts: Array[String] = []
 	for entry in STAT_ROWS:
 		var pips := _stat_pips(entry[1], stats.get(entry[1], 1.0))
-		parts.append("%s %s%s" % [entry[0], "●".repeat(pips), "○".repeat(5 - pips)])
-	var text := "    ".join(parts)
-	# 화면 폭에 넘치면 폰트를 줄여서 한 줄에 맞춘다 (세로 화면 대응).
-	var size := 20
-	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	while w > vw - 40.0 and size > 12:
+		parts.append("%s %s%s" % [tr(entry[0]), "●".repeat(pips), "○".repeat(5 - pips)])
+	var y := _cat_anchor.y + _cat_size * 0.72
+	UiKit.center_text_outlined(self, "%s · %s" % [tr(str(cat.name)),
+			tr(str(cat.get("trait", "")))],
+			y, _cat_size * 2.4, 28, UiKit.CREAM, _cat_anchor.x - _cat_size * 1.2, 7)
+	var text := "   ".join(parts)
+	# 자리에 넘치면 폰트를 줄여서 한 줄에 맞춘다 (세로 화면 대응).
+	var size := 19
+	var room := minf(_cat_size * 2.6, vw - 40.0)
+	while font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room \
+			and size > 11:
 		size -= 1
-		w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	draw_string(font, Vector2((vw - w) / 2.0, tile_y - 12.0), text,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 0.85))
+	UiKit.center_text_outlined(self, text, y + 34.0, room, size, UiKit.WHITE,
+			_cat_anchor.x - room / 2.0, maxi(3, size / 4))

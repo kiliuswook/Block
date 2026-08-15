@@ -49,6 +49,7 @@ func _draw() -> void:
 	draw_rect(r, Color(1, 1, 1, bg_alpha))
 	draw_rect(r, Color(1, 1, 1, 0.4), false, 2.0)
 	var font := ThemeDB.fallback_font
-	var ts := font.get_string_size(label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
+	var text := tr(label)
+	var ts := font.get_string_size(text, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size)
 	var pos := Vector2((size.x - ts.x) / 2.0, (size.y + ts.y * 0.55) / 2.0)
-	draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1, 1, 1, 0.85))
+	draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1, 1, 1, 0.85))

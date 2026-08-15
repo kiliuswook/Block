@@ -99,14 +99,7 @@ func _ready() -> void:
 		height_title.text = "LEVEL"
 		best_title.text = "TOP"
 		lines_title.text = "LINES"
-		goal_label.text = "고전 오락실 테트리스 — LEVEL 하나 = 판 하나
-목표 줄을 지우면 셔터가 내려온다
-(LEVEL 1은 3줄, 판마다 +1줄, 최대 10줄)
-셔터가 지나는 빈 줄마다 보너스 100 × LEVEL
-— 낮게 쌓을수록 보너스가 커진다
-두 판마다 · 오래 버틸수록 낙하 속도 ↑
-LEVEL 5부터 바닥에 방해 블록
-싱글 40 · 더블 100 · 트리플 300 · 테트리스 1200 × LEVEL"
+		goal_label.text = tr("TUT_CLASSIC")
 		_build_goal_meter()
 		_build_skip_level_button()
 		EventBus.classic_level_started.connect(_on_classic_level_started)
@@ -114,38 +107,19 @@ LEVEL 5부터 바닥에 방해 블록
 		EventBus.classic_level_cleared.connect(_on_classic_level_cleared)
 	if picnic:
 		# Casual mode: the big number slot becomes the countdown timer.
-		height_title.text = "남은 시간"
-		best_title.text = "최고 점수"
+		height_title.text = tr("HUD_TIME_LEFT")
+		best_title.text = tr("HUD_BEST_SCORE")
 		if get_viewport_rect().size.x > get_viewport_rect().size.y:
 			# Landscape: score shares the timer's slot — slide it below BEST.
 			# (Portrait already spreads them: timer top-center, score right column.)
 			score_title.position = Vector2(1360.0, 460.0)
 			score_label.position = Vector2(1360.0, 488.0)
-		goal_label.text = "느긋한 2분 젤리 피크닉!
-아무도 죽지 않는 편안한 모드 —
-깔려도 젤리처럼 팡! 하고 빠져나온다
-블록을 쌓고 밟고 올라가서
-둥둥 떠 있는 젤리 생선을 모으자
-생선 1마리 100점 · 줄 클리어 보너스"
+		goal_label.text = tr("TUT_PICNIC")
 	if endless:
-		goal_label.text = "블록을 쌓고 밟으며
-끝없이 위로 올라가자!
-아래에서 용암이 올라온다 — 닿으면 사망
-높이 오를수록, 오래 버틸수록 블록이 빨라진다
-블록이 떨어지기 시작하면 회전 불가 —
-그리고 다음 블록이 바로 등장!
-대시/점프 2회 타격으로 블록 파괴
-줄을 지우면 용암을 밀어내고 골드 획득!
-(줄이 사라져도 발판은 안 무너진다)
-줄 클리어로 FEVER 게이지 충전 —
-피버 중엔 무적 + 2배 점프,
-빠르게 쏟아지는 블록을 밟고 상승!"
+		goal_label.text = tr("TUT_ENDLESS")
 	elif versus:
-		goal_label.text = "2P 대전  —  %d선승
-P1 고양이: 출구로 탈출하면 승리
-P2 블록: 고양이를 깔아뭉개면 승리
-꼭대기까지 쌓아버리면 P2 패배!" % VERSUS_TARGET
-		help_label.text = "P1(고양이)  < > 이동 (더블탭: 대시)   ^ 점프   v 빠른 낙하        P2(블록)  A/D 이동   Q/E 회전   S 낙하 (더블탭: 슬램, 착지 후: 고정)        R 새 대결   ESC 타이틀"
+		goal_label.text = tr("TUT_VERSUS").format({"target": VERSUS_TARGET})
+		help_label.text = tr("TUT_KEYS_VERSUS")
 		_build_versus_tally()
 	if GameState.mode == GameState.MODE_STORY and not GameState.split:
 		EventBus.story_stage_started.connect(_on_story_stage)
@@ -185,11 +159,11 @@ func _on_game_started() -> void:
 		record_tween.kill()
 	match GameState.mode:
 		GameState.MODE_PICNIC:
-			best_label.text = "%d점" % GameState.picnic_best
+			best_label.text = tr("HUD_POINTS").format({"n": GameState.picnic_best})
 		GameState.MODE_CLASSIC:
-			best_label.text = "%d점" % GameState.classic_best
+			best_label.text = tr("HUD_POINTS").format({"n": GameState.classic_best})
 		_:
-			best_label.text = "%d층" % GameState.best_height
+			best_label.text = tr("HUD_FLOOR").format({"n": GameState.best_height})
 	best_label.modulate = Color.WHITE
 	height_label.modulate = Color.WHITE
 	height_label.scale = Vector2.ONE
@@ -200,7 +174,7 @@ func _on_height_changed(v: int) -> void:
 		return  # classic owns the big-number slot for the LEVEL counter
 	var prev := height
 	height = v
-	height_label.text = "%d층" % v
+	height_label.text = tr("HUD_FLOOR").format({"n": v})
 	if v <= prev:
 		return
 	_punch_height_label()
@@ -209,7 +183,7 @@ func _on_height_changed(v: int) -> void:
 		record_broken = true
 		_show_new_record()
 	if record_broken:
-		best_label.text = "%d층" % v
+		best_label.text = tr("HUD_FLOOR").format({"n": v})
 	var tier := floori(v / 10.0)
 	if tier > floori(prev / 10.0):
 		_show_milestone(tier * 10)
@@ -248,9 +222,9 @@ func _spawn_floor_popup(delta_floors: int) -> void:
 
 ## Full-screen banner every 10 floors: slams in, holds, fades.
 func _show_milestone(floors: int) -> void:
-	milestone_label.text = "%d층 돌파!" % floors
+	milestone_label.text = tr("HUD_MILESTONE").format({"n": floors})
 	if floors % 50 == 0:
-		milestone_label.text = "대기록! %d층 돌파!!" % floors
+		milestone_label.text = tr("HUD_MILESTONE_BIG").format({"n": floors})
 	Sfx.play("milestone")
 	_pop_milestone()
 	_screen_flash(0.22 if floors % 50 == 0 else 0.14)
@@ -307,7 +281,8 @@ func _on_game_over() -> void:
 	if endless:
 		var weekly_up := GameState.record_weekly("endless", height)
 		was_record = GameState.record_height(height)
-		stats = "도달 높이 %d층      최고 기록 %d층" % [height, GameState.best_height]
+		stats = tr("HUD_STATS_ENDLESS").format(
+				{"height": height, "best": GameState.best_height})
 		if was_record:
 			Replays.save_replay("endless", board.rec_export())
 		if weekly_up and not was_record:  # record_height already submits
@@ -324,7 +299,8 @@ func _on_game_over() -> void:
 	elif picnic:
 		var weekly_up := GameState.record_weekly("picnic", GameState.score)
 		was_record = GameState.record_picnic(GameState.score)
-		stats = "SCORE %d      젤리 생선 %d마리" % [GameState.score, board.picnic_snacks]
+		stats = tr("HUD_STATS_PICNIC").format(
+				{"score": GameState.score, "snacks": board.picnic_snacks})
 		if was_record:
 			Replays.save_replay("picnic", board.rec_export())
 		if weekly_up and not was_record:
@@ -348,8 +324,9 @@ func _on_game_over() -> void:
 	tw.tween_callback(func() -> void:
 		if not board.playing:
 			death_popup.open(stats, was_record, earned, cost, endless, show_skip,
-					not picnic, "냠냠 피크닉 종료!" if picnic else "",
-					"LEVEL %d 처음부터" % board.level if classic else ""))
+					not picnic, tr("POP_PICNIC_END") if picnic else "",
+					tr("POP_CONTINUE_LEVEL").format({"level": board.level})
+					if classic else ""))
 
 
 ## Gems the next revive costs right now (0 = free). Endless and classic use
@@ -392,11 +369,11 @@ func _award_run_rewards(was_record: bool) -> String:
 	if daily:
 		earn_gold *= 2
 	GameState.add_currency(earn_gold, earn_gems)
-	var line := "획득   +%d G" % earn_gold
+	var line := tr("HUD_EARNED").format({"gold": earn_gold})
 	if earn_gems > 0:
 		line += "   +%d ◆" % earn_gems
 	if daily:
-		line = "오늘 첫 판 2배!   " + line
+		line = tr("HUD_DAILY_DOUBLE") + line
 	return line
 
 
@@ -411,7 +388,7 @@ func _build_split() -> void:
 			goal_label, $UI/NextTitle, $UI/NextPreview]:
 		n.visible = false
 	$TouchControls.visible = false
-	help_label.text = "P1(왼쪽)  A/D 이동 (더블탭: 대시)   W 점프   S 낙하   Q/E 회전   Ctrl 대시        P2(오른쪽)  < > 이동   ^ 점프   v 낙하   , . 회전   Shift 대시        R 새 대결   ESC 타이틀"
+	help_label.text = tr("TUT_KEYS_SPLIT")
 	board.queue_free()
 	boards = []
 	for i in range(2):
@@ -483,7 +460,8 @@ func _process(_delta: float) -> void:
 	for i in range(2):
 		var b: EscapeBoard = boards[i]
 		if GameState.mode == GameState.MODE_ENDLESS:
-			split_labels[i].text = "P%d   %d층" % [i + 1, b.best_height]
+			split_labels[i].text = tr("SPLIT_SCORE").format(
+					{"n": i + 1, "floors": b.best_height})
 		else:
 			split_labels[i].text = "P%d" % (i + 1)
 
@@ -525,11 +503,11 @@ func _update_versus_tally() -> void:
 	if GameState.split:
 		versus_tally.text = "P1  %d : %d  P2" % [p1_wins, p2_wins]
 	else:
-		versus_tally.text = "P1 고양이  %d : %d  블록 P2" % [p1_wins, p2_wins]
+		versus_tally.text = tr("VS_TALLY").format({"p1": p1_wins, "p2": p2_wins})
 
 
 func _on_versus_round(winner: int) -> void:
-	_duel_round(winner, "고양이 (P1)" if winner == 1 else "블록 (P2)")
+	_duel_round(winner, tr("VS_CAT") if winner == 1 else tr("VS_BLOCKS"))
 
 
 ## Shared round flow for versus and split: tally, banner, auto next round,
@@ -546,9 +524,10 @@ func _duel_round(winner: int, who: String) -> void:
 	milestone_label.modulate = Color(1, 1, 1, 0)
 	milestone_label.scale = Vector2(1.8, 1.8)
 	if match_over:
-		milestone_label.text = "%s 최종 승리!\n%d : %d\n\nR 새 대결  ·  ESC 타이틀" % [who, p1_wins, p2_wins]
+		milestone_label.text = tr("VS_MATCH_WIN").format(
+				{"who": who, "p1": p1_wins, "p2": p2_wins})
 	else:
-		milestone_label.text = "%s 라운드 승리!" % who
+		milestone_label.text = tr("VS_ROUND_WIN").format({"who": who})
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(milestone_label, "scale", Vector2.ONE, 0.25) \
@@ -593,7 +572,7 @@ func _on_story_skip() -> void:
 
 ## Floating banner for a first-clear story payout.
 func _on_story_reward(reward_gold: int, reward_gems: int) -> void:
-	var text := "첫 클리어 보상  +%d G" % reward_gold
+	var text := tr("HUD_STORY_REWARD").format({"gold": reward_gold})
 	if reward_gems > 0:
 		text += "   +%d ◆" % reward_gems
 	var vp := get_viewport_rect().size
@@ -692,8 +671,8 @@ func _build_goal_meter() -> void:
 func _build_skip_level_button() -> void:
 	var vp := get_viewport_rect().size
 	var btn := Button.new()
-	btn.text = "▶  다음 LEVEL (테스트)"
-	btn.tooltip_text = "테스트용: 현재 LEVEL을 즉시 클리어한다 (단축키 N)"
+	btn.text = tr("HUD_NEXT_LEVEL_TEST")
+	btn.tooltip_text = tr("HUD_NEXT_LEVEL_TEST_TIP")
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_size_override("font_size", 20)
 	btn.add_theme_color_override("font_color", Color(CREAM, 0.75))
@@ -737,7 +716,7 @@ func _on_classic_level_cleared(_level: int, bonus: int) -> void:
 func _on_escaped(new_level: int) -> void:
 	if story_intro:
 		# Story: the next stage's intro is already up — stamp the clear line on it.
-		intro_clear.text = "STAGE %d 클리어!" % (new_level - 1)
+		intro_clear.text = tr("HUD_STAGE_CLEAR").format({"n": new_level - 1})
 		_screen_flash(0.2)
 		return
 	escape_label.text = "ESCAPE!\nLEVEL %d" % new_level
@@ -811,7 +790,7 @@ func _on_story_stage(stage_num: int) -> void:
 	if $TouchControls.visible:
 		hint = str(stage.get("hint_touch", hint))
 	intro_hint.text = hint
-	intro_prompt.text = "탭 또는 아무 키나 눌러 시작!"
+	intro_prompt.text = tr("HUD_TAP_TO_START")
 	story_intro.visible = true
 	board.is_paused = true
 
@@ -831,7 +810,7 @@ func _on_story_progress(text: String) -> void:
 
 
 func _on_story_doors_opened() -> void:
-	milestone_label.text = "출구가 열렸다!"
+	milestone_label.text = tr("HUD_EXIT_OPEN")
 	_pop_milestone()
 	_screen_flash(0.18)
 
@@ -840,12 +819,12 @@ func _on_story_completed() -> void:
 	Sfx.play("record")
 	var earned := _award_run_rewards(false)
 	intro_mode = "complete"
-	intro_clear.text = "모든 스테이지 클리어"
-	intro_stage.text = "스토리 완주!"
-	intro_name.text = "축하해냥! 이제 무한의 계단에 도전해보자"
+	intro_clear.text = tr("STORY_ALL_CLEAR")
+	intro_stage.text = tr("STORY_COMPLETE")
+	intro_name.text = tr("STORY_COMPLETE_DESC")
 	intro_hint.text = "SCORE %d" % GameState.score \
 			+ ("\n%s" % earned if earned != "" else "")
-	intro_prompt.text = "탭 또는 아무 키 → 타이틀로"
+	intro_prompt.text = tr("STORY_TAP_TO_TITLE")
 	story_intro.visible = true
 	_screen_flash(0.3)
 
@@ -880,7 +859,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			for b in boards:
 				b.is_paused = true
 			Sfx.play("pause")
-			settings_panel.open("일시정지", "계속하기")
+			settings_panel.open(false)
 
 
 ## The pause menu (settings panel) closed: resume play.

@@ -58,8 +58,10 @@ func week_remaining_text() -> String:
 	var h := (rem % 86400) / 3600
 	var m := (rem % 3600) / 60
 	if d > 0:
-		return "%d일 %d시간" % [d, h]
-	return ("%d시간 %d분" % [h, m]) if h > 0 else "%d분" % m
+		return tr("RANK_DUR_DH").format({"d": d, "h": h})
+	if h > 0:
+		return tr("RANK_DUR_HM").format({"h": h, "m": m})
+	return tr("RANK_DUR_M").format({"m": m})
 
 
 ## My current local best for a mode key.
@@ -81,8 +83,8 @@ func value_text(mode_key: String, v: int) -> String:
 		"story":
 			return "STAGE %d" % v
 		"endless":
-			return "%d층" % v
-	return "%d점" % v
+			return tr("HUD_FLOOR").format({"n": v})
+	return tr("HUD_POINTS").format({"n": v})
 
 
 func submit_all() -> void:

@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 
 EventBus="*res://core/autoload/event_bus.gd"
 GameState="*res://core/autoload/game_state.gd"
+I18n="*res://core/autoload/i18n.gd"
 Sfx="*res://core/autoload/sfx.gd"
 Replays="*res://core/autoload/replays.gd"
 Ranks="*res://core/autoload/ranks.gd"
@@ -36,7 +37,12 @@ window/size/viewport_height.mobile=1920
 
 [gui]
 
-theme/custom_font="res://shared/assets/fonts/NotoSansKR-Regular.otf"
+theme/custom_font="res://shared/assets/fonts/ui_font.tres"
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://shared/locale/ui.en.translation", "res://shared/locale/ui.ko.translation", "res://shared/locale/ui.en_XA.translation", "res://shared/locale/content.en.translation", "res://shared/locale/content.ko.translation", "res://shared/locale/content.en_XA.translation", "res://shared/locale/flavor.en.translation", "res://shared/locale/flavor.ko.translation", "res://shared/locale/flavor.en_XA.translation")
+locale/fallback="en"
 
 [input]
 

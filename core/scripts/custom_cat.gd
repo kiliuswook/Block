@@ -5,7 +5,8 @@ extends RefCounted
 ## 스타일 옵션의 "r"은 희귀도(0 일반~3 전설, 표시용), "d"는 플레이버 텍스트.
 ## (class_name 없이 preload로 참조 — 전역 클래스 캐시 갱신 불필요)
 
-const RARITY_NAMES: Array[String] = ["일반", "희귀", "영웅", "전설"]
+const RARITY_NAMES: Array[String] = ["CAT_RARITY_0", "CAT_RARITY_1",
+		"CAT_RARITY_2", "CAT_RARITY_3"]
 const RARITY_COLS: Array[Color] = [
 	Color(1, 1, 1, 0.75), Color(0.45, 0.8, 1.0),
 	Color(0.78, 0.55, 1.0), Color(1.0, 0.85, 0.35),
@@ -43,9 +44,9 @@ const NOSE_COLS: Array[Color] = [
 ## 부위 목록. type "color"는 cols 팔레트에서, "style"은 opts에서 고른다.
 ## index 0이 기본값 — 스타일 부위는 0번을 무난한 기본 모양으로 둔다.
 const PARTS: Array[Dictionary] = [
-	{"key": "body", "name": "몸 색", "type": "color", "cols": BODY_COLS},
-	{"key": "ear", "name": "귀·꼬리 색", "type": "color", "cols": EAR_COLS},
-	{"key": "eyes", "name": "눈", "type": "style", "opts": [
+	{"key": "body", "name": "CAT_PART_BODY", "type": "color", "cols": BODY_COLS},
+	{"key": "ear", "name": "CAT_PART_EAR", "type": "color", "cols": EAR_COLS},
+	{"key": "eyes", "name": "CAT_PART_EYES", "type": "style", "opts": [
 		{"id": "round", "name": "동글눈", "d": "가장 순수한 눈망울."},
 		{"id": "sparkle", "name": "반짝눈", "r": 1, "d": "눈에 우주가 담겼다."},
 		{"id": "happy", "name": "웃는눈", "d": "세상 만사가 즐겁다."},
@@ -66,8 +67,8 @@ const PARTS: Array[Dictionary] = [
 		{"id": "diamond", "name": "보석눈", "r": 3, "d": "감정가 측정 불가."},
 		{"id": "spiral", "name": "빙글눈", "r": 2, "d": "최면에 걸릴지도."},
 		{"id": "lash", "name": "속눈썹눈", "r": 2, "d": "메이크업 3시간 소요."}]},
-	{"key": "eye_col", "name": "눈 색", "type": "color", "cols": EYE_COLS},
-	{"key": "nose", "name": "코", "type": "style", "opts": [
+	{"key": "eye_col", "name": "CAT_PART_EYE_COL", "type": "color", "cols": EYE_COLS},
+	{"key": "nose", "name": "CAT_PART_NOSE", "type": "style", "opts": [
 		{"id": "tri", "name": "세모코", "d": "정석 중의 정석."},
 		{"id": "heart", "name": "하트코", "r": 1, "d": "숨쉴 때마다 사랑 발사."},
 		{"id": "dot", "name": "점코", "d": "겸손한 코."},
@@ -76,8 +77,8 @@ const PARTS: Array[Dictionary] = [
 		{"id": "clover", "name": "클로버코", "r": 2, "d": "행운이 스며든다."},
 		{"id": "shine", "name": "반짝코", "r": 2, "d": "코가 24K."},
 		{"id": "none", "name": "없음", "d": "코는 마음속에 있다."}]},
-	{"key": "nose_col", "name": "코 색", "type": "color", "cols": NOSE_COLS},
-	{"key": "mouth", "name": "입", "type": "style", "opts": [
+	{"key": "nose_col", "name": "CAT_PART_NOSE_COL", "type": "color", "cols": NOSE_COLS},
+	{"key": "mouth", "name": "CAT_PART_MOUTH", "type": "style", "opts": [
 		{"id": "w", "name": "야옹입", "d": "클래식 그 자체."},
 		{"id": "smile", "name": "미소", "d": "온화함 만렙."},
 		{"id": "neutral", "name": "무심", "d": "쿨내 진동."},
@@ -90,7 +91,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "zigzag", "name": "덜덜입", "r": 1, "d": "월요일을 마주한 표정."},
 		{"id": "whistle", "name": "휘파람", "r": 2, "d": "시치미 뚝."},
 		{"id": "drool", "name": "침흘림", "r": 1, "d": "츄르 목격 직후."}]},
-	{"key": "whisker", "name": "수염", "type": "style", "opts": [
+	{"key": "whisker", "name": "CAT_PART_WHISKER", "type": "style", "opts": [
 		{"id": "basic", "name": "기본", "d": "단정한 기본 수염."},
 		{"id": "long", "name": "긴 수염", "d": "연륜의 상징."},
 		{"id": "droop", "name": "처진 수염", "d": "나른한 오후."},
@@ -101,7 +102,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "single", "name": "외수염", "d": "하나면 충분하다."},
 		{"id": "spark", "name": "전기 수염", "r": 3, "d": "정전기 충전 완료."},
 		{"id": "none", "name": "없음", "d": "면도 완료."}]},
-	{"key": "pattern", "name": "무늬", "type": "style", "opts": [
+	{"key": "pattern", "name": "CAT_PART_PATTERN", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "순수 단색 원단."},
 		{"id": "stripes", "name": "이마 줄무늬", "d": "야생 0.1% 함유."},
 		{"id": "spots", "name": "얼룩", "d": "우유에 빠졌다 나옴."},
@@ -118,8 +119,8 @@ const PARTS: Array[Dictionary] = [
 		{"id": "half", "name": "반반", "r": 2, "d": "반반 무마니."},
 		{"id": "diamond", "name": "다이아 무늬", "r": 3, "d": "럭셔리 그 자체."},
 		{"id": "belly", "name": "둥근 배", "d": "배부터 만지고 싶다."}]},
-	{"key": "pattern_col", "name": "무늬 색", "type": "color", "cols": PATTERN_COLS},
-	{"key": "tail", "name": "꼬리", "type": "style", "opts": [
+	{"key": "pattern_col", "name": "CAT_PART_PATTERN_COL", "type": "color", "cols": PATTERN_COLS},
+	{"key": "tail", "name": "CAT_PART_TAIL", "type": "style", "opts": [
 		{"id": "curl", "name": "말린 꼬리", "d": "기분 좋음의 표준."},
 		{"id": "up", "name": "쭉 편 꼬리", "d": "당당한 직립 꼬리."},
 		{"id": "fluffy", "name": "복슬 꼬리", "r": 1, "d": "이불 대용 가능."},
@@ -134,7 +135,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "question", "name": "물음표 꼬리", "r": 2, "d": "영원한 미스터리."},
 		{"id": "ring", "name": "고리 꼬리", "r": 1, "d": "래쿤 아님."},
 		{"id": "none", "name": "없음", "d": "밸런스 조정의 희생양."}]},
-	{"key": "paws", "name": "앞발", "type": "style", "opts": [
+	{"key": "paws", "name": "CAT_PART_PAWS", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "발은 소중하니까 숨김."},
 		{"id": "paws", "name": "앞발", "d": "까꿍, 앞발 등장."},
 		{"id": "beans", "name": "젤리 발바닥", "r": 1, "d": "말랑함 보증."},
@@ -142,7 +143,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "boots", "name": "부츠", "r": 1, "d": "장화 신은 냥이."},
 		{"id": "heart_beans", "name": "하트 젤리", "r": 2, "d": "발바닥까지 사랑."},
 		{"id": "star_beans", "name": "별 젤리", "r": 2, "d": "밟히면 소원 성취."}]},
-	{"key": "blush", "name": "볼터치", "type": "style", "opts": [
+	{"key": "blush", "name": "CAT_PART_BLUSH", "type": "style", "opts": [
 		{"id": "pink", "name": "핑크", "d": "은은한 홍조."},
 		{"id": "peach", "name": "피치", "d": "복숭아 두 조각."},
 		{"id": "big", "name": "큼직", "r": 1, "d": "부끄러움 최대 출력."},
@@ -151,7 +152,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "star", "name": "별 볼", "r": 2, "d": "볼이 반짝반짝."},
 		{"id": "blue", "name": "새파람", "r": 1, "d": "기가 막힌 상황."},
 		{"id": "none", "name": "없음", "d": "포커페이스."}]},
-	{"key": "mark", "name": "이마·주근깨", "type": "style", "opts": [
+	{"key": "mark", "name": "CAT_PART_MARK", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "깨끗한 이마."},
 		{"id": "star", "name": "별", "r": 1, "d": "선택받은 냥이의 증표."},
 		{"id": "moon", "name": "초승달", "r": 1, "d": "세일러 냥."},
@@ -164,7 +165,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "third_eye", "name": "제3의 눈", "r": 3, "d": "진실이 보인다..."},
 		{"id": "band", "name": "반창고", "d": "격투의 흔적."},
 		{"id": "clover", "name": "클로버", "r": 2, "d": "네잎은 아니지만 행운."}]},
-	{"key": "extra", "name": "소품", "type": "style", "opts": [
+	{"key": "extra", "name": "CAT_PART_EXTRA", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "민낯의 자신감."},
 		{"id": "glasses", "name": "뿔테 안경", "d": "지성 +5 (기분상)."},
 		{"id": "round_glasses", "name": "동글 안경", "d": "순한 맛 지성파."},

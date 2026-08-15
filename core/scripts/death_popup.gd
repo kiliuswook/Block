@@ -67,7 +67,7 @@ func _ready() -> void:
 	v.add_child(cat)
 
 	_title = Label.new()
-	_title.text = "냐옹... 쓰러졌다!"
+	_title.text = tr("POP_DEAD_TITLE")
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.add_theme_font_size_override("font_size", 52)
 	_title.add_theme_color_override("font_color", Color(1.0, 0.42, 0.4))
@@ -76,7 +76,7 @@ func _ready() -> void:
 	v.add_child(_title)
 
 	_record_label = Label.new()
-	_record_label.text = "☆ 신기록 달성! ☆"
+	_record_label.text = tr("POP_NEW_RECORD")
 	_record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_record_label.add_theme_font_size_override("font_size", 30)
 	_record_label.add_theme_color_override("font_color", GOLD)
@@ -98,7 +98,7 @@ func _ready() -> void:
 
 	v.add_child(_spacer(10.0))
 
-	_cont = _make_button("이어서 하기", true)
+	_cont = _make_button(tr("POP_CONTINUE"), true)
 	_cont.pressed.connect(func() -> void: continue_pressed.emit())
 	v.add_child(_cont)
 
@@ -111,7 +111,7 @@ func _ready() -> void:
 
 	v.add_child(_spacer(6.0))
 
-	var restart := _make_button("처음부터 다시하기", false)
+	var restart := _make_button(tr("POP_RESTART"), false)
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	v.add_child(restart)
 
@@ -140,7 +140,7 @@ func _ready() -> void:
 	_skip_btn.pressed.connect(func() -> void: skip_pressed.emit())
 	v.add_child(_skip_btn)
 
-	var to_title := _make_button("타이틀로 나가기", false)
+	var to_title := _make_button(tr("POP_TO_TITLE"), false)
 	to_title.pressed.connect(func() -> void: title_pressed.emit())
 	v.add_child(to_title)
 
@@ -152,9 +152,9 @@ func _ready() -> void:
 func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 		show_boosts := false, show_skip := false, show_continue := true,
 		title_text := "", continue_text := "") -> void:
-	_title.text = title_text if title_text != "" else "냐옹... 쓰러졌다!"
+	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
 	# Classic revives restart the level, so its button says so.
-	_cont.text = continue_text if continue_text != "" else "이어서 하기"
+	_cont.text = continue_text if continue_text != "" else tr("POP_CONTINUE")
 	_title.add_theme_color_override("font_color",
 			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
 	_cont.visible = show_continue
@@ -164,15 +164,15 @@ func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 	_reward_label.text = earned
 	_reward_label.visible = earned != ""
 	if revive_cost <= 0:
-		_hint.text = "◆ 부활 젤리  ·  이번엔 무료!"
+		_hint.text = tr("POP_REVIVE_FREE")
 		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
 		_cont.disabled = false
 	elif GameState.gems >= revive_cost:
-		_hint.text = "◆ 부활 젤리 %d개 사용  (보유 ◆ %d)" % [revive_cost, GameState.gems]
+		_hint.text = tr("POP_REVIVE_USE").format({"cost": revive_cost, "gems": GameState.gems})
 		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
 		_cont.disabled = false
 	else:
-		_hint.text = "부활에 ◆ %d 필요  (보유 ◆ %d — 부족)" % [revive_cost, GameState.gems]
+		_hint.text = tr("POP_REVIVE_LACK").format({"cost": revive_cost, "gems": GameState.gems})
 		_hint.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
 		_cont.disabled = true
 	_boost_label.visible = show_boosts
@@ -181,7 +181,7 @@ func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 		_refresh_boosts()
 	_skip_btn.visible = show_skip
 	if show_skip:
-		_skip_btn.text = "◆ %d  이 스테이지 건너뛰기" % GameState.SKIP_COST
+		_skip_btn.text = tr("POP_SKIP_STAGE").format({"cost": GameState.SKIP_COST})
 		_skip_btn.disabled = GameState.gems < GameState.SKIP_COST
 	visible = true
 	_panel.modulate.a = 0.0
@@ -208,11 +208,11 @@ func _on_boost_chip(boost: Dictionary) -> void:
 
 
 func _refresh_boosts() -> void:
-	_boost_label.text = "다음 판 부스트  (보유 %d G)" % GameState.gold
+	_boost_label.text = tr("POP_BOOST_LABEL").format({"gold": GameState.gold})
 	for b: Dictionary in GameState.BOOSTS:
 		var chip: Button = _boost_chips[b.id]
 		var pending: bool = b.id in GameState.pending_boosts
-		chip.text = "%s%s  %dG" % ["✓ " if pending else "", b.name, b.price]
+		chip.text = "%s%s  %dG" % ["✓ " if pending else "", tr(b.name), b.price]
 		var sb := StyleBoxFlat.new()
 		sb.set_corner_radius_all(10)
 		sb.bg_color = Color(CREAM, 0.18) if pending else Color(1, 1, 1, 0.06)

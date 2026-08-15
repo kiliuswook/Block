@@ -18,38 +18,38 @@ const MODE_PICNIC := 4  # casual jelly picnic: no death, collect snacks on a tim
 ##  lighter floats but gets flung further.
 ##  push — dash shove power in cells: 1 shoves the piece exactly one cell.
 const CATS: Array[Dictionary] = [
-	{"id": "cream", "name": "크림", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
-		"unlock": {"type": "free"}, "trait": "밸런스",
+	{"id": "cream", "name": "CAT_CREAM", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
+		"unlock": {"type": "free"}, "trait": "TRAIT_BALANCED",
 		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "cheese", "name": "치즈", "body": Color("f5b352"), "ear": Color("e08a3c"),
-		"unlock": {"type": "gold", "amount": 300}, "trait": "헤비급",
+	{"id": "cheese", "name": "CAT_CHEESE", "body": Color("f5b352"), "ear": Color("e08a3c"),
+		"unlock": {"type": "gold", "amount": 300}, "trait": "TRAIT_HEAVY",
 		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "calico", "name": "삼색", "body": Color("f2e6d4"), "ear": Color("8a5a33"),
-		"unlock": {"type": "story", "stage": 3}, "trait": "대시왕",
+	{"id": "calico", "name": "CAT_CALICO", "body": Color("f2e6d4"), "ear": Color("8a5a33"),
+		"unlock": {"type": "score", "amount": 2000}, "trait": "TRAIT_DASHKING",
 		"stats": {"speed": 1.04, "jump": 0.97, "dash": 1.18, "weight": 0.95, "push": 4}},
-	{"id": "black", "name": "까망", "body": Color("3a3540"), "ear": Color("26232c"),
+	{"id": "black", "name": "CAT_BLACK", "body": Color("3a3540"), "ear": Color("26232c"),
 		"ink": Color("f0d060"), "unlock": {"type": "height", "floors": 10},
-		"trait": "질주본능",
+		"trait": "TRAIT_SPRINTER",
 		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "gray", "name": "회색", "body": Color("aeb6c2"), "ear": Color("7e8694"),
-		"unlock": {"type": "gold", "amount": 500}, "trait": "묵직점프",
+	{"id": "gray", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
+		"unlock": {"type": "gold", "amount": 500}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	{"id": "mint", "name": "민트", "body": Color("bfe8d5"), "ear": Color("6fbf9a"),
-		"unlock": {"type": "height", "floors": 30}, "trait": "점프킹",
+	{"id": "mint", "name": "CAT_MINT", "body": Color("bfe8d5"), "ear": Color("6fbf9a"),
+		"unlock": {"type": "height", "floors": 30}, "trait": "TRAIT_JUMPKING",
 		"stats": {"speed": 0.96, "jump": 1.12, "dash": 0.95, "weight": 0.9, "push": 1}},
-	{"id": "pink", "name": "벚꽃", "body": Color("f6cdd8"), "ear": Color("e08ea6"),
-		"unlock": {"type": "gold", "amount": 800}, "trait": "날쌘돌이",
+	{"id": "pink", "name": "CAT_PINK", "body": Color("f6cdd8"), "ear": Color("e08ea6"),
+		"unlock": {"type": "gold", "amount": 800}, "trait": "TRAIT_SWIFT",
 		"stats": {"speed": 1.08, "jump": 1.06, "dash": 1.0, "weight": 0.8, "push": 2}},
-	{"id": "ghost", "name": "유령", "body": Color(0.93, 0.96, 1.0, 0.6),
+	{"id": "ghost", "name": "CAT_GHOST", "body": Color(0.93, 0.96, 1.0, 0.6),
 		"ear": Color(0.75, 0.8, 0.95, 0.55), "ink": Color("5a6a8a"),
-		"unlock": {"type": "plays", "count": 20}, "trait": "깃털몸",
+		"unlock": {"type": "plays", "count": 20}, "trait": "TRAIT_FEATHER",
 		"stats": {"speed": 1.0, "jump": 1.04, "dash": 1.1, "weight": 0.72, "push": 1}},
-	{"id": "gold", "name": "황금", "body": Color("f7d354"), "ear": Color("c9982a"),
-		"unlock": {"type": "gems", "amount": 20}, "trait": "올라운더",
+	{"id": "gold", "name": "CAT_GOLD", "body": Color("f7d354"), "ear": Color("c9982a"),
+		"unlock": {"type": "gems", "amount": 20}, "trait": "TRAIT_ALLROUND",
 		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05, "push": 3}},
 	# 나만의 냥: 외형은 CustomCat 카탈로그(custom_cat 저장값)로 결정되는 커스텀 슬롯.
-	{"id": "custom", "name": "나만의 냥", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
-		"unlock": {"type": "free"}, "trait": "커스텀",
+	{"id": "custom", "name": "CAT_CUSTOM", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
+		"unlock": {"type": "free"}, "trait": "TRAIT_CUSTOM",
 		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 ]
 
@@ -59,55 +59,55 @@ const CustomCat := preload("res://core/scripts/custom_cat.gd")
 ## Two independent slots (head / neck), purely cosmetic — no stat effects.
 ## kind selects the draw routine in player.gd; col/col2 tint it.
 const ACCESSORIES: Array[Dictionary] = [
-	{"id": "beanie", "name": "털모자", "slot": "head", "kind": "beanie",
+	{"id": "beanie", "name": "ACC_BEANIE", "slot": "head", "kind": "beanie",
 		"price": {"type": "gold", "amount": 200},
 		"col": Color("5a8fd0"), "col2": Color("e8eef6")},
-	{"id": "leaf", "name": "새싹", "slot": "head", "kind": "leaf",
+	{"id": "leaf", "name": "ACC_LEAF", "slot": "head", "kind": "leaf",
 		"price": {"type": "gold", "amount": 250},
 		"col": Color("7ec850"), "col2": Color("5a9a38")},
-	{"id": "ribbon", "name": "리본", "slot": "head", "kind": "ribbon",
+	{"id": "ribbon", "name": "ACC_RIBBON", "slot": "head", "kind": "ribbon",
 		"price": {"type": "gold", "amount": 300},
 		"col": Color("e0607a"), "col2": Color("b84760")},
-	{"id": "flower", "name": "꽃송이", "slot": "head", "kind": "flower",
+	{"id": "flower", "name": "ACC_FLOWER", "slot": "head", "kind": "flower",
 		"price": {"type": "gold", "amount": 400},
 		"col": Color("f6cdd8"), "col2": Color("f2b93e")},
-	{"id": "wizard", "name": "마법사 모자", "slot": "head", "kind": "wizard",
+	{"id": "wizard", "name": "ACC_WIZARD", "slot": "head", "kind": "wizard",
 		"price": {"type": "gold", "amount": 1200},
 		"col": Color("6a55b0"), "col2": Color("f2d365")},
-	{"id": "tophat", "name": "신사 모자", "slot": "head", "kind": "tophat",
+	{"id": "tophat", "name": "ACC_TOPHAT", "slot": "head", "kind": "tophat",
 		"price": {"type": "gold", "amount": 1500},
 		"col": Color("2c2833"), "col2": Color("b8433f")},
-	{"id": "crown", "name": "황금 왕관", "slot": "head", "kind": "crown",
+	{"id": "crown", "name": "ACC_CROWN", "slot": "head", "kind": "crown",
 		"price": {"type": "gold", "amount": 3000},
 		"col": Color("f2c94c"), "col2": Color("e05f5f")},
-	{"id": "halo", "name": "천사의 링", "slot": "head", "kind": "halo",
+	{"id": "halo", "name": "ACC_HALO", "slot": "head", "kind": "halo",
 		"price": {"type": "gems", "amount": 12},
 		"col": Color("fff3d0"), "col2": Color("f7d354")},
-	{"id": "bell", "name": "방울 목걸이", "slot": "neck", "kind": "bell",
+	{"id": "bell", "name": "ACC_BELL", "slot": "neck", "kind": "bell",
 		"price": {"type": "gold", "amount": 200},
 		"col": Color("b8433f"), "col2": Color("f2c94c")},
-	{"id": "scarf", "name": "목도리", "slot": "neck", "kind": "scarf",
+	{"id": "scarf", "name": "ACC_SCARF", "slot": "neck", "kind": "scarf",
 		"price": {"type": "gold", "amount": 300},
 		"col": Color("c94f43"), "col2": Color("a83d33")},
-	{"id": "bowtie", "name": "나비넥타이", "slot": "neck", "kind": "bowtie",
+	{"id": "bowtie", "name": "ACC_BOWTIE", "slot": "neck", "kind": "bowtie",
 		"price": {"type": "gold", "amount": 400},
 		"col": Color("4a6fb8"), "col2": Color("35507f")},
-	{"id": "bandana", "name": "반다나", "slot": "neck", "kind": "bandana",
+	{"id": "bandana", "name": "ACC_BANDANA", "slot": "neck", "kind": "bandana",
 		"price": {"type": "gold", "amount": 800},
 		"col": Color("d08a3c"), "col2": Color("f4e3c8")},
-	{"id": "goldchain", "name": "금 목걸이", "slot": "neck", "kind": "goldchain",
+	{"id": "goldchain", "name": "ACC_GOLDCHAIN", "slot": "neck", "kind": "goldchain",
 		"price": {"type": "gold", "amount": 3000},
 		"col": Color("f2c94c"), "col2": Color("c9982a")},
-	{"id": "gemchain", "name": "보석 목걸이", "slot": "neck", "kind": "gemchain",
+	{"id": "gemchain", "name": "ACC_GEMCHAIN", "slot": "neck", "kind": "gemchain",
 		"price": {"type": "gems", "amount": 10},
 		"col": Color("d8dee8"), "col2": Color("6fd0e8")},
 ]
 
 ## One-run boosts for endless mode, bought before a run and consumed on start.
 const BOOSTS: Array[Dictionary] = [
-	{"id": "warmup", "name": "워밍업", "desc": "5층 계단에서 출발", "price": 50},
-	{"id": "fever", "name": "피버 스타트", "desc": "피버 게이지 50%로 시작", "price": 40},
-	{"id": "lucky", "name": "럭키 젤리", "desc": "이번 판 골드 +50%", "price": 60},
+	{"id": "warmup", "name": "BOOST_WARMUP", "desc": "BOOST_WARMUP_DESC", "price": 50},
+	{"id": "fever", "name": "BOOST_FEVER", "desc": "BOOST_FEVER_DESC", "price": 40},
+	{"id": "lucky", "name": "BOOST_LUCKY", "desc": "BOOST_LUCKY_DESC", "price": 60},
 ]
 
 ## Snack price scales with the cat's current level: 50 + 50×level gold.
@@ -120,7 +120,7 @@ const SNACK_MAX := 25
 const AFFECTION_STAT_STEP := 0.01
 const SKIP_COST := 3  # gems to skip a story stage after repeated failures
 
-var mode: int = MODE_STORY
+var mode: int = MODE_CLASSIC
 var split: bool = false  # 2-player split screen (escape race/endless only), not saved
 var best_height: int = 0
 var classic_best: int = 0  # classic mode all-time high score
@@ -144,6 +144,7 @@ var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # collected alphabet keycaps: "A".."Z" -> count
 var custom_cat: Dictionary = {}  # 나만의 냥 part picks: part key -> option index
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
+var locale: String = ""  # chosen UI language ("" = follow the system locale)
 # Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
 var vol_master: float = 1.0
 var vol_bgm: float = 0.8
@@ -162,7 +163,7 @@ func _ready() -> void:
 		player_id = "%08x" % (randi() & 0x7fffffff)
 		save_game()
 	if nickname == "":
-		nickname = "냥이-%04d" % (randi() % 10000)
+		nickname = tr("NICKNAME_DEFAULT").format({"n": "%04d" % (randi() % 10000)})
 		save_game()
 	EventBus.game_started.connect(func() -> void: games_played += 1)
 
@@ -182,7 +183,7 @@ func reset() -> void:
 
 ## Full progress wipe (설정 > 게임 초기화): records, story progress, wallet,
 ## unlocked cats, accessories, affection, keycaps, custom cat, weekly bests.
-## Keeps the volume settings, nickname and player_id (same board identity).
+## Keeps the volume settings, language, nickname and player_id (same identity).
 func reset_all() -> void:
 	score = 0
 	best_height = 0
@@ -545,8 +546,8 @@ func is_unlocked(id: String) -> bool:
 			return id in purchased
 		"height":
 			return best_height >= int(u.floors)
-		"story":
-			return story_stage >= int(u.stage)
+		"score":
+			return classic_best >= int(u.amount)
 		"plays":
 			return games_played >= int(u.count)
 	return false
@@ -599,6 +600,7 @@ func save_game() -> void:
 		"keycaps": keycaps,
 		"custom_cat": custom_cat,
 		"last_daily": last_daily,
+		"locale": locale,
 		"vol_master": vol_master,
 		"vol_bgm": vol_bgm,
 		"vol_sfx": vol_sfx,
@@ -669,6 +671,7 @@ func load_game() -> void:
 			for k in cst:
 				custom_cat[str(k)] = int(cst[k])
 		last_daily = str(data.get("last_daily", ""))
+		locale = str(data.get("locale", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
 		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)

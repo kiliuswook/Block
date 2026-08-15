@@ -18,6 +18,10 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_aff.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
 	GameState.affection = saved_aff
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes.png",
+			func(inst: Node) -> void: inst._open_modes())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",
+			func(inst: Node) -> void: inst._open_chars())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_shop.png",
@@ -103,6 +107,28 @@ func _ready() -> void:
 				b._classic_start_shutter()
 				for i in range(12):
 					b._update_shutter(1.0))
+	# Gold: seams inside locked blocks, a nugget riding the live piece, and
+	# loose nuggets lying on the stack waiting to be walked into.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_gold.png",
+			func(inst: Node) -> void:
+				var b: Node = inst.get_node("Board")
+				for x in range(EscapeBoard.COLS):
+					if x != 6:
+						b.grid[Vector2i(x, 19)] = Board.PIECES[x % 7]
+						if x % 3 == 0:
+							b.grid[Vector2i(x, 18)] = Board.PIECES[(x + 2) % 7]
+				b.ore[Vector2i(2, 19)] = EscapeBoard.ORE_VALUE
+				b.ore[Vector2i(3, 18)] = EscapeBoard.ORE_VALUE
+				b.piece_type = "T"
+				b.piece_rot = 0
+				b.piece_pos = Vector2i(4, 3)
+				b.piece_state = b.PieceState.TRACKING
+				b.piece_ore = 0
+				b.rider = {"col": 2, "amount": EscapeBoard.RIDER_VALUE}
+				b._spawn_nugget(Vector2(1.5 * 64.0, 17.0 * 64.0),
+						EscapeBoard.RIDER_VALUE)
+				b.gold_fx.append([Vector2(8.0 * 64.0, 17.0 * 64.0), 0.2, 8])
+				b.queue_redraw())
 	GameState.mode = GameState.MODE_PICNIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS
@@ -113,7 +139,7 @@ func _ready() -> void:
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
 	await _capture("res://core/scenes/main.tscn", OUT + "/pause_settings.png",
 			func(inst: Node) -> void:
-				inst.settings_panel.open("일시정지", "계속하기"))
+				inst.settings_panel.open(false))
 	GameState.split = true
 	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_escape.png")

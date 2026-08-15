@@ -1,30 +1,36 @@
 extends Control
-## Volume settings panel (master / BGM / SFX sliders), built in code and
+## Settings panel (language + master / BGM / SFX sliders), built in code and
 ## viewport-relative so one control serves landscape and portrait, the title
-## screen ("설정") and the in-game pause menu ("일시정지").
+## screen (SET_TITLE) and the in-game pause menu (SET_PAUSE_TITLE).
 
 signal closed
 
-const CREAM := Color("f4e3c8")
-const PANEL_SIZE := Vector2(640.0, 560.0)
-const ROWS := [["전체 음량", "master"], ["배경 음악", "bgm"], ["효과음", "sfx"]]
+const UiKit := preload("res://core/scripts/ui_kit.gd")
+const CREAM := UiKit.CREAM
+const PANEL_SIZE := Vector2(640.0, 640.0)
+const ROWS := [["SET_VOL_MASTER", "master"], ["SET_VOL_BGM", "bgm"],
+		["SET_VOL_SFX", "sfx"]]
 
 var _title_label: Label
 var _close_btn: Button
 var _reset_btn: Button
 var _reset_armed := false  # 첫 탭 = 확인 문구, 둘째 탭 = 실제 초기화
 var _sliders := {}  # kind -> HSlider
+var _lang_row: Array[Control] = []  # 언어 줄 (타이틀 설정에서만 노출)
+var _lang_btn: OptionButton
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.6)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(dim)
 	var vp := get_viewport_rect().size
+	size = vp  # CanvasLayer 밑에서는 앵커만으로 크기가 잡히지 않는다
+	var dim := ColorRect.new()
+	dim.color = Color(0.09, 0.13, 0.18, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.size = vp
+	add_child(dim)
 	var panel := Control.new()
 	panel.position = (vp - PANEL_SIZE) / 2.0
 	panel.size = PANEL_SIZE
@@ -33,60 +39,68 @@ func _ready() -> void:
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.draw.connect(func() -> void:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color("1c1a26")
-		sb.set_corner_radius_all(18)
-		sb.set_border_width_all(3)
-		sb.border_color = Color(CREAM, 0.65)
-		face.draw_style_box(sb, Rect2(Vector2.ZERO, PANEL_SIZE)))
+		face.draw_style_box(UiKit.panel_box(UiKit.WHITE, 26, 0.0),
+				Rect2(Vector2.ZERO, PANEL_SIZE)))
 	panel.add_child(face)
 	_title_label = Label.new()
-	_title_label.text = "설정"
+	_title_label.text = tr("SET_TITLE")
 	_title_label.position = Vector2(0.0, 36.0)
 	_title_label.size = Vector2(PANEL_SIZE.x, 50.0)
 	_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_label.add_theme_font_size_override("font_size", 38)
-	_title_label.add_theme_color_override("font_color", CREAM)
+	_title_label.add_theme_color_override("font_color", UiKit.INK)
 	panel.add_child(_title_label)
+	_build_language_row(panel, 124.0)
 	for i in ROWS.size():
-		_build_row(panel, 132.0 + i * 74.0, ROWS[i][0], ROWS[i][1])
+		_build_row(panel, 214.0 + i * 74.0, tr(ROWS[i][0]), ROWS[i][1])
 	_close_btn = Button.new()
-	_close_btn.text = "닫기"
+	_close_btn.text = tr("SET_CLOSE")
 	_close_btn.size = Vector2(220.0, 56.0)
 	_close_btn.position = Vector2((PANEL_SIZE.x - 220.0) / 2.0, PANEL_SIZE.y - 88.0)
-	_close_btn.add_theme_font_size_override("font_size", 26)
-	_close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(12)
-	sb.bg_color = Color(CREAM, 0.16)
-	sb.set_border_width_all(2)
-	sb.border_color = CREAM
-	_close_btn.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = Color(CREAM, 0.28)
-	_close_btn.add_theme_stylebox_override("hover", hover)
-	_close_btn.add_theme_stylebox_override("pressed", sb)
+	UiKit.btn_primary(_close_btn, 26)
 	_close_btn.pressed.connect(close)
 	panel.add_child(_close_btn)
 	# 게임 초기화 (타이틀의 설정에서만 노출 — 인게임 일시정지에서는 숨김).
 	_reset_btn = Button.new()
 	_reset_btn.size = Vector2(440.0, 52.0)
 	_reset_btn.position = Vector2((PANEL_SIZE.x - 440.0) / 2.0, PANEL_SIZE.y - 168.0)
-	_reset_btn.add_theme_font_size_override("font_size", 20)
-	_reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var danger := StyleBoxFlat.new()
-	danger.set_corner_radius_all(12)
-	danger.bg_color = Color(0.75, 0.3, 0.3, 0.14)
-	danger.set_border_width_all(2)
-	danger.border_color = Color(0.85, 0.4, 0.4, 0.8)
-	_reset_btn.add_theme_stylebox_override("normal", danger)
-	var danger_hover: StyleBoxFlat = danger.duplicate()
-	danger_hover.bg_color = Color(0.75, 0.3, 0.3, 0.28)
-	_reset_btn.add_theme_stylebox_override("hover", danger_hover)
-	_reset_btn.add_theme_stylebox_override("pressed", danger)
-	_reset_btn.add_theme_color_override("font_color", Color(0.95, 0.6, 0.6))
+	UiKit.style_button(_reset_btn, UiKit.RED, UiKit.RED_DEEP, UiKit.WHITE, 20, 14)
 	_reset_btn.pressed.connect(_on_reset_pressed)
 	panel.add_child(_reset_btn)
+
+
+## Language picker. Title-screen only: switching language rebuilds the scene to
+## re-read every string, which would throw away a run if done mid-game.
+func _build_language_row(panel: Control, y: float) -> void:
+	var l := Label.new()
+	l.text = tr("SET_LANGUAGE")
+	l.position = Vector2(64.0, y)
+	l.size = Vector2(190.0, 44.0)
+	l.add_theme_font_size_override("font_size", 26)
+	l.add_theme_color_override("font_color", UiKit.INK)
+	panel.add_child(l)
+	_lang_btn = OptionButton.new()
+	_lang_btn.position = Vector2(264.0, y - 2.0)
+	_lang_btn.size = Vector2(310.0, 48.0)
+	_lang_btn.fit_to_longest_item = false
+	_lang_btn.add_theme_font_size_override("font_size", 22)
+	UiKit.btn_card(_lang_btn, UiKit.PURPLE_DEEP, 22)
+	for code in I18n.codes():
+		_lang_btn.add_item(I18n.native_name(code))
+		_lang_btn.set_item_metadata(_lang_btn.item_count - 1, code)
+	_lang_btn.item_selected.connect(_on_language_selected)
+	panel.add_child(_lang_btn)
+	_lang_row = [l, _lang_btn]
+
+
+func _on_language_selected(idx: int) -> void:
+	var code := str(_lang_btn.get_item_metadata(idx))
+	if code == TranslationServer.get_locale():
+		return
+	Sfx.play("click")
+	I18n.apply(code)
+	GameState.save_game()
+	get_tree().reload_current_scene()
 
 
 func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
@@ -95,7 +109,7 @@ func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
 	l.position = Vector2(64.0, y)
 	l.size = Vector2(190.0, 44.0)
 	l.add_theme_font_size_override("font_size", 26)
-	l.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	l.add_theme_color_override("font_color", UiKit.INK)
 	panel.add_child(l)
 	var s := HSlider.new()
 	s.min_value = 0.0
@@ -104,13 +118,13 @@ func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
 	s.position = Vector2(264.0, y + 6.0)
 	s.size = Vector2(310.0, 32.0)
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(1, 1, 1, 0.12)
+	bg.bg_color = Color(UiKit.INK, 0.14)
 	bg.set_corner_radius_all(5)
 	bg.content_margin_top = 5.0
 	bg.content_margin_bottom = 5.0
 	s.add_theme_stylebox_override("slider", bg)
 	var fill := StyleBoxFlat.new()
-	fill.bg_color = Color(CREAM, 0.9)
+	fill.bg_color = UiKit.ORANGE
 	fill.set_corner_radius_all(5)
 	s.add_theme_stylebox_override("grabber_area", fill)
 	s.add_theme_stylebox_override("grabber_area_highlight", fill)
@@ -125,14 +139,21 @@ func _build_row(panel: Control, y: float, text: String, kind: String) -> void:
 	_sliders[kind] = s
 
 
-func open(title_text := "설정", close_text := "닫기") -> void:
-	_title_label.text = title_text
-	_close_btn.text = close_text
-	# 초기화는 타이틀(제목 "설정")에서만 — 인게임 도중 리셋은 상태가 꼬인다.
-	_reset_btn.visible = title_text == "설정"
+## on_title: 타이틀에서 연 설정인가 (false = 인게임 일시정지).
+## 초기화·언어 변경은 씬을 새로 열기 때문에 타이틀에서만 노출한다.
+func open(on_title := true) -> void:
+	_title_label.text = tr("SET_TITLE") if on_title else tr("SET_PAUSE_TITLE")
+	_close_btn.text = tr("SET_CLOSE") if on_title else tr("SET_RESUME")
+	_reset_btn.visible = on_title
+	for c in _lang_row:
+		c.visible = on_title
+	if on_title:
+		var codes := I18n.codes()
+		var cur := TranslationServer.get_locale()
+		_lang_btn.selected = maxi(0, Array(codes).find(cur))
 	_reset_armed = false
 	_reset_btn.disabled = false
-	_reset_btn.text = "⚠ 게임 초기화  (기록·재화·해금 전부 삭제)"
+	_reset_btn.text = tr("SET_RESET")
 	for kind: String in _sliders:
 		_sliders[kind].set_value_no_signal(Sfx.get_volume(kind))
 	move_to_front()
@@ -144,11 +165,11 @@ func open(title_text := "설정", close_text := "닫기") -> void:
 func _on_reset_pressed() -> void:
 	if not _reset_armed:
 		_reset_armed = true
-		_reset_btn.text = "정말 초기화할까요?  다시 누르면 삭제됩니다!"
+		_reset_btn.text = tr("SET_RESET_CONFIRM")
 		Sfx.play("error")
 		return
 	_reset_btn.disabled = true
-	_reset_btn.text = "초기화 중..."
+	_reset_btn.text = tr("SET_RESETTING")
 	await Ranks.wipe_mine()  # 온라인 보드에서 내 기록 제거 (오프라인이면 즉시 통과)
 	GameState.reset_all()
 	Replays.clear_all()

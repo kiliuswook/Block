@@ -20,11 +20,12 @@ var _preview: Control
 var _tab_btns: Array[Button] = []
 var _grid: GridContainer
 var _grid_w := 900.0
-var _flavor := "냥이 크리에이터에 오신 것을 환영합니다."
+var _flavor := ""
 var _flavor_col := Color(1, 1, 1, 0.8)
 
 
 func _ready() -> void:
+	_flavor = tr("CC_FLAVOR_WELCOME")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	visible = false
 	var vs := get_viewport_rect().size
@@ -65,7 +66,7 @@ func _ready() -> void:
 	for i in CustomCat.PARTS.size():
 		var idx := i  # captured
 		var tb := Button.new()
-		tb.text = str(CustomCat.PARTS[i].name)
+		tb.text = tr(str(CustomCat.PARTS[i].name))
 		tb.add_theme_font_size_override("font_size", 17)
 		tb.custom_minimum_size = Vector2(0.0, 42.0)
 		tb.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -92,16 +93,16 @@ func _ready() -> void:
 	bar.size = Vector2(rw, 58.0)
 	bar.add_theme_constant_override("separation", 14)
 	add_child(bar)
-	var rnd := _bar_btn("🎲 운명의 냥자인", false)
+	var rnd := _bar_btn(tr("CC_RANDOM"), false)
 	rnd.pressed.connect(_randomize_all)
 	bar.add_child(rnd)
-	var rst := _bar_btn("공장 초기화", false)
+	var rst := _bar_btn(tr("CC_RESET"), false)
 	rst.pressed.connect(_reset_all)
 	bar.add_child(rst)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(spacer)
-	var ok := _bar_btn("✔ 이 모습으로 출격!", true)
+	var ok := _bar_btn(tr("CC_CONFIRM"), true)
 	ok.pressed.connect(func() -> void:
 		Sfx.play("record")
 		visible = false)
@@ -124,7 +125,7 @@ func _process(delta: float) -> void:
 
 func open() -> void:
 	_open_t = 0.0
-	_flavor = "유전자 스캔 중... 완벽한 냥자인을 준비하세요."
+	_flavor = tr("CC_FLAVOR_OPEN")
 	_flavor_col = Color(0.5, 0.9, 0.95)
 	_refresh()
 	visible = true
@@ -163,7 +164,7 @@ func _randomize_all() -> void:
 	for p in CustomCat.PARTS:
 		sel[str(p.key)] = randi() % CustomCat.option_count(p)
 	GameState.set_custom_all(sel)
-	_flavor = "유전자 무작위 재조합 완료!! 결과는 책임지지 않습니다."
+	_flavor = tr("CC_FLAVOR_RANDOM")
 	_flavor_col = Color(1.0, 0.85, 0.35)
 	_refresh()
 	changed.emit()
@@ -172,7 +173,7 @@ func _randomize_all() -> void:
 func _reset_all() -> void:
 	Sfx.play("click")
 	GameState.set_custom_all({})
-	_flavor = "공장 초기화 완료. (냥이의 기억은 무사합니다)"
+	_flavor = tr("CC_FLAVOR_RESET")
 	_flavor_col = Color(1, 1, 1, 0.8)
 	_refresh()
 	changed.emit()
@@ -194,7 +195,7 @@ func _draw_backdrop(ci: Control) -> void:
 	ci.draw_rect(Rect2(0, vs.y - 6, vs.x, 6), Color(CREAM, 0.25))
 	var font := ThemeDB.fallback_font
 	ci.draw_string(font, Vector2(vs.x - 430.0, vs.y - 14.0),
-			"CAT-RENDER ENGINE v9.99 · 냥체역학 시뮬레이션 가동 중",
+			tr("CC_ENGINE_LINE"),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.22))
 
 
@@ -240,21 +241,21 @@ func _draw_preview() -> void:
 				Color(0.4, 0.95, 1.0, 0.85), 3.0)
 		ci.draw_rect(Rect2(pcx - cat_s * 0.8, sy - 14.0, cat_s * 1.6, 14.0),
 				Color(0.4, 0.95, 1.0, 0.12))
-		var scan_txt := "유전자 스캔 중" + ".".repeat(1 + int(_open_t * 6.0) % 3)
+		var scan_txt := tr("CC_SCANNING") + ".".repeat(1 + int(_open_t * 6.0) % 3)
 		ci.draw_string(font, Vector2(pcx - 70.0, cat_y - cat_s * 0.85), scan_txt,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.4, 0.95, 1.0, 0.9))
 	# 타이틀 + 짝퉁 에디션 표기.
-	ci.draw_string(font, Vector2(32.0, 60.0), "냥이 크리에이터 3000",
+	ci.draw_string(font, Vector2(32.0, 60.0), tr("CC_TITLE"),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 42, CREAM)
 	ci.draw_string(font, Vector2(34.0, 88.0),
-			"CAT CREATOR 3000™ — ULTIMATE EDITION  v9.99 (정품)",
+			tr("CC_SUBTITLE"),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.45))
 	# 플레이버 텍스트 (마지막 선택 파츠).
 	var fw := font.get_string_size(_flavor, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x
 	ci.draw_string(font, Vector2(pcx - fw / 2.0, pcy + 74.0), _flavor,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 19, _flavor_col)
 	# B급 각주.
-	var joke := "※ 냥이는 2D이므로 뒷모습이 존재하지 않습니다"
+	var joke := tr("CC_JOKE")
 	var jw := font.get_string_size(joke, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 	ci.draw_string(font, Vector2(pcx - jw / 2.0, ph - 16.0), joke,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(1, 1, 1, 0.3))
@@ -315,13 +316,13 @@ func _pick(key: String, idx: int) -> void:
 	var part := CustomCat.get_part(key)
 	if part.get("type") == "color":
 		Sfx.play("click")
-		_flavor = "빛깔 유전자 주입 완료."
+		_flavor = tr("CC_FLAVOR_COLOR")
 		_flavor_col = Color(1, 1, 1, 0.8)
 	else:
 		var opt: Dictionary = (part.opts as Array)[idx]
 		var r := int(opt.get("r", 0))
 		Sfx.play("record" if r >= 3 else ("buy" if r >= 2 else "click"))
-		_flavor = "[%s] %s — %s" % [CustomCat.RARITY_NAMES[r], opt.name,
+		_flavor = "[%s] %s — %s" % [tr(CustomCat.RARITY_NAMES[r]), opt.name,
 				str(opt.get("d", ""))]
 		_flavor_col = CustomCat.RARITY_COLS[r]
 	GameState.set_custom_part(key, idx)
