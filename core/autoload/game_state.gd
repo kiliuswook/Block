@@ -18,42 +18,31 @@ const MODE_PICNIC := 4  # casual jelly picnic: no death, collect snacks on a tim
 ##  lighter floats but gets flung further.
 ##  push — dash shove power in cells: 1 shoves the piece exactly one cell.
 const CATS: Array[Dictionary] = [
-	{"id": "cream", "name": "CAT_CREAM", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
+	{"id": "cream", "char": "char01", "name": "CAT_CREAM", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
 		"unlock": {"type": "free"}, "trait": "TRAIT_BALANCED",
 		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "cheese", "name": "CAT_CHEESE", "body": Color("f5b352"), "ear": Color("e08a3c"),
-		"unlock": {"type": "gold", "amount": 300}, "trait": "TRAIT_HEAVY",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "calico", "name": "CAT_CALICO", "body": Color("f2e6d4"), "ear": Color("8a5a33"),
-		"unlock": {"type": "score", "amount": 2000}, "trait": "TRAIT_DASHKING",
-		"stats": {"speed": 1.04, "jump": 0.97, "dash": 1.18, "weight": 0.95, "push": 4}},
-	{"id": "black", "name": "CAT_BLACK", "body": Color("3a3540"), "ear": Color("26232c"),
+	{"id": "black", "char": "char02", "name": "CAT_BLACK", "body": Color("3a3540"), "ear": Color("26232c"),
 		"ink": Color("f0d060"), "unlock": {"type": "height", "floors": 10},
 		"trait": "TRAIT_SPRINTER",
 		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "gray", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
+	{"id": "cheese", "char": "char03", "name": "CAT_CHEESE", "body": Color("f5b352"), "ear": Color("e08a3c"),
+		"unlock": {"type": "gold", "amount": 300}, "trait": "TRAIT_HEAVY",
+		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
+	{"id": "sleepy", "char": "char04", "name": "CAT_SLEEPY", "body": Color("fbf6ee"),
+		"ear": Color("f0e2d8"), "unlock": {"type": "plays", "count": 8},
+		"trait": "TRAIT_DREAMER",
+		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
+	{"id": "wizard", "char": "char05", "name": "CAT_WIZARD", "body": Color("f0e2d0"),
+		"ear": Color("5a4038"), "unlock": {"type": "gold", "amount": 1500},
+		"trait": "TRAIT_MAGIC",
+		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
+	{"id": "gray", "char": "char06", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
 		"unlock": {"type": "gold", "amount": 500}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	{"id": "mint", "name": "CAT_MINT", "body": Color("bfe8d5"), "ear": Color("6fbf9a"),
-		"unlock": {"type": "height", "floors": 30}, "trait": "TRAIT_JUMPKING",
-		"stats": {"speed": 0.96, "jump": 1.12, "dash": 0.95, "weight": 0.9, "push": 1}},
-	{"id": "pink", "name": "CAT_PINK", "body": Color("f6cdd8"), "ear": Color("e08ea6"),
-		"unlock": {"type": "gold", "amount": 800}, "trait": "TRAIT_SWIFT",
-		"stats": {"speed": 1.08, "jump": 1.06, "dash": 1.0, "weight": 0.8, "push": 2}},
-	{"id": "ghost", "name": "CAT_GHOST", "body": Color(0.93, 0.96, 1.0, 0.6),
-		"ear": Color(0.75, 0.8, 0.95, 0.55), "ink": Color("5a6a8a"),
-		"unlock": {"type": "plays", "count": 20}, "trait": "TRAIT_FEATHER",
-		"stats": {"speed": 1.0, "jump": 1.04, "dash": 1.1, "weight": 0.72, "push": 1}},
-	{"id": "gold", "name": "CAT_GOLD", "body": Color("f7d354"), "ear": Color("c9982a"),
-		"unlock": {"type": "gems", "amount": 20}, "trait": "TRAIT_ALLROUND",
-		"stats": {"speed": 1.05, "jump": 1.04, "dash": 1.05, "weight": 1.05, "push": 3}},
-	# 나만의 냥: 외형은 CustomCat 카탈로그(custom_cat 저장값)로 결정되는 커스텀 슬롯.
-	{"id": "custom", "name": "CAT_CUSTOM", "body": Color("f4e3c8"), "ear": Color("d9a05c"),
-		"unlock": {"type": "free"}, "trait": "TRAIT_CUSTOM",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 ]
 
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
+const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 
 ## Procedural accessories, drawn by Player.paint_cat on top of the skin.
 ## Two independent slots (head / neck), purely cosmetic — no stat effects.
@@ -130,6 +119,8 @@ var games_played: int = 0
 var gold: int = 0
 var gems: int = 0
 var selected_cat: String = "cream"
+## 2P(화면 분할) 몫으로 고른 냥이 — 1P와 같은 냥이여도 커스터마이징은 따로 간다.
+var selected_cat2: String = "cream"
 var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
 var player_id: String = ""  # stable random id identifying this save on boards
 var weekly: Dictionary = {}  # this week's bests: {"week": id, "story": n, ...}
@@ -142,7 +133,8 @@ var affection: Dictionary = {}  # cat id -> total snacks fed
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # collected alphabet keycaps: "A".."Z" -> count
-var custom_cat: Dictionary = {}  # 나만의 냥 part picks: part key -> option index
+# 캐릭터별 커스터마이징: 저장 키(custom_key) -> {부위 key: 옵션 index}
+var cat_custom: Dictionary = {}
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
 var locale: String = ""  # chosen UI language ("" = follow the system locale)
 # Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
@@ -194,6 +186,7 @@ func reset_all() -> void:
 	gold = 0
 	gems = 0
 	selected_cat = "cream"
+	selected_cat2 = "cream"
 	weekly = {}
 	weekly_claimed = 0
 	purchased = []
@@ -204,7 +197,7 @@ func reset_all() -> void:
 	pending_boosts = []
 	skipped_stages = []
 	keycaps = {}
-	custom_cat = {}
+	cat_custom = {}
 	last_daily = ""
 	save_game()
 
@@ -481,22 +474,54 @@ func feed_cat(id: String) -> bool:
 	return true
 
 
-# --- Custom cat (나만의 냥) ------------------------------------------------------
+# --- 캐릭터 커스터마이징 ----------------------------------------------------------
+## 캐릭터마다 따로 저장된다. sel에는 사용자가 손댄 부위만 들어가고,
+## 나머지는 그 캐릭터의 디자인 파츠가 그대로 남는다 (빈 sel = 완전 기본 상태).
 
 
-func custom_idx(key: String) -> int:
-	return CustomCat.pick(custom_cat, key)
+## 커스터마이징 저장 키. 2P는 같은 냥이를 골라도 자기 몫으로 따로 꾸민다.
+func custom_key(id: String, player: int) -> String:
+	return id if player <= 1 else "%s|%d" % [id, player]
 
 
-func set_custom_part(key: String, idx: int) -> void:
-	custom_cat[key] = idx
+func custom_sel(id: String, player := 1) -> Dictionary:
+	var sel: Variant = cat_custom.get(custom_key(id, player), {})
+	return sel if sel is Dictionary else {}
+
+
+func custom_idx(id: String, key: String, player := 1) -> int:
+	return CustomCat.pick(custom_sel(id, player), key)
+
+
+func set_custom_part(id: String, key: String, idx: int, player := 1) -> void:
+	var sel := custom_sel(id, player).duplicate()
+	sel[key] = idx
+	cat_custom[custom_key(id, player)] = sel
 	save_game()
 
 
-## Replaces the whole selection at once (랜덤/초기화 buttons).
-func set_custom_all(sel: Dictionary) -> void:
-	custom_cat = sel
+## Replaces the whole selection at once (프리셋/랜덤/초기화 buttons).
+func set_custom_all(id: String, sel: Dictionary, player := 1) -> void:
+	if sel.is_empty():
+		cat_custom.erase(custom_key(id, player))
+	else:
+		cat_custom[custom_key(id, player)] = sel
 	save_game()
+
+
+## 키캡 도감(A~Z)을 몇 바퀴 완성했는가 — 파츠 해금 단계의 기준.
+func keycap_sets() -> int:
+	if keycaps.size() < 26:
+		return 0
+	var least := 99
+	for i in 26:
+		least = mini(least, keycap_count(char(65 + i)))
+	return least
+
+
+## 디자인 캐릭터의 해금된 파츠 단계 (0=디폴트 ~ 3=꼬리까지).
+func cat_tier(_id: String) -> int:
+	return mini(keycap_sets(), CustomCat.TIER_MAX)
 
 
 func get_cat(id: String) -> Dictionary:
@@ -519,22 +544,49 @@ func cat_stats(id: String) -> Dictionary:
 
 ## Skin dictionary consumed by Player.paint_cat. The selected cat also
 ## carries its equipped accessory defs under "acc".
-func cat_skin(id: String) -> Dictionary:
+func cat_skin(id: String, player := 1) -> Dictionary:
 	var cat := get_cat(id)
-	var skin: Dictionary
-	if id == "custom":
-		skin = CustomCat.build_skin(custom_cat)
-	else:
-		skin = {"body": cat.body, "ear": cat.ear}
-		if cat.has("ink"):
-			skin["ink"] = cat.ink
-	var accs := equipped_accs(id)
+	var char_id := str(cat.get("char", "char01"))
+	var tier := cat_tier(id)
+	var sel := custom_sel(id, player)
+	var skin := CustomCat.build_skin(char_id, tier, sel)
+	# 컨셉 시트 그림으로 그릴 수 있으면 그쪽을 쓴다. 색만 바꾼 경우엔
+	# 파츠 레이어에 틴트로 얹고, 모양까지 바꿨으면 코드 렌더로 남긴다.
+	if CatSprite.has(char_id) and (sel.is_empty()
+			or (CatSprite.is_layered(char_id) and CustomCat.sprite_safe(sel))):
+		skin["sprite"] = char_id
+		skin["tier"] = tier
+		skin["tints"] = CustomCat.sprite_tints(sel)
+	# 액세서리는 지갑이 하나라 1P(=저장된 선택 냥이) 몫으로만 붙는다.
+	var accs: Array = equipped_accs(id) if player <= 1 else []
 	if not accs.is_empty():
 		skin["acc"] = accs
 	var stage := aff_stage(id)
 	if stage > 1:
 		skin["aff"] = stage
 	return skin
+
+
+## 잠긴 냥이용 실루엣 — 실루엣(모양)은 유지하고 색·소품만 지운다.
+func cat_shadow_skin(id: String) -> Dictionary:
+	var full := cat_skin(id)
+	if full.has("sprite"):
+		return {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "gray": true,
+				"sprite": full["sprite"], "tier": full["tier"],
+				"parts": full.get("parts", {})}
+	var parts: Dictionary = (full.get("parts", {}) as Dictionary).duplicate()
+	parts["body_col"] = Color("cdd4dd")
+	parts["ear_col"] = Color("b3bcc9")
+	parts["tail_col"] = Color("b3bcc9")
+	parts["foot_col"] = Color("dfe4ea")
+	parts["pad_col"] = Color("b3bcc9")
+	parts["eye_col"] = Color("8f98a6")
+	parts["nose_col"] = Color("8f98a6")
+	parts["pattern"] = "none"
+	parts["cheek"] = "none"
+	for k in ["head", "face", "neck", "hold", "chest", "back", "mark"]:
+		parts[k] = "none"
+	return {"body": parts["body_col"], "ear": parts["ear_col"], "parts": parts}
 
 
 func is_unlocked(id: String) -> bool:
@@ -569,10 +621,19 @@ func try_buy(id: String) -> bool:
 	return true
 
 
-func select_cat(id: String) -> void:
-	if is_unlocked(id):
+func select_cat(id: String, player := 1) -> void:
+	if not is_unlocked(id):
+		return
+	if player <= 1:
 		selected_cat = id
-		save_game()
+	else:
+		selected_cat2 = id
+	save_game()
+
+
+## 플레이어 자리(1/2)가 지금 쓰는 냥이 id.
+func cat_for(player: int) -> String:
+	return selected_cat if player <= 1 else selected_cat2
 
 
 func save_game() -> void:
@@ -586,6 +647,7 @@ func save_game() -> void:
 		"gold": gold,
 		"gems": gems,
 		"selected_cat": selected_cat,
+		"selected_cat2": selected_cat2,
 		"nickname": nickname,
 		"player_id": player_id,
 		"weekly": weekly,
@@ -598,7 +660,7 @@ func save_game() -> void:
 		"pending_boosts": pending_boosts,
 		"skipped_stages": skipped_stages,
 		"keycaps": keycaps,
-		"custom_cat": custom_cat,
+		"cat_custom": cat_custom,
 		"last_daily": last_daily,
 		"locale": locale,
 		"vol_master": vol_master,
@@ -627,6 +689,7 @@ func load_game() -> void:
 		gold = int(data.get("gold", 0))
 		gems = int(data.get("gems", 0))
 		selected_cat = str(data.get("selected_cat", "cream"))
+		selected_cat2 = str(data.get("selected_cat2", "cream"))
 		nickname = str(data.get("nickname", ""))
 		player_id = str(data.get("player_id", ""))
 		var wkly: Variant = data.get("weekly", {})
@@ -665,15 +728,31 @@ func load_game() -> void:
 			keycaps = {}
 			for k in caps:
 				keycaps[str(k)] = int(caps[k])
-		var cst: Variant = data.get("custom_cat", {})
+		var cst: Variant = data.get("cat_custom", {})
 		if cst is Dictionary:
-			custom_cat = {}
-			for k in cst:
-				custom_cat[str(k)] = int(cst[k])
+			cat_custom = {}
+			for cid in cst:
+				var picks: Variant = cst[cid]
+				if not picks is Dictionary:
+					continue
+				var sel := {}
+				for k in (picks as Dictionary):
+					sel[str(k)] = int((picks as Dictionary)[k])
+				if not sel.is_empty():
+					cat_custom[str(cid)] = sel
 		last_daily = str(data.get("last_daily", ""))
 		locale = str(data.get("locale", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
 		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
-		if not is_unlocked(selected_cat):
+		# 사라진 캐릭터(구버전 세이브)를 고르고 있었으면 기본냥으로 되돌린다.
+		var known := false
+		for cat in CATS:
+			known = known or cat.id == selected_cat
+		if not known or not is_unlocked(selected_cat):
 			selected_cat = "cream"
+		var known2 := false
+		for cat in CATS:
+			known2 = known2 or cat.id == selected_cat2
+		if not known2 or not is_unlocked(selected_cat2):
+			selected_cat2 = "cream"

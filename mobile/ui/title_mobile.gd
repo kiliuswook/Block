@@ -13,6 +13,7 @@ func _ready() -> void:
 			and get_window().content_scale_size.x > get_window().content_scale_size.y:
 		BootScript.apply_mobile_dev_window(get_window())
 	max_tiles_per_row = 5  # 캐릭터 타일을 5+4 두 줄로
+	allow_2p = false  # 한 키보드가 필요한 2인 플레이는 모바일에 없다 → 인원 선택 생략
 	main_scene = "res://mobile/ui/main_mobile.tscn"
 	super()
 	BootScript.dev_platform = "mobile"  # 타이틀 복귀 시에도 모바일 유지

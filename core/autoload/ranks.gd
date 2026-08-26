@@ -29,8 +29,7 @@ const MOCK_NAMES := ["츄르대장", "골골송장인", "캣타워폭격기", "�
 		"수염봉봉", "방울이", "호랑무늬", "낮잠금지", "점프좀치는냥", "테트리스냥",
 		"용암싫어", "골드사냥꾼", "계단오르미", "블록부수기", "살금살금", "야옹백작",
 		"츄르한입만"]
-const MOCK_CATS := ["cream", "cheese", "calico", "black", "gray", "mint", "pink",
-		"ghost", "gold"]
+const MOCK_CATS := ["cream", "black", "cheese", "sleepy", "wizard", "gray"]
 
 var board := {}  # last fetched board: mode key -> Array of entries
 var busy := false

@@ -22,6 +22,16 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",
 			func(inst: Node) -> void: inst._open_chars())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_players.png",
+			func(inst: Node) -> void: inst._on_mode_picked(GameState.MODE_ENDLESS))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_1p.png",
+			func(inst: Node) -> void:
+				inst._pick_mode = GameState.MODE_CLASSIC
+				inst._open_pick(1))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_2p.png",
+			func(inst: Node) -> void:
+				inst._pick_mode = GameState.MODE_ENDLESS
+				inst._open_pick(2))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_shop.png",
@@ -34,21 +44,20 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_keycap_dex())
 	GameState.keycaps = saved_caps
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_custom.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("custom")))
-	var saved_custom: Dictionary = GameState.custom_cat.duplicate()
-	GameState.custom_cat = {"body": 8, "ear": 8, "eyes": 5, "eye_col": 4, "nose": 1,
-			"mouth": 7, "whisker": 8, "pattern": 8, "pattern_col": 3, "tail": 9,
-			"paws": 3, "blush": 4, "mark": 6, "extra": 3}
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cream")))
+	var saved_custom: Dictionary = GameState.cat_custom.duplicate(true)
+	GameState.cat_custom = {"cream": {"body": 8, "ear": 9, "eye_col": 6, "pad_col": 3}}
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer.png",
-			func(inst: Node) -> void: inst._customizer.open())
+			func(inst: Node) -> void: inst._customizer.open("cream"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer_eyes.png",
 			func(inst: Node) -> void:
-				inst._customizer._cur = 2  # 눈 탭 — 스타일 타일(미니 냥이) 확인용
-				inst._customizer.open())
-	GameState.custom_cat = saved_custom
+				inst._customizer.open("cream")
+				inst._customizer._cur = 3  # 눈 색 탭 — 색 견본 그리드 확인용
+				inst._customizer._refresh())
+	GameState.cat_custom = saved_custom
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
-				var rep := {"v": 1, "mode": 1, "cat": "mint", "rows": 20, "door": 0,
+				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "door": 0,
 					"dl": false, "dr": false, "level": 1,
 					"frames": PackedInt32Array([
 						320, 1216, 2, 0, 3, 14, 1, 1500,
@@ -141,10 +150,14 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst.settings_panel.open(false))
 	GameState.split = true
+	# 2P는 자기 자리(slot 2)의 냥이로 나온다 — 자리별 선택/커스터마이징 확인용.
+	var saved_cat2: String = GameState.selected_cat2
+	GameState.selected_cat2 = "black"
 	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_escape.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/split_endless.png")
+	GameState.selected_cat2 = saved_cat2
 	GameState.split = false
 	GameState.mode = GameState.MODE_VERSUS
 	await _capture("res://core/scenes/main.tscn", OUT + "/versus.png")
@@ -174,12 +187,16 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_shop.png",
 			func(inst: Node) -> void: inst._open_shop())
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_pick.png",
+			func(inst: Node) -> void:
+				inst._pick_mode = GameState.MODE_CLASSIC
+				inst._open_pick(1))
 	GameState.keycaps = {"C": 3, "A": 1, "T": 12, "S": 2, "Q": 1, "E": 5, "N": 1, "G": 120}
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex())
 	GameState.keycaps = saved_caps
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
-			func(inst: Node) -> void: inst._customizer.open())
+			func(inst: Node) -> void: inst._customizer.open("cream"))
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

@@ -40,3 +40,7 @@ BOOST_FEVER_DESC,Start with the fever gauge at 50%,피버 게이지 50%로 시�
 BOOST_LUCKY,Lucky Jelly,럭키 젤리,[Łüçķÿ Ĵéłłÿ ————————]
 BOOST_LUCKY_DESC,+50% gold this run,이번 판 골드 +50%,[+50% ğôłð ţĥïş řüń ——————————————]
 NICKNAME_DEFAULT,Cat-{n},냥이-{n},[Çàţ-{n} —————]
+CAT_SLEEPY,Dozy,잠꾸러기,[Ðôżÿ ———]
+CAT_WIZARD,Whiskerlock,마법사,[Ŵĥïşķéřłôçķ ————————]
+TRAIT_DREAMER,Dreamer,꿈나라,[Ðřéàɱéř —————]
+TRAIT_MAGIC,Spellcaster,마법사,[Şþéłłçàşţéř ————————]

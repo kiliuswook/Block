@@ -426,7 +426,10 @@ func _build_split() -> void:
 	p1.act_jump = "p2_jump"
 	p1.act_drop = "p2_drop"
 	p1.act_dash = "p2_dash"
-	p1.skin_override = "cheese" if GameState.selected_cat != "cheese" else "gray"
+	p1.player_slot = 1
+	# 오른쪽 절반(기본 키 배치)이 2P — 자기 냥이와 커스터마이징을 쓴다.
+	var p2: Player = (boards[1] as EscapeBoard).get_node("Player")
+	p2.player_slot = 2
 	var divider := ColorRect.new()
 	divider.position = Vector2(HALF_W - 2.0, 0.0)
 	divider.size = Vector2(4.0, 1080.0)

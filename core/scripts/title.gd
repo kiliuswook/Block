@@ -11,6 +11,7 @@ const INK := UiKit.INK
 
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
+const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
 const POPUP_SIZE := Vector2(620.0, 700.0)
@@ -19,6 +20,12 @@ const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
 		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 const KEY_GAP := 8.0
+## 캐릭터 선택 아래에 깔리는 참가자 슬롯 영역 (마리오 파티식 픽 화면).
+const SLOT_CARD := Vector2(340.0, 168.0)
+const PICK_FOOTER_H := 258.0
+## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단만
+## 지원한다 (스테이지 모드는 LINES 목표 UI가 분할 화면에 들어가지 않는다).
+const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2}
 
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
@@ -40,6 +47,7 @@ var vh := 1080.0
 var tile_y := 780.0  # 캐릭터 타일 첫 줄 y (_build_character_row에서 계산)
 var max_tiles_per_row := 99  # 모바일 타이틀이 줄바꿈을 위해 줄인다
 var main_scene := "res://core/scenes/main.tscn"  # 플랫폼 타이틀이 교체 가능
+var allow_2p := true  # 모바일 타이틀은 false (키보드 한 대가 필요한 2인 모드 없음)
 
 var _tiles := {}  # cat id -> Button
 var _currency_label: Label
@@ -61,6 +69,15 @@ var _shop_wallet: Label
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
+var _players_ui: Control  # 2인 가능 모드에서 PLAY 다음에 뜨는 인원 선택
+var _pick := false  # 캐릭터 선택이 "게임 시작 전 픽" 모드인가
+var _pick_mode := GameState.MODE_CLASSIC  # 픽이 끝나면 시작할 모드
+var _pick_count := 1  # 이번 판 인원 (1 또는 2)
+var _pick_slot := 0  # 지금 고르는 자리 (0 = 1P, 1 = 2P)
+var _pick_cats: Array[String] = ["cream", "cream"]  # 자리별 고른 냥이
+var _pick_footer: Control  # 슬롯 카드 + 시작 버튼이 놓이는 영역
+var _slot_cards: Array = []  # 자리별 카드 [Button, face Control, 꾸미기 Button]
+var _pick_start: Button
 var _char_rows: Control  # 캐릭터 타일이 놓이는 컨테이너
 var _cat_anchor := Vector2(1420.0, 660.0)  # 타이틀 큐브 고양이 자리
 var _cat_size := 300.0
@@ -91,8 +108,8 @@ func _ready() -> void:
 	$UI/TitleLabel.visible = false
 	$UI/SubtitleLabel.visible = false
 	$UI/HintLabel.visible = false
-	classic_btn.pressed.connect(func() -> void: _start(GameState.MODE_CLASSIC))
-	endless_btn.pressed.connect(func() -> void: _start(GameState.MODE_ENDLESS))
+	classic_btn.pressed.connect(func() -> void: _on_mode_picked(GameState.MODE_CLASSIC))
+	endless_btn.pressed.connect(func() -> void: _on_mode_picked(GameState.MODE_ENDLESS))
 	_refresh_classic_desc()
 	_compute_layout()
 	_build_currency_display()
@@ -101,6 +118,7 @@ func _ready() -> void:
 	_build_toast()
 	_build_settings()
 	_build_mode_select()
+	_build_players_select()
 	_build_menu()
 	_build_shop()
 	_build_ranks()
@@ -113,6 +131,7 @@ func _ready() -> void:
 	_replay_viewer.theme = null
 	_customizer.changed.connect(func() -> void:
 		_refresh_tiles()
+		_refresh_pick_cards()
 		if _popup and _popup.visible:
 			_popup_face.queue_redraw())
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
@@ -242,8 +261,10 @@ func _build_mode_select() -> void:
 	# 버튼 라벨 키를 코드에 명시적으로 들고 간다 — 씬의 text를 번호까지 붙여
 	# 덮어쓰기 때문에, 키가 없으면 자동 번역이 끊긴다. (/i18n 철칙 1)
 	var entries := [
-		[classic_btn, classic_desc, "MODE_CLASSIC", UiKit.GOLD, UiKit.GOLD_DEEP],
-		[endless_btn, endless_desc, "MODE_ENDLESS", UiKit.CYAN, UiKit.CYAN_DEEP],
+		[classic_btn, classic_desc, "MODE_CLASSIC", UiKit.GOLD, UiKit.GOLD_DEEP,
+				GameState.MODE_CLASSIC],
+		[endless_btn, endless_desc, "MODE_ENDLESS", UiKit.CYAN, UiKit.CYAN_DEEP,
+				GameState.MODE_ENDLESS],
 	]
 	var row_h := minf(120.0, panel.size.y / entries.size() - 40.0)
 	var y := 8.0
@@ -262,6 +283,16 @@ func _build_mode_select() -> void:
 		desc.size = Vector2(pw, 26.0)
 		desc.add_theme_font_size_override("font_size", 18)
 		desc.add_theme_color_override("font_color", UiKit.MUTED)
+		# 2인까지 되는 모드에는 인원 뱃지를 달아 둔다 (숫자·기호뿐 — 번역 불필요).
+		if _max_players(int(e[5])) > 1:
+			var tag := Label.new()
+			tag.text = "1–2P"
+			tag.position = Vector2(pw - 116.0, y + row_h + 2.0)
+			tag.size = Vector2(112.0, 26.0)
+			tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			tag.add_theme_font_size_override("font_size", 20)
+			tag.add_theme_color_override("font_color", UiKit.CYAN_DEEP)
+			panel.add_child(tag)
 		y += row_h + 40.0
 	_modes.visible = false
 
@@ -276,6 +307,75 @@ func _open_modes() -> void:
 	_raise(_modes)
 	_refresh_classic_desc()
 	_modes.visible = true
+
+
+## 이 모드가 받을 수 있는 최대 인원 (모바일 타이틀은 항상 1인).
+func _max_players(mode: int) -> int:
+	if not allow_2p:
+		return 1
+	return int(MODE_PLAYERS.get(mode, 1))
+
+
+## 모드가 정해진 다음 단계: 2인 가능하면 인원 선택, 아니면 바로 캐릭터 선택.
+func _on_mode_picked(mode: int) -> void:
+	Sfx.play("click")
+	_pick_mode = mode
+	if _modes:
+		_modes.visible = false
+	if _max_players(mode) > 1:
+		_open_players()
+	else:
+		_open_pick(1)
+
+
+# --- 인원 선택 오버레이 ---------------------------------------------------------
+
+
+## 2인까지 되는 모드에서만 뜨는 단계. 1인 / 2인(화면 분할) 둘 중 하나.
+func _build_players_select() -> void:
+	_players_ui = _make_overlay(tr("MENU_PLAYERS"),
+			func() -> void: _back_to_modes(),
+			Vector2(minf(vw - 80.0, 820.0), minf(vh - 160.0, 420.0)))
+	var body: Control = _players_ui.get_meta("body")
+	var entries := [
+		[1, "MENU_PLAYERS_1", "MENU_PLAYERS_1_DESC", UiKit.GOLD, UiKit.GOLD_DEEP],
+		[2, "MENU_PLAYERS_2", "MENU_PLAYERS_2_DESC", UiKit.CYAN, UiKit.CYAN_DEEP],
+	]
+	var row_h := minf(112.0, body.size.y / entries.size() - 40.0)
+	var y := 8.0
+	for e: Array in entries:
+		var count := int(e[0])
+		var b := Button.new()
+		b.text = "%d.  %s" % [count, tr(str(e[1]))]
+		b.position = Vector2(0.0, y)
+		b.size = Vector2(body.size.x, row_h)
+		UiKit.style_button(b, e[3], e[4], INK, int(row_h * 0.3), 16)
+		b.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_players_ui.visible = false
+			_open_pick(count))
+		body.add_child(b)
+		var d := Label.new()
+		d.text = tr(str(e[2]))
+		d.position = Vector2(0.0, y + row_h + 4.0)
+		d.size = Vector2(body.size.x, 26.0)
+		d.add_theme_font_size_override("font_size", 18)
+		d.add_theme_color_override("font_color", UiKit.MUTED)
+		body.add_child(d)
+		y += row_h + 40.0
+	_players_ui.visible = false
+
+
+func _open_players() -> void:
+	_raise(_players_ui)
+	_players_ui.visible = true
+
+
+## 픽 흐름에서 한 단계 뒤로 (인원 선택 → 모드 선택).
+func _back_to_modes() -> void:
+	if _players_ui:
+		_players_ui.visible = false
+	_open_modes()
 
 
 ## 어두운 배경 + 흰 패널 + 제목 + 닫기 버튼을 갖춘 공용 오버레이 껍데기.
@@ -309,6 +409,7 @@ func _make_overlay(title_text: String, on_close: Callable,
 	head.add_theme_font_size_override("font_size", 38)
 	head.add_theme_color_override("font_color", INK)
 	card.add_child(head)
+	root.set_meta("head", head)
 	var close := Button.new()
 	close.text = "✕"
 	close.size = Vector2(56.0, 56.0)
@@ -377,7 +478,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _chars and _chars.visible:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
-			_chars.visible = false
+			_close_chars()
+		return
+	# 인원 선택: 1 / 2 로 고르고 Esc로 모드 선택으로 돌아간다.
+	if _players_ui and _players_ui.visible:
+		if event is InputEventKey and event.pressed and not event.echo:
+			match event.physical_keycode:
+				KEY_ESCAPE:
+					_back_to_modes()
+				KEY_1, KEY_KP_1:
+					_players_ui.visible = false
+					_open_pick(1)
+				KEY_2, KEY_KP_2:
+					_players_ui.visible = false
+					_open_pick(2)
 		return
 	# 모드 오버레이는 숫자 단축키를 그대로 통과시킨다 (Esc는 닫기).
 	if _modes and _modes.visible and event is InputEventKey and event.pressed \
@@ -387,9 +501,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_1, KEY_KP_1:
-				_start(GameState.MODE_CLASSIC)
+				_on_mode_picked(GameState.MODE_CLASSIC)
 			KEY_2, KEY_KP_2:
-				_start(GameState.MODE_ENDLESS)
+				_on_mode_picked(GameState.MODE_ENDLESS)
 
 
 # --- Shop (accessories + run boosts) ------------------------------------------
@@ -497,7 +611,8 @@ func _make_shop_tile(acc: Dictionary) -> Button:
 
 func _draw_shop_tile(ci: Control, acc: Dictionary) -> void:
 	# Preview: the cream cat modeling the item.
-	var skin := {"body": Color("f4e3c8"), "ear": Color("d9a05c"), "acc": [acc]}
+	var skin := GameState.cat_skin("cream")
+	skin["acc"] = [acc]
 	Player.paint_cat(ci, Vector2(SHOP_TILE.x / 2.0, 84.0), 64.0, 0.0, true, false, skin)
 	var font := ThemeDB.fallback_font
 	_draw_center_text(ci, font, tr(str(acc.name)), 152.0, 20, INK, SHOP_TILE.x)
@@ -921,15 +1036,19 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 
 
 ## 캐릭터 선택은 컨셉의 CHARACTER 카드로 여는 오버레이 안에 산다.
+## 두 가지로 쓰인다: ① 메뉴에서 여는 둘러보기(구매·꾸미기) ② PLAY 흐름의
+## 참가자 픽(마리오 파티식) — 아래쪽 슬롯 카드에 1P·2P가 자기 냥이를 앉힌다.
 func _build_character_row() -> void:
-	_chars = _make_overlay(tr("CHAR_SELECT"), func() -> void: _chars.visible = false,
-			Vector2(minf(vw - 60.0, 1180.0), minf(vh - 120.0, 560.0)))
+	_chars = _make_overlay(tr("CHAR_SELECT"), func() -> void: _close_chars(),
+			Vector2(minf(vw - 60.0, 1180.0), minf(vh - 100.0, 800.0)))
 	var body: Control = _chars.get_meta("body")
+	# 아래쪽은 참가자 슬롯 몫으로 늘 비워 둔다 (둘러보기 모드에선 빈 자리).
+	var grid_h := body.size.y - PICK_FOOTER_H
 	# 패널 폭에 맞춰 줄바꿈 (가로는 한 줄, 세로 화면은 여러 줄).
 	var fit := maxi(1, int((body.size.x + TILE_GAP) / (TILE_SIZE.x + TILE_GAP)))
 	var per_row := mini(mini(fit, max_tiles_per_row), GameState.CATS.size())
 	var rows := ceili(GameState.CATS.size() / float(per_row))
-	tile_y = maxf(0.0, (body.size.y - rows * TILE_SIZE.y - (rows - 1) * TILE_GAP) / 2.0)
+	tile_y = maxf(0.0, (grid_h - rows * TILE_SIZE.y - (rows - 1) * TILE_GAP) / 2.0)
 	for r in rows:
 		var chunk: Array = GameState.CATS.slice(r * per_row, (r + 1) * per_row)
 		var total := chunk.size() * TILE_SIZE.x + (chunk.size() - 1) * TILE_GAP
@@ -940,12 +1059,166 @@ func _build_character_row() -> void:
 			body.add_child(tile)
 			_tiles[cat.id] = tile
 			x += TILE_SIZE.x + TILE_GAP
+	_build_pick_footer(body, grid_h)
 
 
 func _open_chars() -> void:
+	_pick = false
+	_pick_count = 1
+	(_chars.get_meta("head") as Label).text = tr("CHAR_SELECT")
+	_pick_footer.visible = false
 	_raise(_chars)
 	_refresh_tiles()
 	_chars.visible = true
+
+
+func _close_chars() -> void:
+	# 픽 도중이면 한 단계 뒤로, 둘러보기면 그냥 닫는다.
+	_chars.visible = false
+	if not _pick:
+		return
+	_pick = false
+	if _max_players(_pick_mode) > 1:
+		_open_players()
+	else:
+		_open_modes()
+
+
+# --- 참가자 픽 (마리오 파티식 슬롯) -----------------------------------------------
+
+
+## 게임 시작 전 캐릭터 픽을 연다. count = 1이면 1P 슬롯 하나, 2면 1P·2P 둘.
+func _open_pick(count: int) -> void:
+	_pick = true
+	_pick_count = count
+	_pick_slot = 0
+	_pick_cats[0] = _first_unlocked(GameState.selected_cat)
+	_pick_cats[1] = _first_unlocked(GameState.selected_cat2)
+	(_chars.get_meta("head") as Label).text = tr("CHAR_PICK")
+	_pick_footer.visible = true
+	_layout_pick_footer()
+	_raise(_chars)
+	_refresh_tiles()
+	_refresh_pick_cards()
+	_chars.visible = true
+
+
+## 저장된 선택이 아직 잠겨 있으면 해금된 첫 냥이로 대체한다.
+func _first_unlocked(id: String) -> String:
+	if GameState.is_unlocked(id):
+		return id
+	for cat in GameState.CATS:
+		if GameState.is_unlocked(cat.id):
+			return str(cat.id)
+	return "cream"
+
+
+func _build_pick_footer(body: Control, top: float) -> void:
+	_pick_footer = Control.new()
+	_pick_footer.position = Vector2(0.0, top)
+	_pick_footer.size = Vector2(body.size.x, PICK_FOOTER_H)
+	_pick_footer.visible = false
+	body.add_child(_pick_footer)
+	for i in 2:
+		var slot := i  # captured
+		var card := Button.new()
+		card.size = SLOT_CARD
+		card.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		card.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_pick_slot = slot
+			_refresh_pick_cards())
+		var face := Control.new()
+		face.set_anchors_preset(Control.PRESET_FULL_RECT)
+		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		face.draw.connect(func() -> void: _draw_slot_card(face, slot))
+		card.add_child(face)
+		var custom := Button.new()
+		custom.text = tr("CHAR_CUSTOMIZE")
+		custom.size = Vector2(150.0, 48.0)
+		custom.position = Vector2(SLOT_CARD.x - 166.0, SLOT_CARD.y - 62.0)
+		UiKit.btn_card(custom, UiKit.PURPLE_DEEP, 20)
+		custom.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_pick_slot = slot
+			_refresh_pick_cards()
+			_customizer.open(_pick_cats[slot], slot + 1))
+		card.add_child(custom)
+		_pick_footer.add_child(card)
+		_slot_cards.append([card, face, custom])
+	_pick_start = Button.new()
+	_pick_start.text = tr("MENU_START")
+	_pick_start.size = Vector2(300.0, 58.0)
+	UiKit.btn_primary(_pick_start, 26)
+	_pick_start.pressed.connect(_start_picked)
+	_pick_footer.add_child(_pick_start)
+
+
+## 인원 수에 맞춰 카드를 가운데로 모으고, 시작 버튼을 그 아래에 놓는다.
+func _layout_pick_footer() -> void:
+	var gap := 24.0
+	var total := _pick_count * SLOT_CARD.x + (_pick_count - 1) * gap
+	var x := (_pick_footer.size.x - total) / 2.0
+	for i in _slot_cards.size():
+		var card: Button = _slot_cards[i][0]
+		card.visible = i < _pick_count
+		if card.visible:
+			card.position = Vector2(x, 0.0)
+			x += SLOT_CARD.x + gap
+	_pick_start.position = Vector2((_pick_footer.size.x - _pick_start.size.x) / 2.0,
+			SLOT_CARD.y + 26.0)
+
+
+func _refresh_pick_cards() -> void:
+	if _pick_footer == null or not _pick_footer.visible:
+		return
+	for i in _slot_cards.size():
+		var card: Button = _slot_cards[i][0]
+		if i == _pick_slot:
+			UiKit.style_button(card, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 18)
+		else:
+			UiKit.style_button(card, UiKit.WHITE, Color("c9c6d0"), INK, 20, 18)
+		(_slot_cards[i][1] as Control).queue_redraw()
+
+
+func _draw_slot_card(ci: Control, slot: int) -> void:
+	var id := _pick_cats[slot]
+	var font := ThemeDB.fallback_font
+	Player.paint_cat(ci, Vector2(76.0, 92.0), 84.0, 0.0, true, false,
+			GameState.cat_skin(id, slot + 1))
+	# 자리 뱃지 (숫자 + P — 언어 무관).
+	ci.draw_string(font, Vector2(16.0, 36.0), "%dP" % (slot + 1),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 28,
+			GOLD_COL if slot == _pick_slot else UiKit.MUTED)
+	var right := Rect2(140.0, 0.0, SLOT_CARD.x - 156.0, SLOT_CARD.y)
+	var cat_name := tr(str(GameState.get_cat(id).get("name", "")))
+	var size := UiKit.fit_size(font, cat_name, right.size.x, 26)
+	ci.draw_string(font, Vector2(right.position.x, 54.0), cat_name,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, size, INK)
+	if slot == _pick_slot:
+		var turn := tr("CHAR_PICK_TURN")
+		var ts := UiKit.fit_size(font, turn, right.size.x, 19)
+		ci.draw_string(font, Vector2(right.position.x, 84.0), turn,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, ts, GOLD_COL)
+
+
+## 타일에서 고른 냥이를 지금 자리에 앉히고, 2인이면 다음 자리로 넘긴다.
+func _assign_pick(cat_id: String) -> void:
+	Sfx.play("buy")
+	_pick_cats[_pick_slot] = cat_id
+	if _pick_count > 1:
+		_pick_slot = (_pick_slot + 1) % _pick_count
+	_refresh_pick_cards()
+	_refresh_tiles()
+
+
+func _start_picked() -> void:
+	GameState.select_cat(_pick_cats[0], 1)
+	if _pick_count > 1:
+		GameState.select_cat(_pick_cats[1], 2)
+	_chars.visible = false
+	_pick = false
+	_start(_pick_mode, _pick_count > 1)
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -965,7 +1238,7 @@ func _make_tile(cat: Dictionary) -> Button:
 
 
 func _style_tile(b: Button, cat: Dictionary) -> void:
-	var selected: bool = GameState.selected_cat == cat.id
+	var selected := _is_chosen(str(cat.id))
 	if selected:
 		UiKit.style_button(b, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 16)
 	else:
@@ -979,10 +1252,21 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 		Player.paint_cat(ci, center, 68.0, 0.0, true, false, GameState.cat_skin(cat.id))
 	else:
 		# 잠긴 냥이는 실루엣 + 자물쇠 뱃지.
-		var shadow := {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "ink": INK}
+		var shadow := GameState.cat_shadow_skin(str(cat.id))
 		Player.paint_cat(ci, center, 68.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(34.0, 24.0))
 	var font := ThemeDB.fallback_font
+	# 픽 중에는 어느 자리가 이 냥이를 골랐는지 우상단 뱃지로 보여준다.
+	if _pick:
+		var by := 6.0
+		for i in _pick_count:
+			if _pick_cats[i] != cat.id:
+				continue
+			var chip := Rect2(TILE_SIZE.x - 44.0, by, 38.0, 26.0)
+			ci.draw_rect(chip, GOLD_COL)
+			ci.draw_string(font, chip.position + Vector2(5.0, 20.0),
+					"%dP" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, UiKit.WHITE)
+			by += 30.0
 	var name_col := INK if unlocked else UiKit.MUTED
 	var tile_name := tr(str(cat.name))
 	if unlocked and GameState.affection_level(cat.id) >= 10:
@@ -1009,7 +1293,7 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 						UiKit.MUTED)
 	else:
 		# 해금된 냥이는 특성 태그를 달고, 선택된 냥이는 진한 금색.
-		var tag_col := GOLD_COL if GameState.selected_cat == cat.id else UiKit.MUTED
+		var tag_col := GOLD_COL if _is_chosen(str(cat.id)) else UiKit.MUTED
 		_draw_center_text(ci, font, tr(str(cat.get("trait", ""))), 144.0, 16, tag_col)
 
 
@@ -1038,7 +1322,21 @@ func _draw_lock(ci: Control, at: Vector2) -> void:
 
 func _on_tile_pressed(cat: Dictionary) -> void:
 	Sfx.play("click")
+	# 픽 중에는 해금된 냥이를 곧장 자리에 앉힌다 (잠긴 냥이는 구매 팝업으로).
+	if _pick and GameState.is_unlocked(cat.id):
+		_assign_pick(str(cat.id))
+		return
 	_open_popup(cat)
+
+
+## 이 냥이가 지금 "고른" 상태인가 — 픽 중에는 참가자 슬롯, 아니면 저장된 선택.
+func _is_chosen(id: String) -> bool:
+	if not _pick:
+		return GameState.selected_cat == id
+	for i in _pick_count:
+		if _pick_cats[i] == id:
+			return true
+	return false
 
 
 # --- Character info popup -----------------------------------------------------
@@ -1080,8 +1378,10 @@ func _build_popup() -> void:
 	_popup_custom.text = tr("CHAR_CUSTOMIZE")
 	_popup_custom.pressed.connect(func() -> void:
 		Sfx.play("click")
+		var id: String = str(_popup_cat.get("id", "cream"))
+		var slot := (_pick_slot + 1) if _pick else 1
 		_close_popup()
-		_customizer.open())
+		_customizer.open(id, slot))
 
 
 func _make_popup_button(panel: Control, accent: bool) -> Button:
@@ -1100,7 +1400,10 @@ func _open_popup(cat: Dictionary) -> void:
 	var unlocked: bool = GameState.is_unlocked(cat.id)
 	var u: Dictionary = cat.unlock
 	if unlocked:
-		_popup_action.visible = GameState.selected_cat != cat.id
+		if _pick:
+			_popup_action.visible = _pick_cats[_pick_slot] != cat.id
+		else:
+			_popup_action.visible = GameState.selected_cat != cat.id
 		_popup_action.text = tr("CHAR_SELECT_BTN")
 	elif u.type == "gold":
 		_popup_action.visible = true
@@ -1111,8 +1414,11 @@ func _open_popup(cat: Dictionary) -> void:
 	else:
 		_popup_action.visible = false
 	_refresh_feed_button()
-	# 나만의 냥은 하단에 꾸미기 버튼이 함께 선다.
-	_popup_custom.visible = cat.id == "custom" and unlocked
+	# 꾸미기는 결과가 실제로 보이는 냥이에만 — 컨셉 시트 그림으로 그리는 냥이는
+	# 파츠 레이어 아트가 있어야 색을 갈아끼울 수 있다.
+	var char_id := str(cat.get("char", "char01"))
+	_popup_custom.visible = unlocked and (CatSprite.is_layered(char_id)
+			or not CatSprite.has(char_id))
 	# Bottom row: visible buttons side by side, centered.
 	var y := POPUP_SIZE.y - 70.0
 	var row: Array = []
@@ -1191,7 +1497,10 @@ func _on_popup_action() -> void:
 	var cat := _popup_cat
 	if GameState.is_unlocked(cat.id):
 		Sfx.play("click")
-		GameState.select_cat(cat.id)
+		if _pick:
+			_assign_pick(str(cat.id))
+		else:
+			GameState.select_cat(cat.id)
 		_refresh_tiles()
 		_close_popup()
 		return
@@ -1204,7 +1513,10 @@ func _on_popup_action() -> void:
 		return
 	if GameState.try_buy(cat.id):
 		Sfx.play("buy")
-		GameState.select_cat(cat.id)
+		if _pick:
+			_assign_pick(str(cat.id))
+		else:
+			GameState.select_cat(cat.id)
 		_show_toast(tr("CHAR_RECRUITED").format({"name": tr(str(cat.name))}), CREAM)
 		_refresh_currency()
 		_refresh_tiles()
@@ -1223,7 +1535,7 @@ func _draw_popup(ci: Control) -> void:
 	if unlocked:
 		Player.paint_cat(ci, center, 110.0, 0.0, true, false, GameState.cat_skin(cat.id))
 	else:
-		var shadow := {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "ink": INK}
+		var shadow := GameState.cat_shadow_skin(str(cat.id))
 		Player.paint_cat(ci, center, 110.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(52.0, 38.0))
 	var name_col := INK if unlocked else UiKit.MUTED

@@ -11,8 +11,8 @@ func _ready() -> void:
 
 ## 열려 있는 오버레이가 하나라도 있으면 Esc는 "닫기"로 쓰인다.
 func _any_overlay_open() -> bool:
-	for c: Control in [_popup, _modes, _chars, _shop, _ranks, _keycap_dex,
-			_customizer, _replay_viewer]:
+	for c: Control in [_popup, _modes, _players_ui, _chars, _shop, _ranks,
+			_keycap_dex, _customizer, _replay_viewer]:
 		if c != null and c.visible:
 			return true
 	return _settings_open()
@@ -29,7 +29,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _add_quit_button() -> void:
 	var b := Button.new()
-	b.text = "종료"
+	b.text = tr("MENU_QUIT")
 	b.size = Vector2(140.0, 60.0)
 	b.position = Vector2(vw - 170.0, vh - 90.0)
 	UiKit.btn_card(b, UiKit.RED_DEEP, 24)
