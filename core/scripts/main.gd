@@ -299,8 +299,7 @@ func _on_game_over() -> void:
 	elif picnic:
 		var weekly_up := GameState.record_weekly("picnic", GameState.score)
 		was_record = GameState.record_picnic(GameState.score)
-		stats = tr("HUD_STATS_PICNIC").format(
-				{"score": GameState.score, "snacks": board.picnic_snacks})
+		stats = tr("HUD_STATS_PICNIC").format({"score": GameState.score})
 		if was_record:
 			Replays.save_replay("picnic", board.rec_export())
 		if weekly_up and not was_record:
@@ -343,7 +342,7 @@ func _award_run_rewards(was_record: bool) -> String:
 	var run_gold := 0
 	var run_gems := 0
 	if GameState.mode == GameState.MODE_ENDLESS:
-		run_gold = int(height * 3 * board.gold_mult)  # lucky jelly boost applies
+		run_gold = height * 3
 		run_gems = mini(height / 30, 3)
 	elif GameState.mode == GameState.MODE_CLASSIC:
 		# Arcade scores swing bigger (1200 × level tetrises + shutter bonuses),

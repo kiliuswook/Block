@@ -50,44 +50,11 @@ const REVIVE_PLATFORM_GAP := 3  # revive platform floats this many cells above t
 const REVIVE_FX_RADIUS := 16.0  # revive blast: cells beyond this erase without FX (off-screen)
 const REVIVE_FX_WAVE := 0.018  # revive blast ripple: FX delay per cell of distance from the cat
 const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
-const GOLD_FX_TIME := 1.0
-# --- Gold ore ------------------------------------------------------------------
-# Gold reaches the cat three ways: baked inside a tetromino cell (clear or break
-# that block to bank it), perched loose on top of a falling piece (rotate to
-# shake it off before it rides down), and raining from above during fever.
-const ORE_CHANCE := 0.3  # chance a spawning piece carries an ore cell
-const ORE_VALUE := 4  # gold banked when that block is cleared or broken
-const RIDER_CHANCE := 0.18  # chance a nugget rides in perched on the piece
-const RIDER_VALUE := 8  # riders are worth more — they have to be caught
-const FEVER_RAIN_INTERVAL := 0.5  # fever: seconds between falling nuggets
-const FEVER_NUGGET_VALUE := 3
-const NUGGET_SIZE := 28.0
-const NUGGET_GRAVITY := 1500.0
-const NUGGET_MAX_FALL := 900.0
-const NUGGET_LIFE := 16.0  # uncollected nuggets fade away
-const NUGGET_FADE := 2.5  # ...blinking out over these last seconds
-const FEVER_TIME := 10.0
-const FEVER_PER_LINE := 0.25  # gauge charge per cleared line (full at 4 lines)
-const FEVER_PER_PIECE := 0.03  # small trickle charge for every locked piece
-const FEVER_FALL_INTERVAL := 0.025  # fever: near-instant fall steps
-const FEVER_LOCK_GRACE := 0.07  # fever: quick lock so the next piece follows
-const FEVER_SPAWN_TRIES := 3  # fever spawn: candidate columns, deepest one wins
-# Jelly picnic (casual): a 2-minute no-death snack hunt. Pieces fall slow and
+# Jelly picnic (casual): a 2-minute no-death timed run. Pieces fall slow and
 # never speed up; anything that would kill the cat pops like jelly instead.
 const PICNIC_TIME := 120.0
-const PICNIC_SNACKS_ACTIVE := 3  # snacks floating in the pit at any moment
-const PICNIC_SNACK_SCORE := 100
 const PICNIC_TRACK_TIME := 6.0
 const PICNIC_FALL_INTERVAL := 0.34
-const PICNIC_SNACK_MIN_UP := 1  # snack floats this many cells above the stack
-const PICNIC_SNACK_MAX_UP := 5
-# Alphabet keycaps: every so often a random locked block turns into a cat-eared
-# keycap; clear the line holding it to bank the letter (title-screen dex).
-# TEST CADENCE — release values should be far rarer (e.g. 45.0 / 0.15).
-const KEYCAP_INTERVAL := 6.0  # spawn roll every this many seconds
-const KEYCAP_CHANCE := 0.6  # chance a roll actually spawns one
-const KEYCAP_MAX_ACTIVE := 2  # keycaps sitting in the pit at once
-const KEYCAP_FX_TIME := 1.3
 # Classic level-clear shutter (Atari B-type): a steel curtain rolls down over
 # the well, paying a bonus for every empty row it passes at the top, holds shut
 # while the next level's board is dealt behind it, then rolls back up.
@@ -132,7 +99,6 @@ var shutter_pop := 0.0  # flare left on the tally after its latest tick
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
-var gold_fx: Array = []  # [pos: Vector2, age: float, amount: int] — floating "+N G" popup
 var mode := Mode.STORY
 var rows := PIT_ROWS  # pit height in cells
 var best_height := 0
@@ -141,33 +107,12 @@ var lava_y := 0.0
 var lava_phase := 0.0
 var p2_das_timer := 0.0
 var versus_pieces := 0
-# Fever (endless only): line clears charge the gauge; at full charge the cat
-# goes invincible with double-height jumps while pieces rain down at full
-# speed; buried cats swim up through the one-way stack (see player.gd).
-var fever_gauge := 0.0
-var fever_active := false
-var fever_timer := 0.0
-var gold_mult := 1.0  # lucky-jelly boost: endless gold multiplier for this run
-# Gold: ore baked into locked blocks, the nugget riding the active piece, and
-# the loose nuggets lying around the pit waiting to be walked into.
-var ore := {}  # Vector2i -> gold amount
-var piece_ore := -1  # index into the active piece's cells carrying ore (-1 none)
-var rider := {}  # {"col": local column, "amount": int} perched on the active piece
-var nuggets: Array = []  # [{pos: Vector2, vel: float, amount: int, age: float,
-						  #   rest: bool}]
-var fever_rain_timer := 0.0
 # Endless: once its countdown ends a piece detaches and falls on its own (no
 # more rotation), so the next piece starts tracking immediately. Each entry:
 # {t: type, r: rot, p: pos, s: PieceState, ft: fall timer, lt: land timer}.
 var loose: Array = []
-# Alphabet keycaps living on locked blocks (cell -> letter "A".."Z").
-var keycaps := {}
-var keycap_timer := 0.0
-var keycap_fx: Array = []  # [pos: Vector2, age: float, letter: String]
-# Picnic: floating jelly-fish snacks (cell -> visual variant), time left, haul.
-var snacks := {}
+# Picnic: time left on the clock.
 var picnic_time := 0.0
-var picnic_snacks := 0
 # Replay recording: 10Hz state frames (cat + piece + score) plus grid-diff
 # events, exported via rec_export(). Story records one stage at a time.
 const REC_STEP := 0.1
@@ -218,22 +163,8 @@ func start_game() -> void:
 	p2_das_timer = 0.0
 	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
-	gold_fx.clear()
-	ore.clear()
-	nuggets.clear()
-	piece_ore = -1
-	rider = {}
-	fever_rain_timer = 0.0
 	loose.clear()
-	keycaps.clear()
-	keycap_timer = 0.0
-	keycap_fx.clear()
-	snacks.clear()
 	picnic_time = 0.0
-	picnic_snacks = 0
-	fever_gauge = 0.0
-	fever_active = false
-	fever_timer = 0.0
 	is_paused = false
 	stage = {}
 	door_left = true
@@ -248,7 +179,6 @@ func start_game() -> void:
 		cam.enabled = mode == Mode.ENDLESS
 		cam.position = Vector2(COLS * CELL / 2.0, rows * CELL / 2.0)
 		cam.reset_smoothing()
-	gold_mult = 1.0
 	if _story():
 		# Resume from the next uncleared stage; a finished story replays from 1.
 		level = GameState.story_stage % StoryStages.TOTAL + 1
@@ -260,22 +190,16 @@ func start_game() -> void:
 		door_right = false
 		_classic_setup_level(1)
 	elif mode == Mode.PICNIC:
-		# Sealed jelly pit: no exits, no death — just a timed snack hunt.
+		# Sealed jelly pit: no exits, no death — just a timed run.
 		door_left = false
 		door_right = false
 		picnic_time = PICNIC_TIME
-		for i in range(PICNIC_SNACKS_ACTIVE):
-			_spawn_snack()
 	elif mode == Mode.ENDLESS and not split:
 		# Consume boosts bought for this run (shop / death-popup chips).
 		for b: String in GameState.take_boosts():
 			match b:
 				"warmup":
 					_build_warmup_stairs()
-				"fever":
-					fever_gauge = 0.5
-				"lucky":
-					gold_mult = 1.5
 	player.respawn(_spawn_point())
 	player.visible = true  # a restart mid-shutter must not leave the cat hidden
 	_spawn_piece()
@@ -314,7 +238,6 @@ func _apply_stage() -> void:
 	_set_doors(goal_done)
 	grid.clear()
 	cracked.clear()
-	keycaps.clear()
 	var pf: Dictionary = stage.get("prefill_cells", {})
 	for c: Vector2i in pf:
 		grid[c + Vector2i(0, shift)] = pf[c]
@@ -341,19 +264,9 @@ func _process(delta: float) -> void:
 		for fx in break_fx:
 			fx[1] += delta
 		break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-		for fx in keycap_fx:
-			fx[1] += delta
-		keycap_fx = keycap_fx.filter(func(fx: Array) -> bool: return fx[1] < KEYCAP_FX_TIME)
 		queue_redraw()
 		return
 	run_time += delta  # only ticks while the board is actually being played
-	if fever_active:
-		fever_timer -= delta
-		if fever_timer <= 0.0:
-			fever_active = false
-			# Blocks turn solid again — pop the cat out if it was inside one.
-			if not _shove_player_out_of_grid():
-				_erase_cells_around(Vector2i((player.position / CELL).floor()), 1)
 	if mode == Mode.VERSUS:
 		_p2_input(delta)
 	else:
@@ -375,15 +288,6 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-	for fx in gold_fx:
-		fx[1] += delta
-	gold_fx = gold_fx.filter(func(fx: Array) -> bool: return fx[1] < GOLD_FX_TIME)
-	for fx in keycap_fx:
-		fx[1] += delta
-	keycap_fx = keycap_fx.filter(func(fx: Array) -> bool: return fx[1] < KEYCAP_FX_TIME)
-	_update_keycaps(delta)
-	_update_nuggets(delta)
-	_update_fever_rain(delta)
 	if _story() and playing and not goal_done and _goal_type() == "survive":
 		var prev := int(survive_time)
 		survive_time += delta
@@ -443,7 +347,7 @@ func _update_endless(delta: float) -> void:
 
 
 func _update_picnic(delta: float) -> void:
-	lava_phase += delta  # doubles as the snack-bobbing animation clock
+	lava_phase += delta
 	picnic_time -= delta
 	if picnic_time <= 0.0:
 		picnic_time = 0.0
@@ -455,50 +359,16 @@ func _update_picnic(delta: float) -> void:
 			EventBus.game_over.emit()
 		queue_redraw()
 		return
-	var pr := player.rect().grow(6.0)
-	for c: Vector2i in snacks.keys():
-		if _cell_rect(c).grow(-10.0).intersects(pr):
-			_collect_snack(c)
-
-
-func _collect_snack(c: Vector2i) -> void:
-	snacks.erase(c)
-	picnic_snacks += 1
-	GameState.score += PICNIC_SNACK_SCORE
-	break_fx.append([c, 0.0])
-	gold_fx.append([_cell_rect(c).get_center(), 0.0, PICNIC_SNACK_SCORE])
-	Sfx.play("gold")
-	_spawn_snack()
-
-
-## Drops a snack over a random column, floating a few cells above that
-## column's stack surface — high ones ask for a little block-climbing.
-func _spawn_snack() -> void:
-	for attempt in range(40):
-		var x := randi_range(0, COLS - 1)
-		var surface := _surface_row(x, x)
-		var y := clampi(surface - randi_range(PICNIC_SNACK_MIN_UP, PICNIC_SNACK_MAX_UP),
-				2, rows - 1)
-		var c := Vector2i(x, y)
-		if grid.has(c) or snacks.has(c):
-			continue
-		if Vector2(c).distance_to(player.position / CELL) < 3.0:
-			continue  # never a freebie right on the cat
-		snacks[c] = randi_range(0, 2)
-		return
 
 
 ## Picnic never kills: whatever pinned the cat pops like jelly instead. The
 ## falling piece bursts, nearby locked cells shatter, and play just continues.
-## big = the stack overflowed the pit: blow the whole thing up and restock.
+## big = the stack overflowed the pit: blow the whole thing up.
 func _picnic_rescue(big := false) -> void:
 	var center := Vector2i((player.position / CELL).floor())
 	Sfx.play("break")
 	if big:
 		_blast_all_cells(center)
-		snacks.clear()
-		for i in range(PICNIC_SNACKS_ACTIVE):
-			_spawn_snack()
 	if piece_type != "" and piece_state != PieceState.TRACKING:
 		for c in _cells(piece_type, piece_rot, piece_pos):
 			break_fx.append([c, 0.0])
@@ -548,11 +418,7 @@ func _rect_in_side_door(r: Rect2) -> bool:
 
 ## What the player collides with: locked grid, walls, and the falling piece.
 ## The falling piece is a solid body — the player can never pass through it.
-## Fever changes the rules: only the pit boundary stays solid — locked blocks
-## and the falling piece become one-way platforms (see [fever_platform_top]).
 func rect_blocked_for_player(r: Rect2) -> bool:
-	if fever_active:
-		return _rect_hits_bounds(r)
 	return rect_hits_solid(r) or piece_hits_rect(r)
 
 
@@ -608,7 +474,7 @@ func _track_target() -> int:
 ## the piece into [member loose] so the next one starts tracking immediately;
 ## every other mode keeps the classic one-piece fall.
 func _release_piece() -> void:
-	if mode == Mode.ENDLESS and not fever_active:
+	if mode == Mode.ENDLESS:
 		_detach_piece()
 	else:
 		_start_fall()
@@ -622,9 +488,8 @@ func _detach_piece() -> void:
 		return
 	if _cells_hit_loose(_cells(piece_type, piece_rot, piece_pos), -1):
 		return  # the previous piece still fills this lane — try again next frame
-	_drop_rider()  # the lurch into free fall shakes the perched nugget off
 	loose.append({"t": piece_type, "r": piece_rot, "p": piece_pos,
-			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0, "o": piece_ore})
+			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0})
 	if _resolve_loose_overlap(loose.size() - 1) or not playing:
 		return
 	_spawn_piece()
@@ -685,7 +550,7 @@ func _step_loose(delta: float) -> void:
 				e.lt += delta
 				if e.lt >= LOCK_GRACE:
 					loose.remove_at(i)
-					_merge_piece(e.t, e.r, e.p, int(e.get("o", -1)))
+					_merge_piece(e.t, e.r, e.p)
 					if not playing:
 						return
 					continue
@@ -726,15 +591,11 @@ func _start_fall() -> void:
 	# Classic Tetris block out: the stack reaches the spawn area and the
 	# piece has nowhere to start falling. In versus that's on P2 — cat wins.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if fever_active:
-			for c in _cells(piece_type, piece_rot, piece_pos):
-				_erase_cell(c)
-		elif mode == Mode.VERSUS:
+		if mode == Mode.VERSUS:
 			_versus_over(1)
-			return
 		else:
 			_kill_player()
-			return
+		return
 	_resolve_piece_overlap()
 
 
@@ -778,7 +639,7 @@ func _landed(delta: float) -> void:
 		_lock_piece()
 		return
 	land_timer += delta
-	if land_timer >= (FEVER_LOCK_GRACE if fever_active else LOCK_GRACE):
+	if land_timer >= LOCK_GRACE:
 		_lock_piece()
 
 
@@ -872,8 +733,6 @@ func _resolve_loose_overlap(i: int) -> bool:
 
 
 func _resolve_overlap_cells(piece_cells: Array) -> bool:
-	if fever_active:
-		return false  # invincible: the piece passes straight through the cat
 	var pr := player.rect().grow(-CRUSH_MARGIN)
 	var cell_rects: Array = []
 	var overlapping: Array = []
@@ -925,27 +784,21 @@ func _resolve_overlap_cells(piece_cells: Array) -> bool:
 
 
 func _lock_piece() -> void:
-	_drop_rider()  # whatever rode this piece down slides off onto the stack
-	if _merge_piece(piece_type, piece_rot, piece_pos, piece_ore):
+	if _merge_piece(piece_type, piece_rot, piece_pos):
 		_spawn_piece()
 
 
-## Locks a piece's cells into the grid: overflow, line clears, scoring and the
-## picnic snack shuffle. Serves both the active piece and detached (loose)
-## endless pieces. Returns false when the game ended — or a rescue already
-## spawned the next piece — and the caller must not spawn another.
-## `ore_idx` marks which of the piece's cells carries gold (-1 = none); the
-## seam has to be in the grid before the line check so a clear can pay it out.
-func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
+## Locks a piece's cells into the grid: overflow, line clears and scoring.
+## Serves both the active piece and detached (loose) endless pieces. Returns
+## false when the game ended — or a rescue already spawned the next piece —
+## and the caller must not spawn another.
+func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 	var overflow := false
-	var merged := _cells(t, r, pos)
-	for c in merged:
+	for c in _cells(t, r, pos):
 		grid[c] = t
 		cracked.erase(c)
 		if c.y < 0:
 			overflow = true
-	if ore_idx >= 0 and ore_idx < merged.size():
-		ore[merged[ore_idx]] = ORE_VALUE
 	if overflow and mode != Mode.ENDLESS:
 		# Stack spilled over the top: cat dies in escape, P2 loses in versus.
 		if mode == Mode.PICNIC:
@@ -959,17 +812,14 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 		return false
 	if not _free_player_from_grid():
 		return false
-	if not fever_active:  # fever locks a piece every ~0.1s — too spammy to click
-		Sfx.play("lock")
+	Sfx.play("lock")
 	GameState.score += 10 * level
-	_add_fever(FEVER_PER_PIECE)
 	var cleared := _clear_lines()
 	if cleared > 0:
 		total_lines += cleared
 		# Classic pays the arcade table (40/100/300/1200 × stage, pre-level-up).
 		var table: Array = Board.CLASSIC_SCORES if mode == Mode.CLASSIC else LINE_SCORES
 		GameState.score += table[cleared] * level
-		_add_fever(cleared * FEVER_PER_LINE)
 		Sfx.play("clear", 1.0 + 0.07 * (cleared - 1))
 		if mode == Mode.ENDLESS:
 			_endless_line_reward(cleared)
@@ -982,12 +832,6 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 			return true  # 레벨 클리어 연출 중: 깔림 판정 없이 셔터가 내려온다
 		if not _free_player_from_grid():
 			return false
-	if mode == Mode.PICNIC:
-		# Locks and line shifts may have buried a snack — float it elsewhere.
-		for c: Vector2i in snacks.keys():
-			if grid.has(c):
-				snacks.erase(c)
-				_spawn_snack()
 	return true
 
 
@@ -1002,8 +846,7 @@ func _build_warmup_stairs() -> void:
 
 
 ## Endless: line clears fight the lava — every clear shoves it back down,
-## scaling steeply with multi-line clears. (Gold no longer rides on the clear
-## itself: it comes out of the ore seams the cleared blocks were carrying.)
+## scaling steeply with multi-line clears.
 ## Height itself is never lost: _clear_lines leaves gaps instead of collapsing.
 func _endless_line_reward(cleared: int) -> void:
 	lava_y += LAVA_PUSH[cleared] * CELL
@@ -1020,12 +863,8 @@ func _classic_setup_level(n: int) -> void:
 	level_garbage = Board.classic_garbage(n)
 	grid.clear()
 	cracked.clear()
-	keycaps.clear()
-	ore.clear()
 	loose.clear()
 	piece_type = ""
-	piece_ore = -1
-	rider = {}
 	_fill_garbage(level_garbage)
 
 
@@ -1155,12 +994,8 @@ func _shutter_pay_row(y: int) -> bool:
 
 
 ## The curtain has come to rest on the stack: it flattens whatever is left
-## (bursting the blocks, banking any keycaps) and the next board is dealt.
+## and the next board is dealt.
 func _classic_shutter_landed() -> void:
-	for c: Vector2i in keycaps.keys():
-		_collect_keycap(c)
-	for c: Vector2i in ore.keys():
-		_bank_ore(c)  # the curtain crushes the stack open, gold and all
 	for c: Vector2i in grid:
 		break_fx.append([c, 0.0])
 	if not grid.is_empty():
@@ -1182,153 +1017,6 @@ func _classic_deal_next_level() -> void:
 		player.respawn(_spawn_point())
 	_spawn_piece()
 	_classic_announce_level()
-
-
-# --- Gold ore ---------------------------------------------------------------------
-
-
-## Gold only pays out where a single wallet makes sense: split screen shares
-## one save across two boards, and in versus the blocks belong to P2.
-func _gold_on() -> bool:
-	return not split and mode != Mode.VERSUS
-
-
-## Banks gold and throws the floating "+N G" popup.
-func _pay_gold(amount: int, at: Vector2) -> void:
-	if not _gold_on() or amount <= 0:
-		return
-	var g := int(amount * gold_mult)
-	GameState.add_currency(g, 0)
-	gold_fx.append([at, 0.0, g])
-	Sfx.play("gold")
-
-
-## The ore in this cell is freed — by a line clear, a break, or a blast.
-func _bank_ore(c: Vector2i) -> void:
-	if not ore.has(c):
-		return
-	var amount: int = ore[c]
-	ore.erase(c)
-	_pay_gold(amount, _cell_rect(c).get_center())
-
-
-## Rolls what gold (if any) the freshly spawned piece brings down with it:
-## either a seam of ore inside one of its cells, or a nugget riding on top.
-func _roll_piece_gold() -> void:
-	piece_ore = -1
-	rider = {}
-	if not _gold_on() or piece_type == "" or fever_active:
-		return  # fever has its own downpour — no need to seed the pieces too
-	if randf() < ORE_CHANCE:
-		piece_ore = randi() % Board.SHAPES[piece_type][piece_rot].size()
-	elif randf() < RIDER_CHANCE:
-		# Perch it over one of the piece's own columns, on the top face.
-		var cols: Array = []
-		for c in Board.SHAPES[piece_type][piece_rot]:
-			if not cols.has(c.x):
-				cols.append(c.x)
-		rider = {"col": cols[randi() % cols.size()], "amount": RIDER_VALUE}
-
-
-## Where the perched nugget currently sits: on the top face of its column.
-func _rider_pos() -> Vector2:
-	var col: int = piece_pos.x + int(rider.col)
-	var top := INF
-	for c in _cells(piece_type, piece_rot, piece_pos):
-		if c.x == col:
-			top = minf(top, float(c.y))
-	if top == INF:
-		top = float(piece_pos.y)
-	return Vector2((col + 0.5) * CELL, top * CELL - NUGGET_SIZE * 0.5)
-
-
-## Shakes the perched nugget loose — rotating the piece out from under it is
-## the whole trick, but locking or detaching drops it too.
-func _drop_rider() -> void:
-	if rider.is_empty():
-		return
-	_spawn_nugget(_rider_pos(), int(rider.amount))
-	rider = {}
-
-
-func _spawn_nugget(at: Vector2, amount: int) -> void:
-	nuggets.append({"pos": at, "vel": 0.0, "amount": amount, "age": 0.0, "rest": false})
-
-
-## Loose nuggets fall until something solid stops them, get picked up by
-## walking into them, and fade if nobody ever does.
-func _update_nuggets(delta: float) -> void:
-	var half := NUGGET_SIZE * 0.5
-	var keep: Array = []
-	for n in nuggets:
-		n.age += delta
-		if not n.rest:
-			n.vel = minf(n.vel + NUGGET_GRAVITY * delta, NUGGET_MAX_FALL)
-			var next_y: float = n.pos.y + n.vel * delta
-			if rect_hits_solid(Rect2(n.pos.x - half, next_y - half,
-					NUGGET_SIZE, NUGGET_SIZE)):
-				n.rest = true
-				n.vel = 0.0
-			else:
-				n.pos.y = next_y
-		elif not rect_hits_solid(Rect2(n.pos.x - half, n.pos.y - half + 2.0,
-				NUGGET_SIZE, NUGGET_SIZE)):
-			n.rest = false  # the block under it was cleared away
-		if player.alive and player.rect().intersects(
-				Rect2(n.pos - Vector2.ONE * half, Vector2.ONE * NUGGET_SIZE)):
-			_pay_gold(int(n.amount), n.pos)
-			continue
-		if mode == Mode.ENDLESS and n.pos.y > lava_y:
-			continue  # swallowed by the lava
-		if n.age < NUGGET_LIFE:
-			keep.append(n)
-	nuggets = keep
-
-
-## Fever: gold rains over the pit while the cat is invincible, so the climb
-## doubles as a payday.
-func _update_fever_rain(delta: float) -> void:
-	if not fever_active or not _gold_on():
-		return
-	fever_rain_timer -= delta
-	if fever_rain_timer > 0.0:
-		return
-	fever_rain_timer = FEVER_RAIN_INTERVAL
-	_spawn_nugget(Vector2((randi() % COLS + 0.5) * CELL,
-			(_endless_spawn_row() - 1) * CELL), FEVER_NUGGET_VALUE)
-
-
-# --- Alphabet keycaps -----------------------------------------------------------
-
-
-## Every KEYCAP_INTERVAL seconds, one random locked block may turn into an
-## alphabet keycap. Clearing the line that holds it banks the letter. Split
-## boards skip it (two boards share one save), versus skips it (P2 owns the
-## blocks, a collectible for P1 there makes no sense).
-func _update_keycaps(delta: float) -> void:
-	if not playing or split or mode == Mode.VERSUS:
-		return
-	keycap_timer += delta
-	if keycap_timer < KEYCAP_INTERVAL:
-		return
-	keycap_timer = 0.0
-	if randf() > KEYCAP_CHANCE or keycaps.size() >= KEYCAP_MAX_ACTIVE:
-		return
-	var cells: Array = grid.keys().filter(func(c: Vector2i) -> bool:
-		return not keycaps.has(c) and (mode == Mode.ENDLESS or c.y >= 0))
-	if cells.is_empty():
-		return
-	keycaps[cells.pick_random()] = char(65 + randi() % 26)
-	Sfx.play("crack")
-	queue_redraw()
-
-
-func _collect_keycap(c: Vector2i) -> void:
-	var letter: String = keycaps[c]
-	keycaps.erase(c)
-	GameState.add_keycap(letter)
-	keycap_fx.append([_cell_rect(c).get_center(), 0.0, letter])
-	Sfx.play("record")
 
 
 # --- Replay recording -------------------------------------------------------------
@@ -1436,14 +1124,9 @@ func _clear_lines() -> int:
 	var collapse := mode != Mode.ENDLESS
 	var new_grid := {}
 	var new_cracked := {}
-	var new_keycaps := {}
-	var new_ore := {}
 	for c in grid:
 		if c.y in full_rows:
 			break_fx.append([c, 0.0])
-			if keycaps.has(c):
-				_collect_keycap(c)
-			_bank_ore(c)  # the seam in this block is cashed in with the line
 			continue
 		var dest: Vector2i = c
 		if collapse:
@@ -1455,23 +1138,13 @@ func _clear_lines() -> int:
 		new_grid[dest] = grid[c]
 		if cracked.has(c):
 			new_cracked[dest] = true
-		if keycaps.has(c):
-			new_keycaps[dest] = keycaps[c]
-		if ore.has(c):
-			new_ore[dest] = ore[c]
 	grid = new_grid
 	cracked = new_cracked
-	keycaps = new_keycaps
-	ore = new_ore
 	return full_rows.size()
 
 
-## Buried by a lock/line shift with nowhere to nudge to: normally death, but
-## a fever cat is invincible — blocks are one-way, so being inside them is
-## fine and it can simply jump out.
+## Buried by a lock/line shift with nowhere to nudge to: that is death.
 func _free_player_from_grid() -> bool:
-	if fever_active:
-		return true
 	if _shove_player_out_of_grid():
 		return true
 	_kill_player()
@@ -1515,8 +1188,6 @@ func break_cell_in_rect(r: Rect2) -> bool:
 	if cracked.has(best):
 		cracked.erase(best)
 		grid.erase(best)
-		keycaps.erase(best)
-		_bank_ore(best)  # smashing the block open frees whatever gold was in it
 		break_fx.append([best, 0.0])
 		GameState.score += BREAK_SCORE
 		_story_add_progress("breaks", 1)
@@ -1544,11 +1215,7 @@ func _spawn_piece() -> void:
 		EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
-	if fever_active:
-		# Fever pieces don't chase the cat: rain over the whole pit width,
-		# leaning toward the lowest part of the stack (see [_fever_spawn_x]).
-		piece_pos = Vector2i(_fever_spawn_x(), spawn_row)
-	elif mode == Mode.VERSUS:
+	if mode == Mode.VERSUS:
 		# Neutral center spawn: P2 steers it from there.
 		piece_pos = Vector2i(COLS / 2 - 2, spawn_row)
 		versus_pieces += 1
@@ -1557,18 +1224,12 @@ func _spawn_piece() -> void:
 	piece_state = PieceState.TRACKING
 	track_timer = 0.0
 	track_move_timer = 0.0
-	_roll_piece_gold()
 	# Classic Tetris block out: the new piece spawns inside the stack.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if fever_active:
-			for c in _cells(piece_type, piece_rot, piece_pos):
-				_erase_cell(c)
-		elif mode == Mode.VERSUS:
+		if mode == Mode.VERSUS:
 			_versus_over(1)
 		else:
 			_kill_player()
-	if fever_active and playing:
-		_start_fall()
 
 
 func _draw_from_bag() -> String:
@@ -1619,9 +1280,6 @@ func _try_rotate(dir: int) -> void:
 				continue
 		piece_pos = target
 		piece_rot = new_rot
-		# The perched nugget loses its footing the moment the piece turns —
-		# that's the trick: shake it loose before it rides down into the stack.
-		_drop_rider()
 		return
 
 
@@ -1665,7 +1323,6 @@ func _escape() -> void:
 	GameState.score += ESCAPE_SCORE * (level - 1)
 	grid.clear()
 	cracked.clear()
-	keycaps.clear()
 	player.respawn(_spawn_point())
 	_spawn_piece()
 	EventBus.level_changed.emit(level)
@@ -1723,7 +1380,6 @@ func _blast_all_cells(center: Vector2i) -> void:
 			break_fx.append([c, -dist * REVIVE_FX_WAVE])
 	grid.clear()
 	cracked.clear()
-	keycaps.clear()
 
 
 ## Endless revive: a flat bar floats a few cells above the lava as a rescue
@@ -1784,8 +1440,6 @@ func _erase_cell(c: Vector2i) -> void:
 		return
 	grid.erase(c)
 	cracked.erase(c)
-	keycaps.erase(c)
-	_bank_ore(c)
 	break_fx.append([c, 0.0])
 
 
@@ -1851,8 +1505,6 @@ func _track_time() -> float:
 
 
 func _fall_interval() -> float:
-	if fever_active:
-		return FEVER_FALL_INTERVAL
 	if mode == Mode.PICNIC:
 		return PICNIC_FALL_INTERVAL
 	if mode == Mode.CLASSIC:
@@ -1875,105 +1527,12 @@ func _lava_speed() -> float:
 	return minf(LAVA_SPEED_BASE + (_difficulty() - 1) * LAVA_SPEED_STEP, LAVA_SPEED_MAX)
 
 
-# --- Fever time (endless) -----------------------------------------------------
-
-
-## Test hotkeys: F fills the fever gauge (endless), N clears the current level
-## on the spot (classic).
+## Test hotkey: N clears the current classic level on the spot.
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
-	if event.keycode == KEY_F and playing and not is_paused:
-		_add_fever(1.0)
-	elif event.keycode == KEY_N:
+	if event.keycode == KEY_N:
 		classic_skip_level()
-
-
-func _add_fever(amount: float) -> void:
-	if mode != Mode.ENDLESS or fever_active:
-		return
-	fever_gauge = clampf(fever_gauge + amount, 0.0, 1.0)
-	if fever_gauge >= 1.0:
-		_start_fever()
-
-
-func _start_fever() -> void:
-	fever_active = true
-	fever_timer = FEVER_TIME
-	fever_gauge = 0.0
-	Sfx.play("fever")
-	# The hovering piece joins the downpour right away, from a random column.
-	if piece_state == PieceState.TRACKING and piece_type != "":
-		piece_pos.x = _fever_spawn_x()
-		_start_fall()
-
-
-## Fever spawn column. The old uniform randi over [0, COLS-4] had two flaws:
-## most shapes only cover x offsets 0..2, so the rightmost columns almost
-## never got blocks, and pure i.i.d. rolls cluster into one-sided towers.
-## Instead: span the true footprint of the piece across the full pit width,
-## roll a few candidates and keep the one over the lowest stack surface —
-## still reads as random rain, but fills valleys and stays climbable.
-func _fever_spawn_x() -> int:
-	var min_dx := 3
-	var max_dx := 0
-	for c: Vector2i in Board.SHAPES[piece_type][0]:
-		min_dx = mini(min_dx, c.x)
-		max_dx = maxi(max_dx, c.x)
-	var lo := -min_dx
-	var hi := COLS - 1 - max_dx
-	var best_x := randi_range(lo, hi)
-	var best_top := _surface_row(best_x + min_dx, best_x + max_dx)
-	for i in range(FEVER_SPAWN_TRIES - 1):
-		var x := randi_range(lo, hi)
-		var top := _surface_row(x + min_dx, x + max_dx)
-		if top > best_top:  # larger y = deeper valley
-			best_x = x
-			best_top = top
-	return best_x
-
-
-## Highest occupied row (smallest y) across columns [x0, x1]; the pit floor
-## row when those columns are empty. Endless rows go negative as the stack
-## climbs, so "deepest" means the largest value returned here.
-func _surface_row(x0: int, x1: int) -> int:
-	var top := rows
-	for c: Vector2i in grid:
-		if c.x >= x0 and c.x <= x1:
-			top = mini(top, c.y)
-	return top
-
-
-## One-way platforms during fever: blocks are intangible from below, but
-## their exposed tops can still be stood on — both the falling piece and the
-## locked grid. Highest top the player's feet can rest on (within
-## [feet - 10, feet + tol]), or INF when none.
-func fever_platform_top(r: Rect2, tol: float) -> float:
-	var best := INF
-	if piece_state != PieceState.TRACKING and piece_type != "":
-		for c in _cells(piece_type, piece_rot, piece_pos):
-			best = minf(best, _platform_top_of(_cell_rect(c), r, tol))
-	for e: Dictionary in loose:
-		for c: Vector2i in _loose_cells(e):
-			best = minf(best, _platform_top_of(_cell_rect(c), r, tol))
-	# Locked grid: only exposed surfaces count (no landing inside the stack).
-	var x0 := int(floor((r.position.x + 6.0) / CELL))
-	var x1 := int(floor((r.end.x - 6.0) / CELL))
-	var y0 := int(ceil((r.end.y - 10.0) / CELL))
-	var y1 := int(floor((r.end.y + tol) / CELL))
-	for y in range(y0, y1 + 1):
-		for x in range(x0, x1 + 1):
-			if grid.has(Vector2i(x, y)) and not grid.has(Vector2i(x, y - 1)):
-				best = minf(best, _platform_top_of(_cell_rect(Vector2i(x, y)), r, tol))
-	return best
-
-
-func _platform_top_of(rect: Rect2, r: Rect2, tol: float) -> float:
-	if rect.position.x < r.end.x - 6.0 and rect.end.x > r.position.x + 6.0:
-		var top: float = rect.position.y
-		if top >= r.end.y - 10.0 and top <= r.end.y + tol:
-			return top
-	return INF
 
 
 func _spawn_point() -> Vector2:
@@ -2013,12 +1572,6 @@ func _draw() -> void:
 			_draw_cell(c, Board.COLORS[grid[c]])
 			if cracked.has(c):
 				_draw_crack(c)
-			if ore.has(c):
-				_draw_ore(_cell_rect(c))
-			if keycaps.has(c):
-				paint_keycap(self, _cell_rect(c), keycaps[c],
-						0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 3.0
-								+ (c.x * 5 + c.y) * 1.1))
 	for fx in break_fx:
 		if fx[1] < 0.0:
 			continue  # revive ripple: the blast hasn't reached this cell yet
@@ -2027,10 +1580,6 @@ func _draw() -> void:
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
 	if mode != Mode.ENDLESS and mode != Mode.PICNIC and mode != Mode.CLASSIC:
 		_draw_doors()  # the arcade well has no exit at all — nothing to draw
-	if mode == Mode.PICNIC:
-		_draw_snacks()
-	_draw_keycap_fx()
-	_draw_nuggets()
 	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
@@ -2053,8 +1602,6 @@ func _draw() -> void:
 		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), border, 2.0)
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
 		_draw_lava(w)
-		_draw_fever(w)
-	_draw_gold_fx()  # gold pays out in every mode now — the popup goes with it
 	if shutter_row > 0:
 		_draw_shutter(w)
 
@@ -2204,13 +1751,9 @@ func _draw_piece() -> void:
 		var c: Vector2i = cells[i]
 		if mode == Mode.ENDLESS or c.y >= 0:
 			_draw_cell(c, color)
-			if i == piece_ore:
-				_draw_ore(_cell_rect(c), color.a)
 			if piece_state == PieceState.LANDED:
 				draw_rect(_cell_rect(c).grow(-2.0),
 						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
-	if not rider.is_empty():
-		_draw_nugget(_rider_pos())
 	if piece_state == PieceState.TRACKING:
 		var remain := ceili(_track_time() - track_timer)
 		var top_left := Vector2(piece_pos) * CELL
@@ -2226,59 +1769,11 @@ func _draw_loose() -> void:
 		if e.s == PieceState.LANDED:
 			pulse = 0.5 + 0.5 * sin(e.lt * 16.0)
 			color = color.lightened(0.18 + 0.18 * pulse)
-		var cells: Array = _loose_cells(e)
-		for i in range(cells.size()):
-			var c: Vector2i = cells[i]
+		for c: Vector2i in _loose_cells(e):
 			_draw_cell(c, color)
-			if i == int(e.get("o", -1)):
-				_draw_ore(_cell_rect(c))
 			if e.s == PieceState.LANDED:
 				draw_rect(_cell_rect(c).grow(-2.0),
 						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
-
-
-## A seam of gold showing through a block: a small faceted gem, lit from above
-## like everything else in the pit, breathing so the eye catches it.
-func _draw_ore(rect: Rect2, alpha := 1.0) -> void:
-	var mid := rect.get_center()
-	var s := rect.size.x * 0.26
-	var glow := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 1000.0 * 3.4
-			+ mid.x * 0.03 + mid.y * 0.05)
-	draw_circle(mid, s * 1.7, Color(1.0, 0.86, 0.4, 0.16 * glow * alpha))
-	draw_colored_polygon(PackedVector2Array([
-			mid + Vector2(0.0, -s * 1.25), mid + Vector2(s, 0.0),
-			mid + Vector2(0.0, s * 1.25), mid + Vector2(-s, 0.0)]),
-			Color(0.85, 0.63, 0.17, alpha))
-	# Top facets take the light; the lower half stays in shadow.
-	draw_colored_polygon(PackedVector2Array([
-			mid + Vector2(0.0, -s * 1.25), mid + Vector2(s, 0.0),
-			mid + Vector2(0.0, -s * 0.1)]), Color(1.0, 0.87, 0.4, alpha))
-	draw_colored_polygon(PackedVector2Array([
-			mid + Vector2(0.0, -s * 1.25), mid + Vector2(-s, 0.0),
-			mid + Vector2(0.0, -s * 0.1)]), Color(1.0, 0.95, 0.72, alpha))
-
-
-## A loose nugget: a fat coin with a warm top edge and a shadow under it.
-func _draw_nugget(at: Vector2, alpha := 1.0) -> void:
-	var r := NUGGET_SIZE * 0.5
-	var bob := sin(Time.get_ticks_msec() / 1000.0 * 5.0 + at.x * 0.05) * 1.5
-	var mid := at + Vector2(0.0, bob)
-	draw_circle(mid + Vector2(0.0, r * 0.55), r * 0.8, Color(0, 0, 0, 0.3 * alpha))
-	draw_circle(mid, r * 1.5, Color(1.0, 0.85, 0.35, 0.14 * alpha))
-	draw_circle(mid, r, Color(0.82, 0.6, 0.16, alpha))
-	draw_circle(mid - Vector2(0.0, r * 0.22), r * 0.72, Color(0.97, 0.83, 0.33, alpha))
-	draw_circle(mid - Vector2(r * 0.24, r * 0.34), r * 0.24, Color(1.0, 0.98, 0.85, alpha))
-
-
-func _draw_nuggets() -> void:
-	for n: Dictionary in nuggets:
-		var alpha := 1.0
-		var left: float = NUGGET_LIFE - float(n.age)
-		if left < NUGGET_FADE:
-			alpha = clampf(left / NUGGET_FADE, 0.0, 1.0)
-			if left < NUGGET_FADE * 0.5 and fmod(float(n.age), 0.3) < 0.15:
-				alpha *= 0.35  # blinking out
-		_draw_nugget(n.pos, alpha)
 
 
 func _draw_crack(c: Vector2i) -> void:
@@ -2290,61 +1785,6 @@ func _draw_crack(c: Vector2i) -> void:
 	draw_polyline(PackedVector2Array([
 		p + Vector2(48, 12), p + Vector2(36, 30), p + Vector2(50, 44),
 	]), col, 2.0)
-
-
-## Fever gauge/timer bar, anchored to the camera so it stays on screen in
-## both single and split-viewport play.
-## Floating "+N G" popup over the cat when an endless line clear pays out.
-func _draw_gold_fx() -> void:
-	var font := ThemeDB.fallback_font
-	for fx in gold_fx:
-		var t: float = fx[1] / GOLD_FX_TIME
-		var pos: Vector2 = fx[0] + Vector2(-90.0, -CELL * t)
-		var col := Color("f7d354")
-		col.a = 1.0 - t * t
-		var text := ("+%d 냠!" % fx[2]) if mode == Mode.PICNIC else "+%d G" % fx[2]
-		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_CENTER, 180.0, 30, col)
-
-
-func _draw_fever(w: float) -> void:
-	var cam_y := cam.position.y if cam else rows * CELL / 2.0
-	# Bar rides just above the screen bottom — or above the touch zone on
-	# portrait, where the bottom belongs to the controls.
-	var vp := get_viewport_rect().size
-	var bar_sy := vp.y - 70.0 if vp.x > vp.y else vp.y - 555.0
-	var bar := Rect2(CELL * 0.5, cam_y - vp.y / 2.0 + bar_sy, w - CELL, 16.0)
-	draw_rect(bar, Color(0, 0, 0, 0.45))
-	if fever_active:
-		var t := fever_timer / FEVER_TIME
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * t, bar.size.y)), Color("ffd27a"))
-		if fmod(lava_phase, 0.3) < 0.2:
-			draw_string(ThemeDB.fallback_font, Vector2(w / 2.0 - 130.0, cam_y - 380.0),
-					"FEVER!!", HORIZONTAL_ALIGNMENT_LEFT, -1, 64, Color(1.0, 0.85, 0.35))
-	elif fever_gauge > 0.0:
-		var fill := Color("e8935a")
-		if fever_gauge >= 0.75:
-			fill = fill.lerp(Color("ffd27a"), 0.5 + 0.5 * sin(lava_phase * 8.0))
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * fever_gauge, bar.size.y)), fill)
-	draw_rect(bar, Color(1, 1, 1, 0.35), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(bar.position.x, bar.position.y - 8.0),
-			"FEVER", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1.0, 0.95, 0.82, 0.75))
-
-
-## Jelly-fish snacks bobbing in place, glowing faintly like little exit lights.
-func _draw_snacks() -> void:
-	const BODY_COLS: Array[Color] = [Color("f2c94c"), Color("bfe8d5"), Color("f6cdd8")]
-	for c: Vector2i in snacks:
-		var p := _cell_rect(c).get_center() \
-				+ Vector2(0.0, sin(lava_phase * 3.0 + (c.x * 7 + c.y) * 1.3) * 5.0)
-		var col: Color = BODY_COLS[int(snacks[c]) % BODY_COLS.size()]
-		var pulse := 0.5 + 0.5 * sin(lava_phase * 4.0 + c.x)
-		draw_circle(p, 24.0 + 3.0 * pulse, Color(1.0, 0.95, 0.82, 0.10))
-		# Fish: round body, triangular tail, one content little eye.
-		draw_circle(p + Vector2(-3.0, 0.0), 13.0, col)
-		draw_colored_polygon(PackedVector2Array([
-			p + Vector2(7.0, 0.0), p + Vector2(19.0, -10.0), p + Vector2(19.0, 10.0),
-		]), col.darkened(0.15))
-		draw_circle(p + Vector2(-8.0, -3.0), 2.4, Color("2a2230"))
 
 
 ## Cat-eared alphabet keycap riding a locked block: cream cap, two little ears,
@@ -2388,24 +1828,6 @@ static func paint_keycap(ci: CanvasItem, r: Rect2, letter: String,
 		for dy: float in [-1.0, 1.0]:
 			ci.draw_circle(center + Vector2(sx * s * 0.3, s * 0.05 + dy * s * 0.05),
 					s * 0.022, Color(ink, 0.55))
-
-
-## Floating "키캡 획득!" popup rising off the cleared keycap block.
-func _draw_keycap_fx() -> void:
-	var font := ThemeDB.fallback_font
-	for fx in keycap_fx:
-		var t: float = fx[1] / KEYCAP_FX_TIME
-		var pos: Vector2 = fx[0] + Vector2(0.0, -CELL * 1.2 * t)
-		var col := Color("f4e3c8")
-		col.a = 1.0 - t * t
-		var cap := Rect2(pos - Vector2(CELL * 0.45, CELL * 0.85), Vector2.ONE * CELL * 0.9)
-		paint_keycap(self, cap, fx[2], 1.0, false)
-		var text := "%s 키캡 획득!" % fx[2]
-		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26).x
-		var tp := Vector2(pos.x - w / 2.0, pos.y + 24.0)
-		draw_string(font, tp + Vector2(2.0, 2.0), text,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(0, 0, 0, 0.6 * col.a))
-		draw_string(font, tp, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, col)
 
 
 func _draw_cell(c: Vector2i, color: Color) -> void:

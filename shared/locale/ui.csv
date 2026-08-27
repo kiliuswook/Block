@@ -33,7 +33,7 @@ HUD_MILESTONE_BIG,Amazing! {n} F reached!!,대기록! {n}층 돌파!!,[Åɱàż�
 HUD_STAGE_CLEAR,STAGE {n} CLEAR!,STAGE {n} 클리어!,[ŞŢÅĞÉ {n} ÇŁÉÅŘ! ————————————]
 HUD_TAP_TO_START,Tap or press any key to start!,탭 또는 아무 키나 눌러 시작!,[Ţàþ ôř þřéşş àńÿ ķéÿ ţô şţàřţ! ————————————————————————]
 HUD_STATS_ENDLESS,Reached {height} F      Best {best} F,도달 높이 {height}층      최고 기록 {best}층,[Řéàçĥéð {height} Ƒ      Ɓéşţ {best} Ƒ —————————————————————————————]
-HUD_STATS_PICNIC,SCORE {score}      Jelly fish {snacks},SCORE {score}      젤리 생선 {snacks}마리,[ŞÇÔŘÉ {score}      Ĵéłłÿ ƒïşĥ {snacks} ——————————————————————————————]
+HUD_STATS_PICNIC,SCORE {score},SCORE {score},[ŞÇÔŘÉ {score} ——————————]
 HUD_EARNED,Earned   +{gold} G,획득   +{gold} G,[Éàřńéð   +{gold} Ğ ——————————————]
 HUD_DAILY_DOUBLE,First run today — double!   ,오늘 첫 판 2배!   ,[Ƒïřşţ řüń ţôðàÿ — ðôüƀłé!    ——————————————————————]
 HUD_STORY_REWARD,First clear bonus  +{gold} G,첫 클리어 보상  +{gold} G,[Ƒïřşţ çłéàř ƀôńüş  +{gold} Ğ ——————————————————————]
@@ -81,11 +81,7 @@ and the next block shows up right away!
 Break blocks with a dash or two jump hits
 Clearing lines pushes the lava back down
 (footholds hold up even when a line vanishes)
-Gold veins inside blocks pay out when cleared or broken!
-Rotate to shake loose the nuggets riding on a block
-Line clears charge the FEVER gauge —
-during fever you're invincible, double jump, gold rain,
-so ride the pouring blocks up and grab the gold!","블록을 쌓고 밟으며
+Clear lines and climb as high as you can!","블록을 쌓고 밟으며
 끝없이 위로 올라가자!
 아래에서 용암이 올라온다 — 닿으면 사망
 높이 오를수록, 오래 버틸수록 블록이 빨라진다
@@ -94,11 +90,7 @@ so ride the pouring blocks up and grab the gold!","블록을 쌓고 밟으며
 대시/점프 2회 타격으로 블록 파괴
 줄을 지우면 용암을 밀어낸다
 (줄이 사라져도 발판은 안 무너진다)
-블록 속 금맥은 줄을 지우거나 부수면 골드!
-블록 위에 얹힌 금덩이는 회전으로 떨어뜨려 줍자
-줄 클리어로 FEVER 게이지 충전 —
-피버 중엔 무적 + 2배 점프 + 골드 비,
-쏟아지는 블록을 밟고 금을 주우며 상승!","[Şţàçķ ƀłôçķş, şţéþ ôń ţĥéɱ ————————————————————]
+줄을 지우며 최대한 높이 올라가자!","[Şţàçķ ƀłôçķş, şţéþ ôń ţĥéɱ ————————————————————]
 [àńð çłïɱƀ ƒôřéṽéř üþŵàřð! ————————————————————]
 [Łàṽà řïşéş ƒřôɱ ƀéłôŵ — ţôüçĥïńğ ïţ ïş ðéàţĥ ———————————————————————————————————]
 [Ţĥé ĥïğĥéř àńð łôńğéř ÿôü ğô, ţĥé ƒàşţéř ƀłôçķş ƒàłł —————————————————————————————————————————]
@@ -107,11 +99,7 @@ so ride the pouring blocks up and grab the gold!","블록을 쌓고 밟으며
 [Ɓřéàķ ƀłôçķş ŵïţĥ à ðàşĥ ôř ţŵô ĵüɱþ ĥïţş ————————————————————————————————]
 [Çłéàřïńğ łïńéş þüşĥéş ţĥé łàṽà ƀàçķ ðôŵń ————————————————————————————————]
 [(ƒôôţĥôłðş ĥôłð üþ éṽéń ŵĥéń à łïńé ṽàńïşĥéş) ————————————————————————————————————]
-[Ğôłð ṽéïńş ïńşïðé ƀłôçķş þàÿ ôüţ ŵĥéń çłéàřéð ôř ƀřôķéń! ————————————————————————————————————————————]
-[Řôţàţé ţô şĥàķé łôôşé ţĥé ńüğğéţş řïðïńğ ôń à ƀłôçķ ————————————————————————————————————————]
-[Łïńé çłéàřş çĥàřğé ţĥé ƑÉṼÉŘ ğàüğé — ————————————————————————————]
-[ðüřïńğ ƒéṽéř ÿôü'řé ïńṽïńçïƀłé, ðôüƀłé ĵüɱþ, ğôłð řàïń, ————————————————————————————————————————————]
-[şô řïðé ţĥé þôüřïńğ ƀłôçķş üþ àńð ğřàƀ ţĥé ğôłð! ——————————————————————————————————————]"
+[Çłéàř łïńéş àńð çłïɱƀ àş ĥïğĥ àş ÿôü çàń! ————————————————————————————————]"
 TUT_PICNIC,"A laid-back 2-minute jelly picnic!
 Nobody dies in this cozy mode —
 get squashed and you pop out like jelly
@@ -240,7 +228,7 @@ RANK_MY_RECORD,My record,내 기록,[Ṁÿ řéçôřð ———————]
 RANK_ME_MARK,   ◀ me,   ◀ 나,[   ◀ ɱé —————]
 RANK_REPLAY_FAIL,Couldn't load that replay,리플레이를 불러올 수 없어요,[Çôüłðń'ţ łôàð ţĥàţ řéþłàÿ ————————————————————]
 KEYCAP_TITLE,▦ Keycap Dex,▦ 키캡 도감,[▦ Ķéÿçàþ Ðéẋ —————————]
-KEYCAP_HINT,Clear a line holding a keycap block and the keycap is yours!,블록에 나타난 키캡이 있는 줄을 지우면 키캡을 모을 수 있다냥!,[Çłéàř à łïńé ĥôłðïńğ à ķéÿçàþ ƀłôçķ àńð ţĥé ķéÿçàþ ïş ÿôüřş! ————————————————————————————————————————————————]
+KEYCAP_HINT,Collect all 26 letters to unlock the next parts for every cat!,A~Z를 모두 모으면 모든 냥이의 다음 파츠가 해금된다냥!,[Çôłłéçţ àłł 26 łéţţéřş ţô üńłôçķ ţĥé ńéẋţ þàřţş ƒôř éṽéřÿ çàţ! —————————————————————————————————————————————————]
 KEYCAP_STATS,Collected  {kinds} / 26 kinds   ·   {total} total,모은 키캡  {kinds} / 26 종   ·   총 {total}개,[Çôłłéçţéð  {kinds} / 26 ķïńðş   ·   {total} ţôţàł ———————————————————————————————————————]
 HUD_EXIT_OPEN,The exit is open!,출구가 열렸다!,[Ţĥé éẋïţ ïş ôþéń! —————————————]
 STORY_ALL_CLEAR,All stages cleared,모든 스테이지 클리어,[Åłł şţàğéş çłéàřéð ——————————————]

@@ -95,8 +95,6 @@ const ACCESSORIES: Array[Dictionary] = [
 ## One-run boosts for endless mode, bought before a run and consumed on start.
 const BOOSTS: Array[Dictionary] = [
 	{"id": "warmup", "name": "BOOST_WARMUP", "desc": "BOOST_WARMUP_DESC", "price": 50},
-	{"id": "fever", "name": "BOOST_FEVER", "desc": "BOOST_FEVER_DESC", "price": 40},
-	{"id": "lucky", "name": "BOOST_LUCKY", "desc": "BOOST_LUCKY_DESC", "price": 60},
 ]
 
 ## Snack price scales with the cat's current level: 50 + 50×level gold.
@@ -334,7 +332,9 @@ func keycap_total() -> int:
 	return total
 
 
-## A cleared line held a keycap block: bank the letter (duplicates stack).
+## Banks one alphabet keycap (duplicates stack). Keycaps are no longer found
+## in the pit — a future gacha hands them out — but the dex and the part-tier
+## unlock still read from here.
 func add_keycap(letter: String) -> void:
 	keycaps[letter] = keycap_count(letter) + 1
 	save_game()

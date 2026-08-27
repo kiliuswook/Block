@@ -216,8 +216,8 @@ func _ready() -> void:
 	b2._update_endless(0.016)
 	_check(not p2.alive, "touching lava is death")
 
-	# Endless line clears: the stack stays floating (no collapse), the lava is
-	# shoved back down, and gold is paid on the spot.
+	# Endless line clears: the stack stays floating (no collapse) and the lava
+	# is shoved back down.
 	b2.grid.clear()
 	b2.cracked.clear()
 	for x in range(EscapeBoard.COLS):
@@ -225,67 +225,15 @@ func _ready() -> void:
 	b2.grid[Vector2i(4, 5)] = "T"
 	b2.cracked[Vector2i(4, 5)] = true
 	b2.lava_y = 2000.0
-	b2.ore[Vector2i(2, 6)] = EscapeBoard.ORE_VALUE  # a seam sitting in that row
-	var gold_before: int = GameState.gold
 	var lava_pushed_from: float = b2.lava_y
 	var endless_cleared: int = b2._clear_lines()
 	_check(endless_cleared == 1, "endless full row clears")
 	_check(not b2.grid.has(Vector2i(0, 6)), "cleared row is gone")
 	_check(b2.grid.has(Vector2i(4, 5)), "endless clear leaves the stack floating")
 	_check(b2.cracked.has(Vector2i(4, 5)), "endless clear keeps the crack in place")
-	_check(GameState.gold == gold_before + EscapeBoard.ORE_VALUE,
-			"clearing a line banks the ore that was in it")
-	_check(b2.ore.is_empty(), "the cashed-in seam is gone")
 	b2._endless_line_reward(endless_cleared)
 	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
 
-	# --- Gold: seams in blocks, riders on pieces, loose nuggets ----------------
-	b2.grid.clear()
-	b2.cracked.clear()
-	b2.ore.clear()
-	b2.nuggets.clear()
-	b2.playing = true
-	p2.alive = true
-	GameState.gold = 0
-	# Smashing an ore block open banks what was inside it.
-	b2.grid[Vector2i(3, 8)] = "T"
-	b2.cracked[Vector2i(3, 8)] = true
-	b2.ore[Vector2i(3, 8)] = EscapeBoard.ORE_VALUE
-	b2.break_cell_in_rect(b2._cell_rect(Vector2i(3, 8)))
-	_check(GameState.gold == EscapeBoard.ORE_VALUE and b2.ore.is_empty(),
-			"breaking an ore block banks the gold")
-	# A piece carrying ore leaves the seam behind when it locks.
-	b2.grid.clear()
-	b2.cracked.clear()
-	b2._merge_piece("O", 0, Vector2i(0, 8), 0)
-	_check(b2.ore.size() == 1, "a locked piece leaves its seam in the stack")
-	# The perched nugget loses its footing the moment the piece turns.
-	b2.grid.clear()
-	b2.ore.clear()
-	b2.nuggets.clear()
-	b2.piece_type = "T"
-	b2.piece_rot = 0
-	b2.piece_pos = Vector2i(3, 2)
-	b2.piece_state = b2.PieceState.TRACKING
-	b2.rider = {"col": 1, "amount": EscapeBoard.RIDER_VALUE}
-	b2._try_rotate(1)
-	_check(b2.rider.is_empty() and b2.nuggets.size() == 1,
-			"rotating shakes the perched nugget loose")
-	# Walking into a loose nugget banks it.
-	GameState.gold = 0
-	b2.nuggets[0].pos = p2.position
-	b2._update_nuggets(0.016)
-	_check(b2.nuggets.is_empty() and GameState.gold == EscapeBoard.RIDER_VALUE,
-			"the cat picks nuggets up by touch")
-	# Fever turns the pit into a downpour of gold.
-	b2.fever_active = true
-	b2.fever_rain_timer = 0.0
-	b2._update_fever_rain(0.01)
-	_check(b2.nuggets.size() == 1, "fever rains nuggets from above")
-	b2.fever_active = false
-	b2.nuggets.clear()
-	b2.grid.clear()
-	b2.cracked.clear()
 	b2.lava_y = p2.position.y  # restore the lava-death state for the revive tests
 	GameState.mode = GameState.MODE_STORY
 
@@ -351,69 +299,6 @@ func _ready() -> void:
 	_check(b2._clear_lines() == 0, "rescue bar never counts as a clearable line")
 	_check(plat_row * c > p2.position.y, "rescue bar sits below the revived cat")
 	b2.grid.clear()
-
-	# --- Fever time (endless only) ---
-	board.mode = board.Mode.STORY
-	board._add_fever(1.0)
-	_check(not board.fever_active and board.fever_gauge == 0.0,
-			"story mode never charges fever")
-	b2.playing = true
-	b2.fever_gauge = 0.0  # earlier lock tests already trickled some charge in
-	b2._add_fever(0.5)
-	_check(b2.fever_gauge == 0.5 and not b2.fever_active, "line clears charge the gauge")
-	b2._add_fever(0.5)
-	_check(b2.fever_active, "full gauge triggers fever")
-	_check(b2.fever_gauge == 0.0, "fever spends the gauge")
-	b2._add_fever(1.0)
-	_check(b2.fever_gauge == 0.0, "no recharging during fever")
-	# Normal piece flow keeps running during fever — no tracking, instant drop
-	_check(b2.piece_state == b2.PieceState.FALLING, "fever drops the piece immediately")
-	_check(b2._fall_interval() == EscapeBoard.FEVER_FALL_INTERVAL, "fever pieces fall fast")
-	b2._spawn_piece()
-	_check(b2.piece_state == b2.PieceState.FALLING, "fever spawns skip tracking entirely")
-	# The falling piece is intangible to the cat (pass through)...
-	b2.grid.clear()
-	b2.piece_type = "O"
-	b2.piece_rot = 0
-	b2.piece_state = b2.PieceState.FALLING
-	b2.piece_pos = Vector2i(3, 7)  # O cells at x 4..5, y 7..8
-	var inside := Rect2(4 * c + 10, 7 * c + 10, 10, 10)
-	_check(b2.piece_hits_rect(inside), "piece cell occupies the probe")
-	_check(not b2.rect_blocked_for_player(inside), "fever: cat passes through the piece")
-	# ...but its top is a one-way platform the cat can stand on
-	var feet_r := Rect2(4 * c - 25.0, 7 * c - 50.0, 50.0, 50.0)
-	_check(b2.fever_platform_top(feet_r, 12.0) == 7.0 * c, "piece top supports the cat")
-	var below_r := Rect2(4 * c - 25.0, 9 * c + 10.0, 50.0, 50.0)
-	_check(b2.fever_platform_top(below_r, 12.0) == INF, "no support from below")
-	# Overlap never crushes an invincible cat
-	p2.alive = true
-	p2.position = Vector2(4 * c + c / 2.0, 8 * c)
-	_check(not b2._resolve_piece_overlap(), "fever: overlap resolves as pass-through")
-	_check(p2.alive, "fever: falling piece cannot crush the cat")
-	# Locked blocks are one-way during fever: pass through, land on exposed tops
-	b2.piece_state = b2.PieceState.TRACKING  # park the piece for grid-only checks
-	for x in range(2, 8):
-		for y in range(5, 12):
-			b2.grid[Vector2i(x, y)] = "T"
-	p2.position = Vector2(4 * c + c / 2.0, 8 * c)
-	_check(b2._free_player_from_grid(), "fever: burial does not kill")
-	_check(p2.alive and b2.playing, "fever: cat survives inside the stack")
-	_check(not b2.rect_blocked_for_player(p2.rect()), "fever: locked blocks are pass-through")
-	var stack_feet := Rect2(4 * c + 7.0, 5 * c - 50.0, 50.0, 50.0)
-	_check(b2.fever_platform_top(stack_feet, 12.0) == 5.0 * c, "fever: stack surface is standable")
-	var inner_feet := Rect2(4 * c + 7.0, 8 * c - 50.0, 50.0, 50.0)
-	_check(b2.fever_platform_top(inner_feet, 12.0) == INF, "fever: no landing inside the stack")
-	b2.grid.clear()
-	# Fever runs out after its duration
-	b2.fever_timer = 0.01
-	b2._process(0.05)
-	_check(not b2.fever_active, "fever expires after its duration")
-	b2.piece_state = b2.PieceState.TRACKING
-	b2._lock_piece()
-	_check(is_equal_approx(b2.fever_gauge, EscapeBoard.FEVER_PER_PIECE),
-			"locking a piece trickle-charges the gauge")
-	b2.grid.clear()
-	b2.fever_gauge = 0.0
 
 	# Crushed under blocks: the revive blast clears the cells around the cat
 	for x in range(3, 8):
@@ -784,7 +669,7 @@ func _ready() -> void:
 			"endless: shove moved it by the push-stat cells")
 	b6.loose.clear()
 
-	# --- 젤리 피크닉: casual no-death snack hunt --------------------------------
+	# --- 젤리 피크닉: casual no-death timed run ---------------------------------
 	GameState.mode = GameState.MODE_PICNIC
 	var pk: Node2D = load("res://core/scripts/escape_board.gd").new()
 	var pkp: Node2D = load("res://core/scripts/player.gd").new()
@@ -795,7 +680,6 @@ func _ready() -> void:
 	_check(pk.mode == pk.Mode.PICNIC, "picnic: mode starts")
 	_check(not pk.door_left and not pk.door_right, "picnic: pit is sealed")
 	_check(pk.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "picnic: side walls have no exits")
-	_check(pk.snacks.size() == EscapeBoard.PICNIC_SNACKS_ACTIVE, "picnic: snacks spawn at start")
 	_check(pk.picnic_time == EscapeBoard.PICNIC_TIME, "picnic: timer starts full")
 	_check(absf(pk._track_time() - EscapeBoard.PICNIC_TRACK_TIME) < 0.01,
 			"picnic: relaxed tracking window")
@@ -810,19 +694,7 @@ func _ready() -> void:
 	pk._resolve_piece_overlap()
 	_check(pkp.alive, "picnic: crush rescues instead of killing")
 	_check(pk.playing, "picnic: game keeps running after a rescue")
-	# Touching a snack collects it, pays score and respawns one elsewhere.
 	pk.grid.clear()
-	pk.snacks.clear()
-	var snack_c := Vector2i(4, 10)
-	pk.snacks[snack_c] = 0
-	pkp.position = Vector2(4.5 * c, 10.5 * c)
-	var picnic_score: int = GameState.score
-	pk._update_picnic(0.016)
-	_check(pk.picnic_snacks == 1, "picnic: snack collected on touch")
-	_check(GameState.score == picnic_score + EscapeBoard.PICNIC_SNACK_SCORE,
-			"picnic: snack pays score")
-	_check(not pk.snacks.has(snack_c), "picnic: collected snack is gone")
-	_check(pk.snacks.size() == 1, "picnic: a replacement snack spawns")
 	# Stack overflow bursts the whole pit instead of ending the run.
 	pkp.position = Vector2(5 * c, 18 * c)
 	for x in range(EscapeBoard.COLS):
@@ -835,8 +707,6 @@ func _ready() -> void:
 	pk._lock_piece()
 	_check(pk.playing, "picnic: overflow keeps the game running")
 	_check(pk.grid.is_empty(), "picnic: overflow bursts the whole stack")
-	_check(pk.snacks.size() == EscapeBoard.PICNIC_SNACKS_ACTIVE,
-			"picnic: burst restocks the snacks")
 	# The clock is the only thing that ends a picnic.
 	pk._update_picnic(EscapeBoard.PICNIC_TIME + 1.0)
 	_check(not pk.playing, "picnic: timer end stops the run")

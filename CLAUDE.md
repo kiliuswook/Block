@@ -2,6 +2,15 @@
 
 Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테트리스 블록을 밟고 위로 탈출하는 게임.
 
+> ## ⛳ 현재 개발 방향: **PC(스팀) 우선** (2026-08-27~)
+>
+> **모바일 개발은 당분간 보류.** PC(가로 1920×1080, 키보드) 버전을 먼저 완성한다.
+> - 새 기능·UI·컨텐츠는 **PC 기준으로만** 만든다. 모바일 세로 레이아웃(`mobile/ui/main_mobile.tscn` 오버라이드), 터치 버튼, `title_mobile.gd` 숨김 처리 등은 **하지 않는다**.
+> - 배포도 **PC 빌드만** — 아래 배포 절차의 모바일 단계는 건너뛴다.
+> - `mobile/` 폴더와 기존 모바일 코드·씬은 **지우지 않고 그대로 둔다** (나중에 재개).
+> - 단, `core/`에 화면 크기를 하드코딩하지 않는 원칙은 계속 지킨다 — 재개 비용을 낮추기 위함.
+> - 모바일 작업이 필요하면 사용자가 명시적으로 요청할 때만 ("모바일도", "모바일 빌드").
+
 ## 실행
 
 - Godot 실행 파일: `C:/Users/SangWook Lee/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64.exe`
@@ -11,19 +20,24 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 
 ## 배포 (GitHub Pages)
 
-> **"io 배포"/"배포해줘" 요청 시 항상 PC·모바일 두 빌드를 모두 빌드·배포한다.** 한쪽만 배포하는 것은 사용자가 명시적으로 지정한 경우("PC만", "모바일만")뿐.
+> **PC 우선 기간(현재): "io 배포"/"배포해줘" 요청 시 PC 빌드만 빌드·배포한다.** `gh-pages`의 기존 `m/`(모바일 세로판)은 **손대지 않고 그대로 둔다** — 지난 배포본이 계속 서비스된다.
+>
+> <details><summary>모바일 재개 시 되돌릴 원래 규칙 (지금은 적용 안 함)</summary>
+>
+> "io 배포"/"배포해줘" 요청 시 항상 PC·모바일 두 빌드를 모두 빌드·배포한다. 한쪽만 배포하는 것은 사용자가 명시적으로 지정한 경우("PC만", "모바일만")뿐.
+> </details>
 
-- 라이브 URL: PC https://kiliuswook.github.io/Block/ (`gh-pages` 루트) / 모바일 세로판 https://kiliuswook.github.io/Block/m/ (`gh-pages`의 `m/`)
-- 절차 (순서대로):
-  1. **익스포트 (둘 다)**: `& "<godot>" --headless --path E:\Game\Block --export-release "Web" build/web/index.html` 그리고 `--export-release "WebMobile" build/web_m/index.html`
-  2. **캐시 버스터 (둘 다)**: 각 `index.html`에서 `index.js` src와 GODOT_CONFIG의 `mainPack`에 버전 쿼리(`?v=<타임스탬프>`)를 붙일 것 — Pages가 10분 캐시(`max-age=600`)라 이걸 안 하면 배포 직후 브라우저에 이전 빌드가 보임
-  3. **gh-pages 복사**: git worktree로 `gh-pages` 체크아웃 → `build/web/*` → 루트, `build/web_m/*` → `m/`에 복사 (기존 `m/`은 비우고 복사, 루트의 `m/` 폴더는 삭제 금지)
-  4. **커밋·푸시** 후 worktree 정리, 두 URL 모두 안내
-- PC판 `index.html`에는 터치 기기 → `m/` 리다이렉트가 들어감 (Web 프리셋의 `html/head_include` — 익스포트 시 자동 포함)
+- 라이브 URL: PC https://kiliuswook.github.io/Block/ (`gh-pages` 루트) / 모바일 세로판 https://kiliuswook.github.io/Block/m/ (`gh-pages`의 `m/` — **보류 중, 갱신하지 않음**)
+- 절차 (순서대로 — PC 우선 기간에는 ⓜ 표시 단계를 건너뛴다):
+  1. **익스포트**: `& "<godot>" --headless --path E:\Game\Block --export-release "Web" build/web/index.html` / ⓜ `--export-release "WebMobile" build/web_m/index.html`
+  2. **캐시 버스터**: `index.html`에서 `index.js` src와 GODOT_CONFIG의 `mainPack`에 버전 쿼리(`?v=<타임스탬프>`)를 붙일 것 — Pages가 10분 캐시(`max-age=600`)라 이걸 안 하면 배포 직후 브라우저에 이전 빌드가 보임 (ⓜ 모바일 `index.html`도 동일)
+  3. **gh-pages 복사**: git worktree로 `gh-pages` 체크아웃 → `build/web/*` → 루트에 복사. **루트의 `m/` 폴더는 절대 삭제·갱신하지 말 것** / ⓜ `build/web_m/*` → `m/` (기존 `m/`을 비우고 복사)
+  4. **커밋·푸시** 후 worktree 정리, PC URL 안내 (ⓜ 두 URL 모두)
+- PC판 `index.html`에는 터치 기기 → `m/` 리다이렉트가 들어감 (Web 프리셋의 `html/head_include` — 익스포트 시 자동 포함). 모바일 배포를 멈춰도 `m/`이 살아 있으므로 이 리다이렉트는 그대로 유효
 
 ## 구조 (스팀/모바일 멀티 플랫폼)
 
-> **컨텐츠·시스템·UI를 수정/추가할 때는 `/platform-split` 스킬(`.claude/skills/platform-split/SKILL.md`)의 분기 규칙·체크리스트를 따를 것.**
+> **컨텐츠·시스템·UI를 수정/추가할 때는 `/platform-split` 스킬(`.claude/skills/platform-split/SKILL.md`)의 분기 규칙을 따를 것** — 단 PC 우선 기간이므로 그 스킬의 **모바일 대응 항목은 보류**(참조 방향 철칙·좌표 하드코딩 금지는 계속 유효).
 >
 > **사용자에게 보이는 텍스트를 추가/수정할 때는 `/i18n` 스킬(`.claude/skills/i18n/SKILL.md`)을 따를 것** — 스팀 출시 목표는 13개국어. 문자열 하드코딩 금지, `_draw()` 텍스트는 `tr()` 수동 적용.
 

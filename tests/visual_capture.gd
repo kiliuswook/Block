@@ -83,15 +83,6 @@ func _ready() -> void:
 	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic.png")
-	# In-game keycap block + collect popup (forced onto a prefilled floor row).
-	await _capture("res://core/scenes/main.tscn", OUT + "/classic_keycap.png",
-			func(inst: Node) -> void:
-				var b: Node = inst.get_node("Board")
-				for x in range(4):
-					b.grid[Vector2i(x, 19)] = "J"
-				b.keycaps[Vector2i(2, 19)] = "K"
-				b.keycap_fx.append([Vector2(6.5 * 64.0, 16.0 * 64.0), 0.0, "M"])
-				b.queue_redraw())
 	# Level structure: a deep board with its garbage floor and a half-filled
 	# LINES rack, then the clear shutter mid-descent with its bonus tally.
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic_level5.png",
@@ -116,28 +107,6 @@ func _ready() -> void:
 				b._classic_start_shutter()
 				for i in range(12):
 					b._update_shutter(1.0))
-	# Gold: seams inside locked blocks, a nugget riding the live piece, and
-	# loose nuggets lying on the stack waiting to be walked into.
-	await _capture("res://core/scenes/main.tscn", OUT + "/classic_gold.png",
-			func(inst: Node) -> void:
-				var b: Node = inst.get_node("Board")
-				for x in range(EscapeBoard.COLS):
-					if x != 6:
-						b.grid[Vector2i(x, 19)] = Board.PIECES[x % 7]
-						if x % 3 == 0:
-							b.grid[Vector2i(x, 18)] = Board.PIECES[(x + 2) % 7]
-				b.ore[Vector2i(2, 19)] = EscapeBoard.ORE_VALUE
-				b.ore[Vector2i(3, 18)] = EscapeBoard.ORE_VALUE
-				b.piece_type = "T"
-				b.piece_rot = 0
-				b.piece_pos = Vector2i(4, 3)
-				b.piece_state = b.PieceState.TRACKING
-				b.piece_ore = 0
-				b.rider = {"col": 2, "amount": EscapeBoard.RIDER_VALUE}
-				b._spawn_nugget(Vector2(1.5 * 64.0, 17.0 * 64.0),
-						EscapeBoard.RIDER_VALUE)
-				b.gold_fx.append([Vector2(8.0 * 64.0, 17.0 * 64.0), 0.2, 8])
-				b.queue_redraw())
 	GameState.mode = GameState.MODE_PICNIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS

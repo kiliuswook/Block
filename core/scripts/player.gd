@@ -28,7 +28,6 @@ const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
 const JUMP_VEL := -840.0
-const FEVER_JUMP_FACTOR := sqrt(2.0)  # jump height scales with v² — this doubles it
 const COYOTE := 0.1
 const JUMP_BUFFER := 0.12
 const STEP := 4.0
@@ -153,13 +152,9 @@ func _handle_input(delta: float) -> void:
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
-	# Fever: blocks are one-way, so the cat can end up buried inside the
-	# stack (or fall into a covered-over hole). While submerged it can jump
-	# repeatedly and sinks slowly, so it always swims up and out.
-	var submerged: bool = board.fever_active and board.rect_hits_solid(rect())
-	coyote_timer = COYOTE if on_floor or submerged else maxf(coyote_timer - delta, 0.0)
+	coyote_timer = COYOTE if on_floor else maxf(coyote_timer - delta, 0.0)
 	wall_dir = _wall_contact()
-	var jump_vel := JUMP_VEL * stat_jump * (FEVER_JUMP_FACTOR if board.fever_active else 1.0)
+	var jump_vel := JUMP_VEL * stat_jump
 	if jump_buffer > 0.0 and coyote_timer > 0.0:
 		velocity.y = jump_vel
 		jump_buffer = 0.0
@@ -179,9 +174,6 @@ func _handle_input(delta: float) -> void:
 	if velocity.y > 0.0 and fast_fall:
 		g *= FAST_FALL_FACTOR * stat_weight
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
-	if submerged:
-		# Sinking slowly inside the stack keeps each fever jump a net gain.
-		velocity.y = minf(velocity.y, WALL_SLIDE_SPEED)
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
 		velocity.y = WALL_SLIDE_SPEED
@@ -222,19 +214,6 @@ func _apply_motion(delta: float) -> void:
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
 		on_floor = velocity.y >= 0.0 and board.rect_blocked_for_player(feet)
-		# Fever: the falling piece is a one-way platform — pass through from
-		# below, land on top.
-		if not on_floor and board.fever_active and velocity.y >= 0.0:
-			var top := board.fever_platform_top(rect(), maxf(velocity.y * delta, 4.0) + 8.0)
-			if top < INF:
-				var snapped := Rect2(position.x - SIZE / 2.0, top - SIZE, SIZE, SIZE)
-				if not board.rect_blocked_for_player(snapped):
-					position.y = top - SIZE / 2.0
-					if velocity.y > 300.0:
-						squash_timer = SQUASH_TIME
-						Sfx.play("land")
-					velocity.y = 0.0
-					on_floor = true
 		if on_floor:
 			wall_jumps_left = 1
 
@@ -280,11 +259,6 @@ func _draw() -> void:
 		skin_id = GameState.cat_for(player_slot)
 	var skin: Dictionary = GameState.cat_skin(skin_id, player_slot)
 	var trail: Color = skin.get("body", BODY_COLOR)
-	if board and board.fever_active and alive:
-		# Fever aura: pulsing golden glow around the invincible cat.
-		var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 90.0)
-		draw_rect(body.grow(10.0 + 4.0 * pulse), Color(1.0, 0.85, 0.35, 0.16 + 0.1 * pulse))
-		draw_rect(body.grow(4.0), Color(1.0, 0.93, 0.6, 0.22))
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color(trail, 0.22))
 		for i in range(1, 4):

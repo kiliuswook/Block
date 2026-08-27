@@ -252,9 +252,6 @@ func _build_sounds() -> void:
 	_add_tone(b, 0.0, 0.4, 350.0, 1400.0, 0.2, TRIANGLE)
 	_add_tone(b, 0.25, 0.25, 1568.0, 1568.0, 0.15, SINE)
 	_sounds["revive"] = _wav(b)
-	# Fever kick-off riff.
-	_sounds["fever"] = _jingle([659.25, 783.99, 987.77, 1318.5, 987.77, 1318.5,
-			1568.0], 0.07, SQUARE, 0.18, 2.5)
 	# New record fanfare.
 	_sounds["record"] = _jingle([880.0, 1108.7, 1318.5, 1760.0], 0.1, TRIANGLE,
 			0.22, 3.5)
