@@ -170,7 +170,10 @@ func _on_reset_pressed() -> void:
 		return
 	_reset_btn.disabled = true
 	_reset_btn.text = tr("SET_RESETTING")
-	await Ranks.wipe_mine()  # 온라인 보드에서 내 기록 제거 (오프라인이면 즉시 통과)
+	# 온라인 보드에서 내 기록 제거 (오프라인이면 즉시 통과).
+	# 스팀 리더보드는 클라이언트가 자기 엔트리를 못 지워서 그냥 넘어간다 —
+	# 로컬 기록만 비고, 보드의 기록은 다음 플레이 때 덮어써진다.
+	await Ranks.wipe_mine()
 	GameState.reset_all()
 	Replays.clear_all()
 	Sfx.play("click")

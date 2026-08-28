@@ -39,6 +39,25 @@ func load_replay(mode_key: String) -> Dictionary:
 	return data if data is Dictionary else {}
 
 
+## 스팀 리더보드용 바이너리 형식 — UGC로 파일째 붙이므로 base64가 필요 없다.
+## 저장된 리플레이가 없으면 빈 배열(첨부를 건너뛴다).
+func pack(mode_key: String) -> PackedByteArray:
+	var data := load_replay(mode_key)
+	if data.is_empty():
+		return PackedByteArray()
+	return var_to_bytes(data).compress(FileAccess.COMPRESSION_GZIP)
+
+
+func unpack(bytes: PackedByteArray) -> Dictionary:
+	if bytes.is_empty():
+		return {}
+	var raw := bytes.decompress_dynamic(4 * 1024 * 1024, FileAccess.COMPRESSION_GZIP)
+	if raw.is_empty():
+		return {}
+	var data: Variant = bytes_to_var(raw)
+	return data if data is Dictionary else {}
+
+
 ## Compact wire format for leaderboard entries. "" when too big to attach.
 func encode(data: Dictionary, max_b64 := 90000) -> String:
 	if data.is_empty():

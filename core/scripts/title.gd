@@ -1295,6 +1295,9 @@ func _refresh_pick_cards() -> void:
 			UiKit.style_button(card, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 18)
 		else:
 			UiKit.style_button(card, UiKit.WHITE, Color("c9c6d0"), INK, 20, 18)
+		# 꾸미기는 나만의 캐릭터 슬롯에서만.
+		(_slot_cards[i][2] as Button).visible = GameState.is_custom_cat(
+				str(_pick_cats[i]) if i < _pick_cats.size() else "")
 		(_slot_cards[i][1] as Control).queue_redraw()
 
 
@@ -1530,11 +1533,9 @@ func _open_popup(cat: Dictionary) -> void:
 		_popup_action.text = tr("CHAR_SELECT_BTN")
 	else:
 		_popup_action.visible = false
-	# 꾸미기는 결과가 실제로 보이는 냥이에만 — 컨셉 시트 그림으로 그리는 냥이는
-	# 파츠 레이어 아트가 있어야 색을 갈아끼울 수 있다.
-	var char_id := str(cat.get("char", "char01"))
-	_popup_custom.visible = unlocked and (CatSprite.is_layered(char_id)
-			or not CatSprite.has(char_id))
+	# 꾸미기는 "나만의 캐릭터" 슬롯 전용 — 디자인 냥이 6종은 컨셉 시트 원본
+	# 그대로 두고, 커스터마이징은 해금한 파츠로 조립하는 커스텀 슬롯에서만 한다.
+	_popup_custom.visible = unlocked and GameState.is_custom_cat(str(cat.id))
 	# 나만의 캐릭터는 키캡을 모으지 않으므로 도감 버튼이 없다.
 	_popup_dex.visible = not GameState.is_custom_cat(str(cat.id))
 	# Bottom row: visible buttons side by side, centered — 다 들어가지 않으면

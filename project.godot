@@ -26,6 +26,12 @@ Replays="*res://core/autoload/replays.gd"
 Ranks="*res://core/autoload/ranks.gd"
 Platform="*res://platform/platform.gd"
 
+[cattris]
+
+; 스팀 앱 id. 480 = Valve 공개 테스트 앱 "Spacewar" (리더보드 실험용).
+; 스팀 출시 id를 받으면 이 값만 바꾸면 된다 — steam_platform.gd가 여기서 읽는다.
+steam/app_id=480
+
 [display]
 
 window/size/viewport_width=1920
