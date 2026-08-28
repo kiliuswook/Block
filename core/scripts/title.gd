@@ -14,7 +14,7 @@ const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
-const POPUP_SIZE := Vector2(620.0, 700.0)
+const POPUP_SIZE := Vector2(620.0, 812.0)
 const SHOP_TILE := Vector2(200.0, 210.0)
 const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
 		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
@@ -59,6 +59,7 @@ var _popup_action: Button
 var _popup_close: Button
 var _popup_feed: Button
 var _popup_custom: Button
+var _popup_dex: Button  # 이 냥이의 키캡 도감 열기
 var _popup_cat: Dictionary = {}
 var _customizer: Control
 var _settings: Control
@@ -66,6 +67,9 @@ var _shop: Control
 var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
 var _boost_chips := {}  # boost id -> Button
 var _shop_wallet: Label
+var _gacha_btns: Array[Button] = []  # [1회, 10연차]
+var _gacha_result: Control  # 마지막으로 뽑은 키캡이 깔리는 자리
+var _last_pull: Array = []  # draw_keycaps()가 돌려준 마지막 결과
 var _bob := 0.0  # title cat idle bounce (affection level 5+)
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
@@ -86,6 +90,8 @@ var _logo_cell := 46.0
 var _keycap_dex: Control
 var _keycap_board: Control
 var _keycap_stats: Label
+var _keycap_tabs := {}  # cat id -> 도감 상단 캐릭터 탭 Button
+var _keycap_cat := "cream"  # 도감에서 보고 있는 캐릭터
 var _ranks: Control
 var _rank_tabs := {}  # mode key -> Button
 var _rank_scopes := {}  # true (주간) / false (누적) -> Button
@@ -553,6 +559,22 @@ func _build_shop() -> void:
 	list.add_theme_constant_override("separation", 12)
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list)
+	# 키캡 가챠 — 캐릭터 해금·등급업의 유일한 통로라 상점 맨 위에 둔다.
+	list.add_child(_shop_header(tr("SHOP_GACHA")))
+	var gacha_row := HBoxContainer.new()
+	gacha_row.add_theme_constant_override("separation", 14)
+	list.add_child(gacha_row)
+	for n: int in [1, GameState.KEYCAP_GACHA_BULK]:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2((pw - 88.0) / 2.0, 74.0)
+		b.pressed.connect(func() -> void: _on_gacha(n))
+		UiKit.btn_primary(b, 22)
+		gacha_row.add_child(b)
+		_gacha_btns.append(b)
+	_gacha_result = Control.new()
+	_gacha_result.custom_minimum_size = Vector2(pw - 60.0, 118.0)
+	_gacha_result.draw.connect(func() -> void: _draw_gacha_result(_gacha_result))
+	list.add_child(_gacha_result)
 	var per_row := maxi(1, int((pw - 60.0 + TILE_GAP) / (SHOP_TILE.x + TILE_GAP)))
 	for slot: Array in [["head", "SHOP_HEAD"], ["neck", "SHOP_NECK"]]:
 		list.add_child(_shop_header(tr(str(slot[1]))))
@@ -649,6 +671,64 @@ func _on_shop_item(acc: Dictionary) -> void:
 	_refresh_tiles()
 
 
+## 키캡 n장 뽑기. 결과는 아래 띠에 깔리고, 등급이 오른 냥이는 토스트로 알린다.
+func _on_gacha(n: int) -> void:
+	var pull := GameState.draw_keycaps(n)
+	if pull.is_empty():
+		Sfx.play("error")
+		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
+		return
+	_last_pull = pull
+	_gacha_result.queue_redraw()
+	# 등급업(=해금 포함)이 있으면 그쪽을 알리고, 아니면 마지막 한 장을 알린다.
+	var announced := false
+	for hit: Dictionary in pull:
+		if not hit.grade_up:
+			continue
+		var id := str(hit.cat)
+		var cat_name := tr(str(GameState.get_cat(id).name))
+		var grade := GameState.cat_grade(id)
+		Sfx.play("record")
+		_show_toast(tr("CHAR_RECRUITED").format({"name": cat_name}) if grade == 1
+				else tr("KEYCAP_GRADE_UP").format({"name": cat_name, "grade": grade}),
+				CREAM)
+		announced = true
+		break
+	if not announced:
+		var last: Dictionary = pull[-1]
+		var cat_name := tr(str(GameState.get_cat(str(last.cat)).name))
+		Sfx.play("buy" if last.fresh else "click")
+		_show_toast(tr("KEYCAP_NEW" if last.fresh else "KEYCAP_DUP").format(
+				{"name": cat_name, "letter": str(last.letter)}),
+				GOLD_COL if last.fresh else UiKit.MUTED)
+	_refresh_shop()
+	_refresh_currency()
+	_refresh_tiles()
+	if _keycap_dex.visible:
+		_refresh_keycap_dex()
+
+
+## 마지막 뽑기 결과 — 키캡 한 줄과 그 아래 냥이 이름. 새로 채운 글자는 별표.
+func _draw_gacha_result(ci: Control) -> void:
+	if _last_pull.is_empty():
+		UiKit.center_text(ci, tr("SHOP_GACHA_EMPTY"), 62.0, ci.size.x, 19,
+				UiKit.MUTED)
+		return
+	var n := _last_pull.size()
+	var gap := 8.0
+	var cap := minf(74.0, (ci.size.x - gap * (n - 1)) / n)
+	var x := (ci.size.x - (cap * n + gap * (n - 1))) / 2.0
+	for i in n:
+		var hit: Dictionary = _last_pull[i]
+		var at := Rect2(x + i * (cap + gap), 6.0, cap, cap)
+		EscapeBoard.paint_keycap(ci, at, str(hit.letter), 0.6, false, str(hit.cat))
+		if not hit.fresh:  # 중복은 흐리게 눌러 둔다
+			ci.draw_rect(at, Color(0.09, 0.13, 0.18, 0.42))
+		var label := tr(str(GameState.get_cat(str(hit.cat)).name))
+		UiKit.center_text(ci, label, at.end.y + 22.0, cap + gap, 14,
+				GOLD_COL if hit.fresh else UiKit.MUTED, at.position.x - gap / 2.0)
+
+
 func _on_boost_chip(boost: Dictionary) -> void:
 	var had: bool = boost.id in GameState.pending_boosts
 	if not GameState.toggle_boost(str(boost.id)):
@@ -670,6 +750,11 @@ func _refresh_shop() -> void:
 		UiKit.style_button(face.get_parent() as Button,
 				Color("fff1cf") if eq else UiKit.WHITE,
 				UiKit.GOLD_DEEP if eq else Color("c9c6d0"), INK, 18, 16)
+	for i in _gacha_btns.size():
+		var n: int = 1 if i == 0 else GameState.KEYCAP_GACHA_BULK
+		_gacha_btns[i].text = tr("SHOP_GACHA_DRAW").format(
+				{"n": n, "price": GameState.keycap_price(n)})
+	_gacha_result.queue_redraw()
 	for b: Dictionary in GameState.BOOSTS:
 		var chip: Button = _boost_chips[b.id]
 		var pending: bool = b.id in GameState.pending_boosts
@@ -710,7 +795,7 @@ func _build_keycap_dex() -> void:
 	var pw := minf(vw - 60.0, 1000.0)
 	var key := (pw - 60.0 - KEY_GAP * 9.0) / 10.0
 	var plate_h := key * 3.0 + KEY_GAP * 2.0 + 44.0
-	var ph := minf(vh - 100.0, plate_h + 250.0)
+	var ph := minf(vh - 100.0, plate_h + 360.0)
 	var panel := PanelContainer.new()
 	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
 	panel.size = Vector2(pw, ph)
@@ -725,6 +810,23 @@ func _build_keycap_dex() -> void:
 	title.add_theme_font_size_override("font_size", 36)
 	title.add_theme_color_override("font_color", INK)
 	v.add_child(title)
+	# 캐릭터 탭 — 키캡은 냥이마다 따로 모으므로 어느 냥이 도감인지 먼저 고른다.
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 6)
+	v.add_child(tabs)
+	for cat: Dictionary in GameState.CATS:
+		var id := str(cat.id)
+		var tab := Button.new()
+		tab.custom_minimum_size = Vector2(
+				(pw - 60.0 - 6.0 * (GameState.CATS.size() - 1)) / GameState.CATS.size(),
+				46.0)
+		tab.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_keycap_cat = id
+			_refresh_keycap_dex())
+		tabs.add_child(tab)
+		_keycap_tabs[id] = tab
 	_keycap_stats = Label.new()
 	_keycap_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_keycap_stats.add_theme_font_size_override("font_size", 24)
@@ -751,16 +853,36 @@ func _build_keycap_dex() -> void:
 	v.add_child(wrap)
 
 
-func _open_keycap_dex() -> void:
+## cat_id를 주면 그 냥이 도감을 펼친 채로 연다 (캐릭터 팝업의 도감 버튼).
+func _open_keycap_dex(cat_id := "") -> void:
+	if cat_id != "":
+		_keycap_cat = cat_id
 	_raise(_keycap_dex)
-	_keycap_stats.text = tr("KEYCAP_STATS").format(
-			{"kinds": GameState.keycap_kinds(), "total": GameState.keycap_total()})
-	_keycap_board.queue_redraw()
+	_refresh_keycap_dex()
 	_keycap_dex.visible = true
 
 
-## The keyboard: three staggered QWERTY rows on a dark plate. Collected
-## letters wear the in-game cat keycap; missing ones are dim empty sockets.
+func _refresh_keycap_dex() -> void:
+	for id: String in _keycap_tabs:
+		var tab: Button = _keycap_tabs[id]
+		# 잠긴 냥이는 자물쇠를 달고, 칩 폭이 좁아 글자는 작게 (긴 이름 대응).
+		var label := tr(str(GameState.get_cat(id).name))
+		if not GameState.is_unlocked(id):
+			label = "🔒" + label
+		tab.text = "%s %d/26" % [label, GameState.keycap_ring(id)]
+		UiKit.btn_chip(tab, id == _keycap_cat, 15)
+	var cat: Dictionary = GameState.get_cat(_keycap_cat)
+	_keycap_stats.text = tr("KEYCAP_STATS").format({
+			"name": tr(str(cat.name)),
+			"kinds": GameState.keycap_ring(_keycap_cat),
+			"grade": GameState.cat_grade(_keycap_cat),
+			"max": GameState.KEYCAP_GRADE_MAX,
+			"total": GameState.keycap_total(_keycap_cat)})
+	_keycap_board.queue_redraw()
+
+
+## The keyboard: three staggered QWERTY rows on a light plate. Letters banked
+## this round wear that cat's own keycap; the rest are dim empty sockets.
 func _draw_keycap_dex_board() -> void:
 	var ci := _keycap_board
 	var bw := ci.size.x
@@ -776,9 +898,9 @@ func _draw_keycap_dex_board() -> void:
 		for i in letters.length():
 			var letter := letters[i]
 			var rect := Rect2(x + i * (key + KEY_GAP), y, key, key)
-			var count := GameState.keycap_count(letter)
-			if count > 0:
-				EscapeBoard.paint_keycap(ci, rect, letter, 0.6, false)
+			var count := GameState.keycap_count(_keycap_cat, letter)
+			if GameState.has_keycap(_keycap_cat, letter):
+				EscapeBoard.paint_keycap(ci, rect, letter, 0.6, false, _keycap_cat)
 				if count > 1:
 					var badge := rect.position + Vector2(key - 14.0, key - 8.0)
 					ci.draw_circle(badge + Vector2(0.0, -6.0), 15.0, Color("b8433f"))
@@ -788,7 +910,7 @@ func _draw_keycap_dex_board() -> void:
 					ci.draw_string(font, badge + Vector2(-tw / 2.0, 0.0), txt,
 							HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color.WHITE)
 			else:
-				# 빈 소켓: 아직 못 모은 글자 자리.
+				# 빈 소켓: 이번 바퀴에 아직 못 모은 글자 자리.
 				var sock := StyleBoxFlat.new()
 				sock.bg_color = Color(0.72, 0.82, 0.88, 0.55)
 				sock.set_corner_radius_all(int(key * 0.14))
@@ -1272,29 +1394,27 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 	if unlocked and GameState.affection_level(cat.id) >= 10:
 		tile_name = "★" + tile_name
 	_draw_center_text(ci, font, tile_name, 112.0, 22, name_col)
-	if not unlocked:
-		var u: Dictionary = cat.unlock
-		match u.type:
-			"gold":
-				_draw_center_text(ci, font, "%d G" % u.amount, 144.0, 19, GOLD_COL)
-			"gems":
-				_draw_center_text(ci, font, "◆ %d" % u.amount, 144.0, 19, GEM_COL)
-			"height":
-				_draw_center_text(ci, font, tr("CHAR_UNLOCK_HEIGHT").format({"n": u.floors}),
-						144.0, 16,
-						UiKit.MUTED)
-			"score":
-				_draw_center_text(ci, font, tr("CHAR_UNLOCK_SCORE").format({"n": u.amount}),
-						144.0, 16,
-						UiKit.MUTED)
-			"plays":
-				_draw_center_text(ci, font, tr("CHAR_UNLOCK_PLAYS").format({"n": u.count}),
-						144.0, 16,
-						UiKit.MUTED)
-	else:
+	if unlocked:
 		# 해금된 냥이는 특성 태그를 달고, 선택된 냥이는 진한 금색.
 		var tag_col := GOLD_COL if _is_chosen(str(cat.id)) else UiKit.MUTED
-		_draw_center_text(ci, font, tr(str(cat.get("trait", ""))), 144.0, 16, tag_col)
+		_draw_center_text(ci, font, tr(str(cat.get("trait", ""))), 142.0, 16, tag_col)
+	else:
+		# 잠긴 냥이는 해금 게이지 = 이번 바퀴 키캡 진행 (기호+숫자라 번역 불필요).
+		_draw_center_text(ci, font, "▦ %d / 26" % GameState.keycap_ring(str(cat.id)),
+				142.0, 18, GOLD_COL)
+	_draw_grade_pips(ci, str(cat.id), 158.0)
+
+
+## 타일 아래 등급 칩 — 채워진 개수가 지금 등급(키캡 A~Z를 채운 바퀴 수)이다.
+func _draw_grade_pips(ci: Control, id: String, y: float) -> void:
+	var top: int = GameState.KEYCAP_GRADE_MAX
+	var grade := GameState.cat_grade(id)
+	var w := 18.0
+	var gap := 6.0
+	var x := (TILE_SIZE.x - (top * w + (top - 1) * gap)) / 2.0
+	for i in top:
+		var r := Rect2(x + i * (w + gap), y, w, 8.0)
+		ci.draw_rect(r, UiKit.GOLD_DEEP if i < grade else Color(INK, 0.12))
 
 
 func _draw_center_text(ci: Control, font: Font, text: String, y: float,
@@ -1382,6 +1502,13 @@ func _build_popup() -> void:
 		var slot := (_pick_slot + 1) if _pick else 1
 		_close_popup()
 		_customizer.open(id, slot))
+	_popup_dex = _make_popup_button(panel, false)
+	_popup_dex.text = tr("CHAR_DEX_BTN")
+	_popup_dex.pressed.connect(func() -> void:
+		Sfx.play("click")
+		var id: String = str(_popup_cat.get("id", "cream"))
+		_close_popup()
+		_open_keycap_dex(id))
 
 
 func _make_popup_button(panel: Control, accent: bool) -> Button:
@@ -1398,19 +1525,13 @@ func _open_popup(cat: Dictionary) -> void:
 	_raise(_popup)
 	_popup_cat = cat
 	var unlocked: bool = GameState.is_unlocked(cat.id)
-	var u: Dictionary = cat.unlock
+	# 캐릭터는 키캡으로만 해금된다 — 잠긴 냥이에겐 고를 버튼 자체가 없다.
 	if unlocked:
 		if _pick:
 			_popup_action.visible = _pick_cats[_pick_slot] != cat.id
 		else:
 			_popup_action.visible = GameState.selected_cat != cat.id
 		_popup_action.text = tr("CHAR_SELECT_BTN")
-	elif u.type == "gold":
-		_popup_action.visible = true
-		_popup_action.text = tr("CHAR_BUY_GOLD").format({"amount": u.amount})
-	elif u.type == "gems":
-		_popup_action.visible = true
-		_popup_action.text = tr("CHAR_BUY_GEMS").format({"amount": u.amount})
 	else:
 		_popup_action.visible = false
 	_refresh_feed_button()
@@ -1419,23 +1540,32 @@ func _open_popup(cat: Dictionary) -> void:
 	var char_id := str(cat.get("char", "char01"))
 	_popup_custom.visible = unlocked and (CatSprite.is_layered(char_id)
 			or not CatSprite.has(char_id))
-	# Bottom row: visible buttons side by side, centered.
+	# Bottom row: visible buttons side by side, centered — 다 들어가지 않으면
+	# 폭을 같은 비율로 줄인다 (긴 번역 + 버튼 4개).
 	var y := POPUP_SIZE.y - 70.0
 	var row: Array = []
 	if _popup_action.visible:
-		row.append([_popup_action, 220.0])
+		row.append([_popup_action, 200.0])
 	if _popup_custom.visible:
-		row.append([_popup_custom, 180.0])
-	row.append([_popup_close, 200.0 if row.is_empty() else 150.0])
-	var total := -20.0
+		row.append([_popup_custom, 170.0])
+	row.append([_popup_dex, 170.0])
+	row.append([_popup_close, 200.0 if row.is_empty() else 140.0])
+	var total := -18.0
 	for entry: Array in row:
-		total += entry[1] + 20.0
+		total += entry[1] + 18.0
+	var avail := POPUP_SIZE.x - 44.0
+	var shrink := minf(1.0, (avail - (row.size() - 1) * 18.0)
+			/ maxf(1.0, total - (row.size() - 1) * 18.0))
+	total = -18.0
+	for entry: Array in row:
+		entry[1] = floorf(entry[1] * shrink)
+		total += entry[1] + 18.0
 	var x := (POPUP_SIZE.x - total) / 2.0
 	for entry: Array in row:
 		var b: Button = entry[0]
 		b.size = Vector2(entry[1], 52.0)
 		b.position = Vector2(x, y)
-		x += entry[1] + 20.0
+		x += entry[1] + 18.0
 	_popup.visible = true
 	_popup_face.queue_redraw()
 
@@ -1495,32 +1625,15 @@ func _on_popup_feed() -> void:
 
 func _on_popup_action() -> void:
 	var cat := _popup_cat
-	if GameState.is_unlocked(cat.id):
-		Sfx.play("click")
-		if _pick:
-			_assign_pick(str(cat.id))
-		else:
-			GameState.select_cat(cat.id)
-		_refresh_tiles()
-		_close_popup()
+	if not GameState.is_unlocked(cat.id):
 		return
-	var u: Dictionary = cat.unlock
-	var wallet: int = GameState.gold if u.type == "gold" else GameState.gems
-	if wallet < int(u.amount):
-		Sfx.play("error")
-		_show_toast(tr("SHOP_NO_GOLD") if u.type == "gold" else tr("SHOP_NO_GEMS"),
-				Color(1.0, 0.55, 0.5))
-		return
-	if GameState.try_buy(cat.id):
-		Sfx.play("buy")
-		if _pick:
-			_assign_pick(str(cat.id))
-		else:
-			GameState.select_cat(cat.id)
-		_show_toast(tr("CHAR_RECRUITED").format({"name": tr(str(cat.name))}), CREAM)
-		_refresh_currency()
-		_refresh_tiles()
-		_close_popup()
+	Sfx.play("click")
+	if _pick:
+		_assign_pick(str(cat.id))
+	else:
+		GameState.select_cat(cat.id)
+	_refresh_tiles()
+	_close_popup()
 
 
 func _draw_popup(ci: Control) -> void:
@@ -1556,6 +1669,8 @@ func _draw_popup(ci: Control) -> void:
 			var r := Rect2(238.0 + p * 50.0, row_y, 42.0, 16.0)
 			var col := UiKit.ORANGE if p < pips else Color(INK, 0.12)
 			ci.draw_rect(r, col)
+	# 키캡 수집 현황 — 잠긴 냥이에겐 이게 곧 해금 조건이다.
+	_draw_keycap_progress(ci, str(cat.id), 530.0)
 	# Affection hearts (snacks fed) — unlocked cats only.
 	if unlocked:
 		var level := GameState.affection_level(cat.id)
@@ -1564,36 +1679,39 @@ func _draw_popup(ci: Control) -> void:
 		if level > 1:
 			line += tr("CHAR_AFFECTION_BONUS").format(
 					{"pct": roundi(GameState.affection_bonus(cat.id) * 100)})
-		_draw_center_text(ci, font, line, 522.0, 20,
+		_draw_center_text(ci, font, line, 620.0, 20,
 				Color("e0578a"), POPUP_SIZE.x)
-	# Status / unlock condition line.
-	var status := ""
-	var status_col := UiKit.MUTED
-	var u: Dictionary = cat.unlock
-	if unlocked:
-		if GameState.selected_cat == cat.id:
-			status = tr("CHAR_EQUIPPED")
-			status_col = GOLD_COL
+	if unlocked and GameState.selected_cat == cat.id:
+		_draw_center_text(ci, font, tr("CHAR_EQUIPPED"), POPUP_SIZE.y - 92.0, 19,
+				GOLD_COL, POPUP_SIZE.x)
+
+
+## 이 냥이의 키캡 수집 현황 — 이번 바퀴 진행 바 + 등급.
+## 잠긴 냥이에게는 이 바가 그대로 해금 게이지다 (A~Z 한 바퀴 = 합류).
+func _draw_keycap_progress(ci: Control, id: String, y: float) -> void:
+	var font := ThemeDB.fallback_font
+	var ring := GameState.keycap_ring(id)
+	var grade := GameState.cat_grade(id)
+	var top := GameState.KEYCAP_GRADE_MAX
+	var full := grade >= top
+	_draw_center_text(ci, font, tr("CHAR_KEYCAP").format(
+			{"ring": ring, "grade": grade, "max": top}), y, 20, GOLD_COL, POPUP_SIZE.x)
+	var bar := Rect2((POPUP_SIZE.x - 340.0) / 2.0, y + 14.0, 340.0, 16.0)
+	ci.draw_rect(bar, Color(INK, 0.10))
+	var frac := 1.0 if full else ring / 26.0
+	if frac > 0.0:
+		ci.draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)),
+				UiKit.GOLD_DEEP if full else UiKit.ORANGE)
+	ci.draw_rect(bar, Color(INK, 0.35), false, 2.0)
+	var note := ""
+	if full:
+		note = tr("CHAR_KEYCAP_MAX")
+	elif grade == 0:
+		note = tr("CHAR_LOCK_KEYCAP").format({"left": GameState.keycaps_to_next(id)})
 	else:
-		match u.type:
-			"gold":
-				status = tr("CHAR_HAVE_GOLD").format({"gold": GameState.gold})
-				status_col = GOLD_COL
-			"gems":
-				status = tr("CHAR_HAVE_GEMS").format({"gems": GameState.gems})
-				status_col = GEM_COL
-			"height":
-				status = tr("CHAR_LOCK_HEIGHT").format(
-						{"need": u.floors, "best": GameState.best_height})
-			"score":
-				status = tr("CHAR_LOCK_SCORE").format(
-						{"need": u.amount, "best": GameState.classic_best})
-			"plays":
-				status = tr("CHAR_LOCK_PLAYS").format(
-						{"need": u.count, "now": GameState.games_played})
-	if status != "":
-		_draw_center_text(ci, font, status, POPUP_SIZE.y - 92.0, 19, status_col,
-				POPUP_SIZE.x)
+		note = tr("CHAR_KEYCAP_NEXT").format(
+				{"left": GameState.keycaps_to_next(id), "grade": grade + 1})
+	_draw_center_text(ci, font, note, y + 54.0, 17, UiKit.MUTED, POPUP_SIZE.x)
 
 
 func _refresh_tiles() -> void:

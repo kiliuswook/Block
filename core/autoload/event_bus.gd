@@ -16,7 +16,7 @@ signal story_progress_changed(text: String)
 signal story_doors_opened
 signal story_completed
 signal story_reward(gold: int, gems: int)  # first-clear payout for a story stage
-signal keycap_collected(letter: String, count: int)  # alphabet keycap banked
+signal keycap_collected(cat_id: String, letter: String, count: int)  # 캐릭터별 키캡 적립
 # Classic (arcade B-type): a level's board opens, its line goal ticks, and the
 # shutter finishes paying out the empty-row bonus.
 signal classic_level_started(level: int, quota: int, garbage: int)

@@ -39,9 +39,9 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
 	var saved_caps: Dictionary = GameState.keycaps.duplicate()
-	GameState.keycaps = {"C": 3, "A": 1, "T": 12, "S": 2, "Q": 1, "E": 5, "N": 1, "G": 120}
+	GameState.keycaps = _demo_keycaps()
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_keycaps.png",
-			func(inst: Node) -> void: inst._open_keycap_dex())
+			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
 	GameState.keycaps = saved_caps
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_custom.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cream")))
@@ -160,9 +160,9 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst._pick_mode = GameState.MODE_CLASSIC
 				inst._open_pick(1))
-	GameState.keycaps = {"C": 3, "A": 1, "T": 12, "S": 2, "Q": 1, "E": 5, "N": 1, "G": 120}
+	GameState.keycaps = _demo_keycaps()
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_keycaps.png",
-			func(inst: Node) -> void: inst._open_keycap_dex())
+			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
 	GameState.keycaps = saved_caps
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
 			func(inst: Node) -> void: inst._customizer.open("cream"))
@@ -197,3 +197,16 @@ func _capture(scene_path: String, out: String, setup: Callable = Callable()) -> 
 	get_viewport().get_texture().get_image().save_png(out)
 	inst.queue_free()
 	await get_tree().process_frame
+
+
+## 캡처용 더미 수집 상태: 냥이마다 다른 진행도 (일부는 해금, 일부는 잠김).
+func _demo_keycaps() -> Dictionary:
+	var out := {}
+	for i in GameState.CATS.size():
+		var d := {}
+		# 0번은 전체 2바퀴, 뒤로 갈수록 적게 — 도감/등급 표시를 한눈에 본다.
+		var letters := maxi(3, 26 - i * 5)
+		for j in letters:
+			d[char(65 + j)] = 2 if i == 0 else 1
+		out[str(GameState.CATS[i].id)] = d
+	return out

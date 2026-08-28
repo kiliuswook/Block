@@ -10,8 +10,9 @@ const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
 const MODE_PICNIC := 4  # casual jelly picnic: no death, collect snacks on a timer
 
 ## Playable cube-cat skins. Unlock types:
-##  free — always available / gold, gems — purchasable / height — endless best
-##  story — story-mode stage cleared / plays — total games played.
+##  free — 시작부터 지급되는 첫 캐릭터 (첫 키캡 한 바퀴를 공짜로 갖고 시작)
+##  keycap — 그 캐릭터의 키캡 A~Z를 한 바퀴 모으면 해금.
+## 해금 뒤에도 한 바퀴를 더 모을 때마다 등급이 오른다 (등급 1~4, 파츠 해금).
 ## Per-cat stat multipliers (1.0 = baseline cream):
 ##  speed — run speed / jump — jump velocity / dash — dash speed & cooldown
 ##  weight — heavier falls harder when fast-falling and resists knockback,
@@ -22,22 +23,21 @@ const CATS: Array[Dictionary] = [
 		"unlock": {"type": "free"}, "trait": "TRAIT_BALANCED",
 		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 	{"id": "black", "char": "char02", "name": "CAT_BLACK", "body": Color("3a3540"), "ear": Color("26232c"),
-		"ink": Color("f0d060"), "unlock": {"type": "height", "floors": 10},
-		"trait": "TRAIT_SPRINTER",
+		"ink": Color("f0d060"), "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
 		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
 	{"id": "cheese", "char": "char03", "name": "CAT_CHEESE", "body": Color("f5b352"), "ear": Color("e08a3c"),
-		"unlock": {"type": "gold", "amount": 300}, "trait": "TRAIT_HEAVY",
+		"unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
 		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
 	{"id": "sleepy", "char": "char04", "name": "CAT_SLEEPY", "body": Color("fbf6ee"),
-		"ear": Color("f0e2d8"), "unlock": {"type": "plays", "count": 8},
+		"ear": Color("f0e2d8"), "unlock": {"type": "keycap"},
 		"trait": "TRAIT_DREAMER",
 		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
 	{"id": "wizard", "char": "char05", "name": "CAT_WIZARD", "body": Color("f0e2d0"),
-		"ear": Color("5a4038"), "unlock": {"type": "gold", "amount": 1500},
+		"ear": Color("5a4038"), "unlock": {"type": "keycap"},
 		"trait": "TRAIT_MAGIC",
 		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
 	{"id": "gray", "char": "char06", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
-		"unlock": {"type": "gold", "amount": 500}, "trait": "TRAIT_HEAVYJUMP",
+		"unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
 ]
 
@@ -106,6 +106,15 @@ const SNACK_MAX := 25
 ## Stat growth per affection level above 1 (speed/jump/dash), +9% at Lv.10.
 const AFFECTION_STAT_STEP := 0.01
 const SKIP_COST := 3  # gems to skip a story stage after repeated failures
+## 캐릭터 등급 1~4 (0 = 잠김). 등급 하나 = 그 캐릭터의 키캡 A~Z 한 바퀴.
+const KEYCAP_GRADE_MAX := 4
+## 키캡 가챠 — 상점에서 골드로 뽑는다. 10연차는 한 장 값을 깎아 준다.
+## 전원 만렙(6종 × 4등급)까지 대략 625장 = 약 1.6만 골드 (한 판 수입 150~400G 기준).
+const KEYCAP_GACHA_PRICE := 30
+const KEYCAP_GACHA_BULK := 10
+const KEYCAP_GACHA_BULK_PRICE := 250
+## 이번 바퀴에서 아직 못 채운 글자가 나올 확률 (나머지는 완전 랜덤 = 중복).
+const KEYCAP_FRESH_CHANCE := 0.7
 
 var mode: int = MODE_CLASSIC
 var split: bool = false  # 2-player split screen (escape race/endless only), not saved
@@ -123,14 +132,13 @@ var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on fir
 var player_id: String = ""  # stable random id identifying this save on boards
 var weekly: Dictionary = {}  # this week's bests: {"week": id, "story": n, ...}
 var weekly_claimed: int = 0  # last finished week whose prize was checked
-var purchased: Array = []  # ids of cats bought with gold/gems
 var acc_owned: Array = []  # ids of purchased accessories
 var acc_head: String = ""  # equipped accessory per slot ("" = none)
 var acc_neck: String = ""
 var affection: Dictionary = {}  # cat id -> total snacks fed
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
-var keycaps: Dictionary = {}  # collected alphabet keycaps: "A".."Z" -> count
+var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
 # 캐릭터별 커스터마이징: 저장 키(custom_key) -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
@@ -187,7 +195,6 @@ func reset_all() -> void:
 	selected_cat2 = "cream"
 	weekly = {}
 	weekly_claimed = 0
-	purchased = []
 	acc_owned = []
 	acc_head = ""
 	acc_neck = ""
@@ -313,32 +320,146 @@ func claim_daily_bonus() -> bool:
 	return true
 
 
-# --- Keycaps (alphabet collection) ---------------------------------------------
+# --- Keycaps (캐릭터별 알파벳 수집) ---------------------------------------------
+## 키캡은 **캐릭터마다 따로** 모은다: keycaps = {cat id: {"A": n, ...}}.
+## 한 캐릭터의 A~Z를 한 바퀴 채울 때마다 그 캐릭터의 등급이 1 오른다 —
+## 첫 바퀴가 해금(등급 1), 이후 세 바퀴가 파츠 단계 1~3(등급 4 = 만렙).
+## 첫 캐릭터(unlock.type == "free")만 첫 바퀴를 처음부터 갖고 시작한다.
 
 
-func keycap_count(letter: String) -> int:
-	return int(keycaps.get(letter, 0))
+## 이 캐릭터가 모은 키캡 사전 ("A" -> 개수). 저장 사전을 그대로 돌려준다.
+func cat_keycaps(cat_id: String) -> Dictionary:
+	var d: Variant = keycaps.get(cat_id, {})
+	return d if d is Dictionary else {}
 
 
-## Distinct letters collected so far (dex completion, 0..26).
-func keycap_kinds() -> int:
-	return keycaps.size()
+func keycap_count(cat_id: String, letter: String) -> int:
+	return int(cat_keycaps(cat_id).get(letter, 0))
 
 
-func keycap_total() -> int:
+## 이 캐릭터가 모은 글자 종류 수 (0..26).
+func keycap_kinds(cat_id: String) -> int:
+	return cat_keycaps(cat_id).size()
+
+
+## 중복 포함 총 장수. cat_id를 비우면 전 캐릭터 합계.
+func keycap_total(cat_id := "") -> int:
 	var total := 0
-	for letter in keycaps:
-		total += int(keycaps[letter])
+	for id: String in keycaps:
+		if cat_id != "" and id != cat_id:
+			continue
+		var d: Dictionary = cat_keycaps(id)
+		for letter: String in d:
+			total += int(d[letter])
 	return total
 
 
-## Banks one alphabet keycap (duplicates stack). Keycaps are no longer found
-## in the pit — a future gacha hands them out — but the dex and the part-tier
-## unlock still read from here.
-func add_keycap(letter: String) -> void:
-	keycaps[letter] = keycap_count(letter) + 1
+## 키캡 한 장을 그 캐릭터 앞으로 적립한다 (중복은 쌓인다).
+## 여러 장을 한꺼번에 뽑을 때는 save=false로 넘기고 마지막에 한 번만 저장한다.
+func add_keycap(cat_id: String, letter: String, save := true) -> void:
+	var d := cat_keycaps(cat_id)
+	d[letter] = int(d.get(letter, 0)) + 1
+	keycaps[cat_id] = d
+	if save:
+		save_game()
+	EventBus.keycap_collected.emit(cat_id, letter, int(d[letter]))
+
+
+## 이 캐릭터의 A~Z를 몇 바퀴 채웠는가 (= 26글자 중 가장 적게 가진 글자의 수).
+func keycap_sets(cat_id: String) -> int:
+	var d := cat_keycaps(cat_id)
+	if d.size() < 26:
+		return 0
+	var least := 99
+	for i in 26:
+		least = mini(least, int(d.get(char(65 + i), 0)))
+	return least
+
+
+## 시작부터 주는 바퀴 수 — 첫 캐릭터만 1 (즉 처음부터 해금 상태).
+func free_sets(id: String) -> int:
+	return 1 if str(get_cat(id).unlock.type) == "free" else 0
+
+
+## 캐릭터 등급 0~4. 0 = 잠김, 1 = 해금(기본 파츠), 4 = 파츠 만렙.
+func cat_grade(id: String) -> int:
+	return mini(keycap_sets(id) + free_sets(id), KEYCAP_GRADE_MAX)
+
+
+## 이번(=다음 등급) 바퀴에서 아직 못 채운 글자 수. 만렙이면 0.
+func keycaps_to_next(id: String) -> int:
+	if cat_grade(id) >= KEYCAP_GRADE_MAX:
+		return 0
+	var d := cat_keycaps(id)
+	var need := keycap_sets(id) + 1
+	var left := 0
+	for i in 26:
+		if int(d.get(char(65 + i), 0)) < need:
+			left += 1
+	return left
+
+
+## 이번 바퀴에서 채운 글자 수 (0~26) — 도감·진행 바 표시용.
+func keycap_ring(id: String) -> int:
+	return 26 - keycaps_to_next(id)
+
+
+## 이번 바퀴 기준으로 이 글자를 이미 갖고 있는가 (도감에서 불 켜진 자리).
+func has_keycap(cat_id: String, letter: String) -> bool:
+	if cat_grade(cat_id) >= KEYCAP_GRADE_MAX:
+		return keycap_count(cat_id, letter) > 0
+	return keycap_count(cat_id, letter) > keycap_sets(cat_id)
+
+
+# --- 키캡 가챠 (상점) ------------------------------------------------------------
+## 인게임 드랍은 없다 — 키캡은 상점에서 골드로 뽑는다.
+
+
+## 키캡을 n장 뽑는다. 캐릭터는 아직 만렙이 아닌 냥이들 중에서 균등 랜덤
+## (잠긴 냥이 포함 — 아무나 먼저 완성한 순서대로 합류한다).
+## 반환: [{"cat": id, "letter": "A", "fresh": bool, "grade_up": bool}, ...]
+## 골드가 모자라면 빈 배열.
+func draw_keycaps(n: int) -> Array:
+	n = maxi(1, n)
+	if not spend_gold(keycap_price(n)):
+		return []
+	var pool: Array[String] = []
+	for cat in CATS:
+		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
+			pool.append(str(cat.id))
+	if pool.is_empty():  # 전원 만렙이면 그냥 아무 냥이 몫으로 (중복 수집)
+		for cat in CATS:
+			pool.append(str(cat.id))
+	var out: Array = []
+	for i in n:
+		var cat_id := pool[randi() % pool.size()]
+		var before := cat_grade(cat_id)
+		var letter := _roll_letter(cat_id)
+		var fresh := not has_keycap(cat_id, letter)
+		add_keycap(cat_id, letter, false)
+		out.append({"cat": cat_id, "letter": letter, "fresh": fresh,
+				"grade_up": cat_grade(cat_id) > before})
 	save_game()
-	EventBus.keycap_collected.emit(letter, keycap_count(letter))
+	return out
+
+
+func keycap_price(n: int) -> int:
+	return KEYCAP_GACHA_BULK_PRICE if n >= KEYCAP_GACHA_BULK 			else KEYCAP_GACHA_PRICE * n
+
+
+## 이번 바퀴에서 비어 있는 글자를 우선으로 하나 고른다. 확정이 아니라
+## 확률이라 중복도 나온다 (100%면 뽑는 맛 없이 정해진 횟수 노가다가 된다).
+func _roll_letter(cat_id: String) -> String:
+	if randf() > KEYCAP_FRESH_CHANCE:
+		return char(65 + randi() % 26)
+	var missing: Array[String] = []
+	for i in 26:
+		var letter := char(65 + i)
+		if not has_keycap(cat_id, letter):
+			missing.append(letter)
+	if missing.is_empty():
+		return char(65 + randi() % 26)
+	return missing[randi() % missing.size()]
 
 
 # --- Accessories --------------------------------------------------------------
@@ -509,19 +630,9 @@ func set_custom_all(id: String, sel: Dictionary, player := 1) -> void:
 	save_game()
 
 
-## 키캡 도감(A~Z)을 몇 바퀴 완성했는가 — 파츠 해금 단계의 기준.
-func keycap_sets() -> int:
-	if keycaps.size() < 26:
-		return 0
-	var least := 99
-	for i in 26:
-		least = mini(least, keycap_count(char(65 + i)))
-	return least
-
-
-## 디자인 캐릭터의 해금된 파츠 단계 (0=디폴트 ~ 3=꼬리까지).
-func cat_tier(_id: String) -> int:
-	return mini(keycap_sets(), CustomCat.TIER_MAX)
+## 디자인 캐릭터의 해금된 파츠 단계 (0=디폴트 ~ 3=꼬리까지) = 등급 - 1.
+func cat_tier(id: String) -> int:
+	return clampi(cat_grade(id) - 1, 0, CustomCat.TIER_MAX)
 
 
 func get_cat(id: String) -> Dictionary:
@@ -589,36 +700,9 @@ func cat_shadow_skin(id: String) -> Dictionary:
 	return {"body": parts["body_col"], "ear": parts["ear_col"], "parts": parts}
 
 
+## 해금 = 그 캐릭터의 키캡 A~Z를 한 바퀴 채웠는가 (첫 캐릭터는 처음부터).
 func is_unlocked(id: String) -> bool:
-	var u: Dictionary = get_cat(id).unlock
-	match u.type:
-		"free":
-			return true
-		"gold", "gems":
-			return id in purchased
-		"height":
-			return best_height >= int(u.floors)
-		"score":
-			return classic_best >= int(u.amount)
-		"plays":
-			return games_played >= int(u.count)
-	return false
-
-
-## Attempts to buy a purchasable cat. Returns true on success.
-func try_buy(id: String) -> bool:
-	if is_unlocked(id):
-		return false
-	var u: Dictionary = get_cat(id).unlock
-	if u.type == "gold" and gold >= int(u.amount):
-		gold -= int(u.amount)
-	elif u.type == "gems" and gems >= int(u.amount):
-		gems -= int(u.amount)
-	else:
-		return false
-	purchased.append(id)
-	save_game()
-	return true
+	return cat_grade(id) >= 1
 
 
 func select_cat(id: String, player := 1) -> void:
@@ -652,7 +736,6 @@ func save_game() -> void:
 		"player_id": player_id,
 		"weekly": weekly,
 		"weekly_claimed": weekly_claimed,
-		"purchased": purchased,
 		"acc_owned": acc_owned,
 		"acc_head": acc_head,
 		"acc_neck": acc_neck,
@@ -698,9 +781,6 @@ func load_game() -> void:
 			for k in wkly:
 				weekly[str(k)] = int(wkly[k])
 		weekly_claimed = int(data.get("weekly_claimed", 0))
-		var bought: Variant = data.get("purchased", [])
-		if bought is Array:
-			purchased = bought
 		var owned: Variant = data.get("acc_owned", [])
 		if owned is Array:
 			acc_owned = owned
@@ -727,7 +807,18 @@ func load_game() -> void:
 		if caps is Dictionary:
 			keycaps = {}
 			for k in caps:
-				keycaps[str(k)] = int(caps[k])
+				var per: Variant = caps[k]
+				if per is Dictionary:
+					var d := {}
+					for letter in per:
+						d[str(letter)] = int(per[letter])
+					keycaps[str(k)] = d
+				else:
+					# 구버전 저장(캐릭터 구분 없는 평면 A~Z)은 첫 캐릭터 몫으로 옮긴다.
+					var first := str(CATS[0].id)
+					var d0: Dictionary = keycaps.get(first, {})
+					d0[str(k)] = int(per)
+					keycaps[first] = d0
 		var cst: Variant = data.get("cat_custom", {})
 		if cst is Dictionary:
 			cat_custom = {}

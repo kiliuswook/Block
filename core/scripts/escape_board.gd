@@ -15,6 +15,8 @@ signal finished(win: bool)
 enum PieceState { TRACKING, FALLING, LANDED }
 enum Mode { STORY, ENDLESS, VERSUS, CLASSIC, PICNIC }
 
+const CatSprite := preload("res://core/scripts/cat_sprite.gd")
+
 const COLS := 10
 const ROWS := 14  # story stage data coordinate base — prefills/door_row are
 				  # authored on the original 14-row pit and shifted at load
@@ -1787,14 +1789,22 @@ func _draw_crack(c: Vector2i) -> void:
 	]), col, 2.0)
 
 
-## Cat-eared alphabet keycap riding a locked block: cream cap, two little ears,
-## whisker dots beside the letter. Static so the title-screen dex reuses it.
-## pulse (0..1) drives the soft glow; pass a constant for still UI renders.
+## 캐릭터별 알파벳 키캡. 캡 색은 그 냥이의 몸/귀 색을 따르고, 캡 위에는
+## 컨셉 시트 원본에서 얼굴만 오려 얹어 "누구 키캡인지" 한눈에 보이게 한다.
+## cat_id를 비우면 예전 크림색 기본 키캡(귀 + 수염 점)으로 그린다.
+## pulse (0..1)가 부드러운 발광을 몰고, 정지 UI에서는 상수를 넘긴다.
 static func paint_keycap(ci: CanvasItem, r: Rect2, letter: String,
-		pulse := 0.5, glow := true) -> void:
+		pulse := 0.5, glow := true, cat_id := "") -> void:
 	var body := Color("f4e3c8")
 	var edge := Color("d9a05c")
 	var ink := Color("2a2230")
+	var char_id := ""
+	if cat_id != "":
+		var cat: Dictionary = GameState.get_cat(cat_id)
+		# 캡 바탕은 몸 색을 밝게 눕힌 것 — 검은 냥이도 글자가 읽혀야 한다.
+		body = (cat.body as Color).lerp(Color.WHITE, 0.55)
+		edge = cat.ear
+		char_id = str(cat.get("char", ""))
 	var center := r.get_center()
 	var s := r.size.x  # keycap scales off the cell size (64 in-game)
 	if glow:
@@ -1819,15 +1829,36 @@ static func paint_keycap(ci: CanvasItem, r: Rect2, letter: String,
 	ci.draw_rect(Rect2(cap.position + Vector2(s * 0.09, s * 0.05),
 			Vector2(cap.size.x - s * 0.18, s * 0.07)), Color(1, 1, 1, 0.5))
 	var font := ThemeDB.fallback_font
-	var fs := int(s * 0.44)
+	var face_drawn := _paint_keycap_face(ci, cap, char_id)
+	# 얼굴이 올라가면 글자는 캡 아래쪽으로, 아니면 예전처럼 한가운데로.
+	var fs := int(s * (0.26 if face_drawn else 0.44))
+	var ly := (cap.end.y - s * 0.055) if face_drawn else (center.y + fs * 0.36)
 	var w := font.get_string_size(letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-	ci.draw_string(font, Vector2(center.x - w / 2.0, center.y + fs * 0.36), letter,
+	ci.draw_string(font, Vector2(center.x - w / 2.0, ly), letter,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
-	# Whisker dots flanking the letter — the cat face of the keycap.
+	if face_drawn:
+		return
+	# Whisker dots flanking the letter — the cat face of the default keycap.
 	for sx: float in [-1.0, 1.0]:
 		for dy: float in [-1.0, 1.0]:
 			ci.draw_circle(center + Vector2(sx * s * 0.3, s * 0.05 + dy * s * 0.05),
 					s * 0.022, Color(ink, 0.55))
+
+
+## 컨셉 시트 원본에서 얼굴(귀 아래 ~ 입 언저리)만 오려 캡 위쪽에 얹는다.
+## 그림이 없는 캐릭터면 false — 호출부가 기본 키캡 얼굴로 떨어진다.
+static func _paint_keycap_face(ci: CanvasItem, cap: Rect2, char_id: String) -> bool:
+	if char_id == "":
+		return false
+	var tex: Texture2D = CatSprite.face_texture(char_id)
+	if tex == null:
+		return false
+	var src := CatSprite.FACE
+	var w := cap.size.x * 0.92
+	var h := w * src.size.y / src.size.x
+	var at := Vector2(cap.get_center().x - w / 2.0, cap.position.y + cap.size.y * 0.05)
+	ci.draw_texture_rect_region(tex, Rect2(at, Vector2(w, h)), src)
+	return true
 
 
 func _draw_cell(c: Vector2i, color: Color) -> void:
