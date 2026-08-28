@@ -4,6 +4,7 @@ extends Node
 ## 세이브는 읽기만 한다 (커스터마이징을 저장하지 않는다).
 
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
+const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 
 var failures := 0
 
@@ -46,7 +47,18 @@ func _ready() -> void:
 
 	# 백지 몸통이 실제로 조립되는가
 	var skin: Dictionary = GameState.cat_skin("mycat")
-	_check(not skin.has("sprite"), "mycat is drawn by code, not a sheet sprite")
+	_check(not skin.has("sprite"),
+			"mycat is not one design cat's finished render")
+	# 나만의 캐릭터는 디자인 냐이들의 시트 파츠 그림을 섞어 그린다.
+	var mix: Dictionary = skin.get("mix", {})
+	_check(not mix.is_empty(), "mycat is assembled from sheet part layers")
+	_check(mix.has("Cat_Body_Outline") and mix.has("Cat_Eyes_Color"),
+			"the body and eyes come from a real cat's layers")
+	for layer: String in mix:
+		_check(not CatSprite.find_layer(str(mix[layer]), layer).is_empty(),
+				"layer %s exists on %s" % [layer, mix[layer]])
+	_check(not (skin.get("tints", {}) as Dictionary).is_empty(),
+			"the mix carries its layer tints")
 	_check((skin.get("parts", {}) as Dictionary).has("body_col"),
 			"mycat's blank body has parts")
 	_check(CustomCat.char_parts("custom").get("ear") == "pointy",

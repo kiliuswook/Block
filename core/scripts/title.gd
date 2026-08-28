@@ -6,16 +6,13 @@ const UiKit := preload("res://core/scripts/ui_kit.gd")
 
 const CREAM := UiKit.CREAM
 const GOLD_COL := UiKit.GOLD_DEEP  # 흰 패널 위에서도 읽히는 진한 금색
-const GEM_COL := UiKit.CYAN_DEEP
 const INK := UiKit.INK
 
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
-const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
 const POPUP_SIZE := Vector2(620.0, 812.0)
-const SHOP_TILE := Vector2(200.0, 210.0)
 const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
 		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
@@ -26,6 +23,21 @@ const PICK_FOOTER_H := 258.0
 ## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단만
 ## 지원한다 (스테이지 모드는 LINES 목표 UI가 분할 화면에 들어가지 않는다).
 const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2}
+## 뽑기 화면 — 왼쪽 캡슐 기계와 아래 당첨 트레이 크기.
+const GACHA_MACHINE_W := 300.0
+const GACHA_MACHINE_H := 430.0
+const GACHA_TRAY_H := 192.0
+## 기계 돔 안에 채워 둔 캡슐 자리 (돔 반지름 70 기준 오프셋).
+const DOME_CAPSULES: Array[Vector2] = [
+	Vector2(-52.0, 22.0), Vector2(-16.0, 40.0), Vector2(22.0, 30.0),
+	Vector2(54.0, 12.0), Vector2(-38.0, -14.0), Vector2(2.0, -4.0),
+	Vector2(40.0, -22.0), Vector2(-8.0, -44.0), Vector2(-62.0, -8.0),
+]
+## 캡슐 하나가 굴러 나와 열리기까지의 연출 타이밍 (초).
+const CAPSULE_STEP := 0.13
+const CAPSULE_FALL := 0.34
+const CAPSULE_HOLD := 0.16
+const CAPSULE_OPEN := 0.26
 
 @onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
@@ -62,13 +74,21 @@ var _popup_dex: Button  # 이 냥이의 키캡 도감 열기
 var _popup_cat: Dictionary = {}
 var _customizer: Control
 var _settings: Control
-var _shop: Control
-var _shop_tiles := {}  # accessory id -> preview Control (for redraws)
-var _boost_chips := {}  # boost id -> Button
-var _shop_wallet: Label
-var _gacha_btns: Array[Button] = []  # [1회, 10연차]
-var _gacha_result: Control  # 마지막으로 뽑은 키캡이 깔리는 자리
+var _gacha: Control  # 뽑기 오버레이 (캡슐 가챠)
+var _gacha_wallet: Label
+var _gacha_machine: Control  # 캡슐 뽑기 기계 연출
+var _gacha_tray: Control  # 뽑은 캡슐이 굴러 나오는 당첨 트레이
+var _gacha_btns: Array[Button] = []  # [1개, 10개]
+var _gacha_mode_btns: Array[Button] = []  # [랜덤, 선택]
+var _gacha_pick_ui: Control  # 선택 뽑기용 냥이 칩 판
+var _gacha_chips := {}  # cat id -> 선택 뽑기 칩 Button
+var _gacha_count: Label
+var _gacha_desc: Label
+var _gacha_pick_mode := false  # false = 랜덤 뽑기, true = 선택 뽑기
 var _last_pull: Array = []  # draw_keycaps()가 돌려준 마지막 결과
+var _pull_t := 0.0  # 캡슐 연출 경과 시간
+var _pull_anim := false
+var _spin_t := 0.0  # 기계 손잡이/캡슐 상시 애니메이션
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
 var _players_ui: Control  # 2인 가능 모드에서 PLAY 다음에 뜨는 인원 선택
@@ -124,7 +144,7 @@ func _ready() -> void:
 	_build_mode_select()
 	_build_players_select()
 	_build_menu()
-	_build_shop()
+	_build_gacha()
 	_build_ranks()
 	_build_keycap_dex()
 	_customizer = CAT_CUSTOMIZER.new()
@@ -213,7 +233,7 @@ func _build_menu() -> void:
 	$UI.add_child(play)
 	var cards := [
 		[tr("MENU_CHARACTER"), UiKit.GOLD_DEEP, func() -> void: _open_chars()],
-		[tr("MENU_SHOP"), UiKit.CYAN_DEEP, func() -> void: _open_shop()],
+		[tr("MENU_GACHA"), UiKit.CYAN_DEEP, func() -> void: _open_gacha()],
 		[tr("MENU_RANKING"), UiKit.GOLD_DEEP, func() -> void: _open_ranks()],
 		[tr("MENU_SETTINGS"), UiKit.PURPLE_DEEP, func() -> void: _settings.open()],
 	]
@@ -440,10 +460,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				and event.physical_keycode == KEY_ESCAPE:
 			_settings.close()
 		return
-	if _shop and _shop.visible:
+	if _gacha and _gacha.visible:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
-			_close_shop()
+			_close_gacha()
 		return
 	if _keycap_dex and _keycap_dex.visible:
 		if event is InputEventKey and event.pressed \
@@ -503,174 +523,179 @@ func _unhandled_input(event: InputEvent) -> void:
 				_on_mode_picked(GameState.MODE_ENDLESS)
 
 
-# --- Shop (accessories + run boosts) ------------------------------------------
+# --- 뽑기 (캡슐 가챠) ---------------------------------------------------------
 
 
-## Code-built shop overlay: accessory tiles per slot plus one-run endless
-## boosts. Sized off the viewport so portrait (mobile) and landscape both fit.
-func _build_shop() -> void:
-	_shop = Control.new()
-	_shop.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_shop.visible = false
-	$UI.add_child(_shop)
-	var dim := Button.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
-	for st in ["normal", "hover", "pressed", "focus"]:
-		dim.add_theme_stylebox_override(st, dim_sb)
-	dim.pressed.connect(_close_shop)
-	_shop.add_child(dim)
-	var pw := minf(vw - 60.0, 940.0)
-	var ph := minf(vh - 140.0, 980.0)
-	var panel := PanelContainer.new()
-	panel.position = (Vector2(vw, vh) - Vector2(pw, ph)) / 2.0
-	panel.size = Vector2(pw, ph)
-	panel.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 26, 30.0))
-	_shop.add_child(panel)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 10)
-	panel.add_child(v)
-	var title := Label.new()
-	title.text = tr("SHOP_TITLE")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", INK)
-	v.add_child(title)
-	_shop_wallet = Label.new()
-	_shop_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shop_wallet.add_theme_font_size_override("font_size", 24)
-	_shop_wallet.add_theme_color_override("font_color", GOLD_COL)
-	v.add_child(_shop_wallet)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	v.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 12)
-	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(list)
-	# 키캡 가챠 — 캐릭터 해금·등급업의 유일한 통로라 상점 맨 위에 둔다.
-	list.add_child(_shop_header(tr("SHOP_GACHA")))
-	var gacha_row := HBoxContainer.new()
-	gacha_row.add_theme_constant_override("separation", 14)
-	list.add_child(gacha_row)
-	for n: int in [1, GameState.KEYCAP_GACHA_BULK]:
+## 뽑기 오버레이 — 파는 것은 키캡 캡슐 하나뿐이고, 뽑는 방식이 둘이다.
+##  · 랜덤 뽑기: 전체 냥이 대상
+##  · 선택 뽑기: 고른 KEYCAP_PICK_SIZE마리만 캡슐에 들어간다 (값은 비싸다)
+## 연출은 동전 넣고 손잡이를 돌리는 장난감 캡슐 뽑기 기계.
+func _build_gacha() -> void:
+	var pw := minf(vw - 60.0, 1000.0)
+	var ph := minf(vh - 90.0, 860.0)
+	_gacha = _make_overlay(tr("SHOP_TITLE"), func() -> void: _close_gacha(),
+			Vector2(pw, ph))
+	var body: Control = _gacha.get_meta("body")
+	var bw := body.size.x
+	var bh := body.size.y
+	_gacha_wallet = Label.new()
+	_gacha_wallet.size = Vector2(bw, 30.0)
+	_gacha_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gacha_wallet.add_theme_font_size_override("font_size", 24)
+	_gacha_wallet.add_theme_color_override("font_color", GOLD_COL)
+	body.add_child(_gacha_wallet)
+	var top_y := 40.0
+	var tray_y := bh - GACHA_TRAY_H
+	# 왼쪽 — 캡슐 뽑기 기계 (연출 전담, 클릭은 받지 않는다).
+	var mach_h := minf(GACHA_MACHINE_H, tray_y - top_y - 12.0)
+	_gacha_machine = Control.new()
+	_gacha_machine.position = Vector2(0.0,
+			top_y + (tray_y - top_y - 12.0 - mach_h) / 2.0)
+	_gacha_machine.size = Vector2(GACHA_MACHINE_W, mach_h)
+	_gacha_machine.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gacha_machine.draw.connect(func() -> void: _draw_machine(_gacha_machine))
+	body.add_child(_gacha_machine)
+	# 오른쪽 — 뽑기 종류 · 냥이 선택 · 뽑기 버튼.
+	var rx := GACHA_MACHINE_W + 26.0
+	var rw := bw - rx
+	var half := (rw - 12.0) / 2.0
+	for i in 2:
+		var pick := i == 1
 		var b := Button.new()
-		b.custom_minimum_size = Vector2((pw - 88.0) / 2.0, 74.0)
+		b.text = tr("SHOP_GACHA_PICK" if pick else "SHOP_GACHA_RANDOM")
+		b.position = Vector2(rx + i * (half + 12.0), top_y)
+		b.size = Vector2(half, 56.0)
+		b.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_gacha_pick_mode = pick
+			_refresh_gacha())
+		body.add_child(b)
+		_gacha_mode_btns.append(b)
+	_gacha_desc = Label.new()
+	_gacha_desc.position = Vector2(rx, top_y + 62.0)
+	_gacha_desc.size = Vector2(rw, 46.0)
+	_gacha_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_gacha_desc.add_theme_font_size_override("font_size", 18)
+	_gacha_desc.add_theme_color_override("font_color", UiKit.MUTED)
+	body.add_child(_gacha_desc)
+	# 냥이 칩 — 선택 뽑기에서는 고르는 판이고, 랜덤 뽑기에서는 이번 풀 미리보기다
+	# (칩을 누르면 그대로 선택 뽑기로 넘어간다).
+	var pick_y := top_y + 112.0
+	var btn_y := tray_y - 92.0
+	# 냥이가 늘어나도(목표 30마리) 칩 크기는 그대로 두고 세로로 스크롤한다.
+	_gacha_pick_ui = ScrollContainer.new()
+	_gacha_pick_ui.position = Vector2(rx, pick_y)
+	_gacha_pick_ui.size = Vector2(rw, btn_y - pick_y - 34.0)
+	_gacha_pick_ui.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.add_child(_gacha_pick_ui)
+	var grid := Control.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_gacha_pick_ui.add_child(grid)
+	var cats := GameState.keycap_cats()
+	var per_row := maxi(1, int((rw - 12.0) / 124.0))
+	var chip := Vector2((rw - 12.0 * (per_row - 1) - 14.0) / per_row, 126.0)
+	var rows := int(ceilf(cats.size() / float(per_row)))
+	grid.custom_minimum_size = Vector2(rw - 14.0, rows * (chip.y + 10.0) - 10.0)
+	for i in cats.size():
+		var cat: Dictionary = cats[i]
+		var b := Button.new()
+		b.position = Vector2((i % per_row) * (chip.x + 12.0),
+				(i / per_row) * (chip.y + 10.0))
+		b.size = chip
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		var face := Control.new()
+		face.set_anchors_preset(Control.PRESET_FULL_RECT)
+		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		face.draw.connect(func() -> void: _draw_gacha_chip(face, cat))
+		b.add_child(face)
+		b.pressed.connect(func() -> void: _toggle_gacha_pick(str(cat.id)))
+		grid.add_child(b)
+		_gacha_chips[str(cat.id)] = b
+	_gacha_count = Label.new()
+	_gacha_count.position = Vector2(rx, btn_y - 32.0)
+	_gacha_count.size = Vector2(rw, 28.0)
+	_gacha_count.add_theme_font_size_override("font_size", 19)
+	_gacha_count.add_theme_color_override("font_color", GOLD_COL)
+	_gacha_count.clip_text = true
+	body.add_child(_gacha_count)
+	# 1개 / 10개 뽑기.
+	for i in 2:
+		var n: int = 1 if i == 0 else GameState.KEYCAP_GACHA_BULK
+		var b := Button.new()
+		b.position = Vector2(rx + i * (half + 12.0), btn_y)
+		b.size = Vector2(half, 82.0)
 		b.pressed.connect(func() -> void: _on_gacha(n))
-		UiKit.btn_primary(b, 22)
-		gacha_row.add_child(b)
+		UiKit.btn_primary(b, 24)
+		body.add_child(b)
 		_gacha_btns.append(b)
-	_gacha_result = Control.new()
-	_gacha_result.custom_minimum_size = Vector2(pw - 60.0, 118.0)
-	_gacha_result.draw.connect(func() -> void: _draw_gacha_result(_gacha_result))
-	list.add_child(_gacha_result)
-	var per_row := maxi(1, int((pw - 60.0 + TILE_GAP) / (SHOP_TILE.x + TILE_GAP)))
-	for slot: Array in [["head", "SHOP_HEAD"], ["neck", "SHOP_NECK"]]:
-		list.add_child(_shop_header(tr(str(slot[1]))))
-		var items := GameState.ACCESSORIES.filter(
-				func(a: Dictionary) -> bool: return a.slot == slot[0])
-		var row: HBoxContainer = null
-		for i in items.size():
-			if i % per_row == 0:
-				row = HBoxContainer.new()
-				row.add_theme_constant_override("separation", int(TILE_GAP))
-				list.add_child(row)
-			row.add_child(_make_shop_tile(items[i]))
-	list.add_child(_shop_header(tr("SHOP_BOOSTS")))
-	var boost_row := HBoxContainer.new()
-	boost_row.add_theme_constant_override("separation", 14)
-	list.add_child(boost_row)
-	for b: Dictionary in GameState.BOOSTS:
-		var chip := Button.new()
-		chip.custom_minimum_size = Vector2((pw - 88.0) / 3.0, 128.0)
-		chip.pressed.connect(_on_boost_chip.bind(b))
-		boost_row.add_child(chip)
-		_boost_chips[b.id] = chip
-	var close := Button.new()
-	close.text = tr("SET_CLOSE")
-	close.custom_minimum_size = Vector2(200.0, 56.0)
-	UiKit.btn_ghost(close, 22)
-	close.pressed.connect(_close_shop)
-	var close_wrap := CenterContainer.new()
-	close_wrap.add_child(close)
-	v.add_child(close_wrap)
+	# 아래 — 캡슐이 굴러 나오는 당첨 트레이.
+	_gacha_tray = Control.new()
+	_gacha_tray.position = Vector2(0.0, tray_y)
+	_gacha_tray.size = Vector2(bw, GACHA_TRAY_H)
+	_gacha_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gacha_tray.clip_contents = true  # 튀어오른 뚜껑이 트레이 밖으로 나가지 않게
+	_gacha_tray.draw.connect(func() -> void: _draw_gacha_tray(_gacha_tray))
+	body.add_child(_gacha_tray)
 
 
-func _shop_header(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", 22)
-	l.add_theme_color_override("font_color", UiKit.MUTED)
-	return l
-
-
-func _make_shop_tile(acc: Dictionary) -> Button:
-	var b := Button.new()
-	b.custom_minimum_size = SHOP_TILE
-	var equipped: bool = GameState.acc_head == acc.id or GameState.acc_neck == acc.id
-	UiKit.style_button(b, Color("fff1cf") if equipped else UiKit.WHITE,
-			UiKit.GOLD_DEEP if equipped else Color("c9c6d0"), INK, 18, 16)
-	b.pressed.connect(_on_shop_item.bind(acc))
-	var face := Control.new()
-	face.set_anchors_preset(Control.PRESET_FULL_RECT)
-	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	face.draw.connect(func() -> void: _draw_shop_tile(face, acc))
-	b.add_child(face)
-	_shop_tiles[acc.id] = face
-	return b
-
-
-func _draw_shop_tile(ci: Control, acc: Dictionary) -> void:
-	# Preview: the cream cat modeling the item.
-	var skin := GameState.cat_skin("cream")
-	skin["acc"] = [acc]
-	Player.paint_cat(ci, Vector2(SHOP_TILE.x / 2.0, 84.0), 64.0, 0.0, true, false, skin)
+## 선택 뽑기의 냥이 칩 — 얼굴 + 이름, 고른 냥이는 금색 체크.
+func _draw_gacha_chip(ci: Control, cat: Dictionary) -> void:
+	var id := str(cat.id)
+	var unlocked: bool = GameState.is_unlocked(id)
+	var center := Vector2(ci.size.x / 2.0, ci.size.y * 0.36)
+	var skin: Dictionary = GameState.cat_skin(id)
+	if not unlocked:
+		skin = GameState.cat_shadow_skin(id)
+	Player.paint_cat(ci, center, ci.size.y * 0.46, 0.0, true, false, skin)
 	var font := ThemeDB.fallback_font
-	_draw_center_text(ci, font, tr(str(acc.name)), 152.0, 20, INK, SHOP_TILE.x)
-	var owned: bool = acc.id in GameState.acc_owned
-	var equipped: bool = GameState.acc_head == acc.id or GameState.acc_neck == acc.id
-	if equipped:
-		_draw_center_text(ci, font, tr("CHAR_EQUIPPED"), 184.0, 18, GOLD_COL, SHOP_TILE.x)
-	elif owned:
-		_draw_center_text(ci, font, tr("SHOP_OWNED"), 184.0, 16,
-				UiKit.MUTED, SHOP_TILE.x)
-	elif acc.price.type == "gold":
-		_draw_center_text(ci, font, "%d G" % acc.price.amount, 184.0, 18, GOLD_COL,
-				SHOP_TILE.x)
-	else:
-		_draw_center_text(ci, font, "◆ %d" % acc.price.amount, 184.0, 18, GEM_COL,
-				SHOP_TILE.x)
+	_draw_center_text(ci, font, tr(str(cat.name)), ci.size.y - 30.0, 17,
+			INK if unlocked else UiKit.MUTED, ci.size.x)
+	_draw_center_text(ci, font, "▦ %d / 26" % GameState.keycap_ring(id),
+			ci.size.y - 10.0, 14, UiKit.MUTED, ci.size.x)
+	if id in GameState.gacha_pick:
+		# 고른 냥이 — 우상단에 금색 체크 뱃지.
+		var at := Vector2(ci.size.x - 18.0, 18.0)
+		ci.draw_circle(at, 13.0, GOLD_COL)
+		ci.draw_polyline(PackedVector2Array([at + Vector2(-6.0, 0.0),
+				at + Vector2(-2.0, 5.0), at + Vector2(6.0, -6.0)]), UiKit.WHITE, 3.0)
 
 
-func _on_shop_item(acc: Dictionary) -> void:
-	if acc.id in GameState.acc_owned:
+func _toggle_gacha_pick(id: String) -> void:
+	var pick: Array = GameState.gacha_pick.duplicate()
+	if id in pick:
+		pick.erase(id)
 		Sfx.play("click")
-		GameState.toggle_acc(str(acc.id))
-	elif GameState.try_buy_acc(str(acc.id)):
-		Sfx.play("buy")
-		GameState.toggle_acc(str(acc.id))  # wear it right away
-		_show_toast(tr("SHOP_BOUGHT").format({"name": tr(str(acc.name))}), CREAM)
-	else:
+	elif pick.size() >= GameState.KEYCAP_PICK_SIZE:
 		Sfx.play("error")
-		_show_toast(tr("SHOP_NO_GOLD") if acc.price.type == "gold" else tr("SHOP_NO_GEMS"),
-				Color(1.0, 0.55, 0.5))
+		_show_toast(tr("SHOP_GACHA_FULL").format(
+				{"max": GameState.KEYCAP_PICK_SIZE}), Color(1.0, 0.55, 0.5))
 		return
-	_refresh_shop()
-	_refresh_currency()
-	_refresh_tiles()
+	else:
+		pick.append(id)
+		Sfx.play("buy")
+	GameState.gacha_pick = pick
+	GameState.save_game()
+	# 선택 뽑기 칩을 건드렸다는 건 그 모드를 쓰겠다는 뜻이다.
+	_gacha_pick_mode = true
+	_refresh_gacha()
 
 
-## 키캡 n장 뽑기. 결과는 아래 띠에 깔리고, 등급이 오른 냥이는 토스트로 알린다.
+## 캡슐 n개 뽑기. 결과는 아래 트레이에 캡슐로 굴러 나와 열린다.
 func _on_gacha(n: int) -> void:
-	var pull := GameState.draw_keycaps(n)
+	var pick: Array = GameState.gacha_pick if _gacha_pick_mode else []
+	if _gacha_pick_mode and pick.size() < GameState.KEYCAP_PICK_SIZE:
+		Sfx.play("error")
+		_show_toast(tr("SHOP_GACHA_PICK_NEED").format(
+				{"n": GameState.KEYCAP_PICK_SIZE}), Color(1.0, 0.55, 0.5))
+		return
+	var pull := GameState.draw_keycaps(n, pick)
 	if pull.is_empty():
 		Sfx.play("error")
 		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
 		return
 	_last_pull = pull
-	_gacha_result.queue_redraw()
+	_pull_t = 0.0
+	_pull_anim = true
 	# 등급업(=해금 포함)이 있으면 그쪽을 알리고, 아니면 마지막 한 장을 알린다.
 	var announced := false
 	for hit: Dictionary in pull:
@@ -692,76 +717,237 @@ func _on_gacha(n: int) -> void:
 		_show_toast(tr("KEYCAP_NEW" if last.fresh else "KEYCAP_DUP").format(
 				{"name": cat_name, "letter": str(last.letter)}),
 				GOLD_COL if last.fresh else UiKit.MUTED)
-	_refresh_shop()
+	_refresh_gacha()
 	_refresh_currency()
 	_refresh_tiles()
 	if _keycap_dex.visible:
 		_refresh_keycap_dex()
 
 
-## 마지막 뽑기 결과 — 키캡 한 줄과 그 아래 냥이 이름. 새로 채운 글자는 별표.
-func _draw_gacha_result(ci: Control) -> void:
+# --- 뽑기 기계 그리기 ----------------------------------------------------------
+
+
+## 돔 + 몸통 + 손잡이 + 배출구. 돔 안의 캡슐 색은 이번 뽑기 풀의 냥이 색이라,
+## 선택 뽑기로 냥이를 고르면 기계 안 캡슐 색도 그 냥이들로 바뀐다.
+func _draw_machine(ci: Control) -> void:
+	var w := ci.size.x
+	var h := ci.size.y
+	var dome_r := minf(w * 0.38, h * 0.3)
+	var dome_c := Vector2(w / 2.0, dome_r + 14.0)
+	var body_top := dome_c.y + dome_r * 0.62
+	var pool := _gacha_pool_colors()
+	# 발밑 그림자.
+	UiKit.ellipse(ci, Vector2(w / 2.0, h - 6.0), Vector2(w * 0.36, 10.0),
+			Color(0.2, 0.35, 0.45, 0.16))
+	# 몸통 — 통통한 하늘색 상자.
+	var body := Rect2(w * 0.13, body_top, w * 0.74, h - body_top - 12.0)
+	_round_box(ci, body, UiKit.CYAN, 24)
+	_round_box(ci, Rect2(body.position + Vector2(0.0, body.size.y - 26.0),
+			Vector2(body.size.x, 26.0)), UiKit.CYAN_DEEP, 24)
+	# 돔 — 반투명 플라스틱 안에 캡슐이 가득.
+	ci.draw_circle(dome_c, dome_r, Color(1.0, 1.0, 1.0, 0.82))
+	for i in DOME_CAPSULES.size():
+		var off: Vector2 = DOME_CAPSULES[i]
+		# 뽑는 동안에는 캡슐이 통 안에서 통통 튄다.
+		var jig := 3.0 if _pull_anim else 1.2
+		var at := dome_c + off * dome_r / 70.0
+		at += Vector2(sin(_spin_t * 3.4 + i) * jig, cos(_spin_t * 4.1 + i * 1.7) * jig)
+		_draw_capsule(ci, at, dome_r * 0.17, pool[i % pool.size()], 0.0)
+	ci.draw_arc(dome_c, dome_r, 0.0, TAU, 48, INK, 5.0)
+	# 돔에 얹힌 하이라이트 — 빛은 항상 위에서.
+	ci.draw_arc(dome_c, dome_r * 0.78, PI * 1.15, PI * 1.55, 16,
+			Color(1, 1, 1, 0.75), 7.0)
+	# 손잡이 — 뽑는 동안 힘차게 돈다.
+	var knob := Vector2(w / 2.0, body_top + body.size.y * 0.34)
+	var kr := minf(28.0, body.size.y * 0.22)
+	ci.draw_circle(knob, kr, UiKit.WHITE)
+	ci.draw_arc(knob, kr, 0.0, TAU, 32, INK, 4.0)
+	var spin := _spin_t * (7.0 if _pull_anim else 0.6)
+	for i in 2:
+		var a := spin + PI * i / 2.0
+		var d := Vector2(cos(a), sin(a)) * kr * 0.62
+		ci.draw_line(knob - d, knob + d, INK, 6.0)
+	# 동전 투입구 — 손잡이 옆 작은 슬롯.
+	var slot_w := body.size.x * 0.1
+	_round_box(ci, Rect2(knob.x + kr + 14.0, knob.y - 9.0, slot_w, 18.0),
+			Color(0.16, 0.2, 0.26), 6)
+	# 배출구.
+	var chute := Rect2(w / 2.0 - body.size.x * 0.24,
+			body_top + body.size.y * 0.62, body.size.x * 0.48,
+			body.size.y * 0.3)
+	_round_box(ci, chute, Color(0.16, 0.2, 0.26), 14)
+	ci.draw_rect(Rect2(chute.position + Vector2(8.0, 6.0),
+			Vector2(chute.size.x - 16.0, 5.0)), Color(1, 1, 1, 0.18))
+
+
+## 이번 뽑기에 들어가는 냥이들의 캡슐 색 (풀이 비면 기본 팔레트).
+func _gacha_pool_colors() -> Array:
+	var pick: Array = GameState.gacha_pick if _gacha_pick_mode else []
+	var out: Array = []
+	for id: String in GameState.gacha_pool(pick):
+		out.append(GameState.get_cat(id).ear)
+	if out.is_empty():
+		out = [UiKit.GOLD, UiKit.PINK, UiKit.CYAN, UiKit.PURPLE]
+	return out
+
+
+## 잉크 외곽선을 두른 둥근 상자 (기계 부품용).
+func _round_box(ci: CanvasItem, r: Rect2, col: Color, radius: int) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(radius)
+	sb.set_border_width_all(4)
+	sb.border_color = INK
+	ci.draw_style_box(sb, r)
+
+
+## 캡슐 한 알. open(0~1)이 1로 갈수록 위 뚜껑이 튀어오르며 열린다.
+func _draw_capsule(ci: CanvasItem, c: Vector2, r: float, col: Color,
+		open_amt: float) -> void:
+	var bottom := PackedVector2Array()
+	for i in 17:
+		var a := PI * i / 16.0
+		bottom.append(c + Vector2(cos(a), sin(a)) * r)
+	ci.draw_colored_polygon(bottom, col)
+	ci.draw_polyline(bottom, INK, maxf(1.5, r * 0.1))
+	# 뚜껑 — 반투명 플라스틱. 열리면 위로 튀며 기울어진다.
+	var lift := Vector2(r * 0.55 * open_amt, -r * 1.25 * open_amt)
+	var rot := open_amt * 0.7
+	var lid := PackedVector2Array()
+	for i in 17:
+		var a := PI + PI * i / 16.0
+		var p := Vector2(cos(a), sin(a)) * r
+		lid.append(c + p.rotated(rot) + lift)
+	ci.draw_colored_polygon(lid, Color(1.0, 1.0, 1.0, 0.9 - 0.5 * open_amt))
+	ci.draw_polyline(lid, Color(INK, 1.0 - 0.55 * open_amt), maxf(1.5, r * 0.1))
+	if open_amt < 0.5:
+		# 뚜껑 위 하이라이트.
+		var hl := c + lift + Vector2(-r * 0.34, -r * 0.42).rotated(rot)
+		UiKit.ellipse(ci, hl, Vector2(r * 0.24, r * 0.15),
+				Color(1, 1, 1, 0.85 * (1.0 - open_amt * 2.0)))
+
+
+# --- 당첨 트레이 --------------------------------------------------------------
+
+
+## 뽑은 캡슐이 하나씩 굴러 나와 착지하고, 잠시 뒤 뚜껑이 열리며 키캡이 나온다.
+func _draw_gacha_tray(ci: Control) -> void:
+	var w := ci.size.x
+	var h := ci.size.y
+	_round_box(ci, Rect2(0.0, 0.0, w, h), Color("eef6fb"), 20)
 	if _last_pull.is_empty():
-		UiKit.center_text(ci, tr("SHOP_GACHA_EMPTY"), 62.0, ci.size.x, 19,
+		UiKit.center_text(ci, tr("SHOP_GACHA_EMPTY"), h / 2.0 + 8.0, w, 19,
 				UiKit.MUTED)
 		return
 	var n := _last_pull.size()
-	var gap := 8.0
-	var cap := minf(74.0, (ci.size.x - gap * (n - 1)) / n)
-	var x := (ci.size.x - (cap * n + gap * (n - 1))) / 2.0
+	var cols := mini(n, 5)
+	var rows := int(ceilf(n / float(cols)))
+	var cw := minf(120.0, (w - 28.0) / cols)
+	var ch := (h - 20.0) / rows
+	var r := minf(cw * 0.4, (ch - 30.0) / 2.0)
+	var x0 := (w - cw * cols) / 2.0
+	var font := ThemeDB.fallback_font
 	for i in n:
 		var hit: Dictionary = _last_pull[i]
-		var at := Rect2(x + i * (cap + gap), 6.0, cap, cap)
-		EscapeBoard.paint_keycap(ci, at, str(hit.letter), 0.6, false, str(hit.cat))
+		var col := i % cols
+		var row := i / cols
+		var slot := Vector2(x0 + cw * (col + 0.5), 12.0 + ch * (row + 0.5) - 8.0)
+		var t := _pull_t - i * CAPSULE_STEP
+		if t <= 0.0:
+			continue
+		# ① 배출구에서 굴러떨어져 착지 ② 잠깐 멈춤 ③ 뚜껑이 열린다
+		var fall := minf(t / CAPSULE_FALL, 1.0)
+		var drop := 1.0 - pow(1.0 - fall, 3.0)
+		var at := Vector2(slot.x, lerpf(slot.y - h - r, slot.y, drop))
+		var open_amt := clampf((t - CAPSULE_FALL - CAPSULE_HOLD) / CAPSULE_OPEN,
+				0.0, 1.0)
+		# 착지 순간 살짝 눌렸다 펴진다.
+		var squash := 0.0 if fall < 1.0 else maxf(0.0,
+				1.0 - (t - CAPSULE_FALL) / 0.16)
+		var rr := r * (1.0 + 0.12 * squash)
+		UiKit.ellipse(ci, Vector2(at.x, slot.y + r * 0.92),
+				Vector2(r * 0.72 * drop, r * 0.2), Color(0.2, 0.35, 0.45, 0.18))
+		var cat_col: Color = GameState.get_cat(str(hit.cat)).ear
+		_draw_capsule(ci, at, rr, cat_col, open_amt)
+		if open_amt <= 0.0:
+			continue
+		# 키캡이 캡슐에서 솟아오른다 (살짝 오버슛).
+		var pop := open_amt * (1.0 + 0.18 * sin(open_amt * PI))
+		var cap := r * 1.5 * pop
+		var cap_at := Rect2(at.x - cap / 2.0, at.y - cap * 0.62 - r * 0.5 * open_amt,
+				cap, cap)
+		EscapeBoard.paint_keycap(ci, cap_at, str(hit.letter), 0.6, false,
+				str(hit.cat))
 		if not hit.fresh:  # 중복은 흐리게 눌러 둔다
-			ci.draw_rect(at, Color(0.09, 0.13, 0.18, 0.42))
+			ci.draw_rect(cap_at, Color(0.09, 0.13, 0.18, 0.38))
+		if open_amt < 1.0:
+			continue
 		var label := tr(str(GameState.get_cat(str(hit.cat)).name))
-		UiKit.center_text(ci, label, at.end.y + 22.0, cap + gap, 14,
-				GOLD_COL if hit.fresh else UiKit.MUTED, at.position.x - gap / 2.0)
+		if hit.grade_up:
+			label = "★ " + label
+		var size := UiKit.fit_size(font, label, cw - 8.0, 15)
+		var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		ci.draw_string(font, Vector2(at.x - tw / 2.0, slot.y + r + 16.0), label,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+				GOLD_COL if hit.fresh else UiKit.MUTED)
 
 
-func _on_boost_chip(boost: Dictionary) -> void:
-	var had: bool = boost.id in GameState.pending_boosts
-	if not GameState.toggle_boost(str(boost.id)):
-		Sfx.play("error")
-		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
+func _process(delta: float) -> void:
+	if _gacha == null or not _gacha.visible:
 		return
-	Sfx.play("click" if had else "buy")
-	_refresh_shop()
-	_refresh_currency()
+	# 기계는 늘 살짝 움직이고, 뽑는 동안에는 캡슐이 굴러 나온다.
+	_spin_t += delta
+	_gacha_machine.queue_redraw()
+	if not _pull_anim:
+		return
+	_pull_t += delta
+	_gacha_tray.queue_redraw()
+	var total := (_last_pull.size() - 1) * CAPSULE_STEP
+	total += CAPSULE_FALL + CAPSULE_HOLD + CAPSULE_OPEN
+	if _pull_t > total:
+		_pull_anim = false
 
 
-func _refresh_shop() -> void:
-	_shop_wallet.text = tr("SHOP_WALLET").format(
+func _refresh_gacha() -> void:
+	_gacha_wallet.text = tr("SHOP_WALLET").format(
 			{"gold": GameState.gold, "gems": GameState.gems})
-	for id: String in _shop_tiles:
-		var face: Control = _shop_tiles[id]
-		face.queue_redraw()
-		var eq: bool = GameState.acc_head == id or GameState.acc_neck == id
-		UiKit.style_button(face.get_parent() as Button,
-				Color("fff1cf") if eq else UiKit.WHITE,
-				UiKit.GOLD_DEEP if eq else Color("c9c6d0"), INK, 18, 16)
+	for i in _gacha_mode_btns.size():
+		UiKit.btn_chip(_gacha_mode_btns[i], _gacha_pick_mode == (i == 1), 22)
+	var picked: int = GameState.gacha_pick.size()
+	if _gacha_pick_mode:
+		_gacha_desc.text = tr("SHOP_GACHA_PICK_DESC").format(
+				{"n": GameState.KEYCAP_PICK_SIZE,
+				"pct": int(round((GameState.KEYCAP_PICK_MARKUP - 1.0) * 100.0))})
+		_gacha_count.text = tr("SHOP_GACHA_PICK_COUNT").format(
+				{"n": picked, "max": GameState.KEYCAP_PICK_SIZE})
+		_gacha_count.add_theme_color_override("font_color", GOLD_COL)
+	else:
+		_gacha_desc.text = tr("SHOP_GACHA_RANDOM_DESC")
+		_gacha_count.text = tr("SHOP_GACHA_RANDOM_HINT")
+		_gacha_count.add_theme_color_override("font_color", UiKit.MUTED)
+	for id: String in _gacha_chips:
+		var b: Button = _gacha_chips[id]
+		var on: bool = id in GameState.gacha_pick
+		UiKit.style_button(b, Color("fff1cf") if on else UiKit.WHITE,
+				UiKit.GOLD_DEEP if on else Color("c9c6d0"), INK, 18, 16)
+		(b.get_child(0) as Control).queue_redraw()
 	for i in _gacha_btns.size():
 		var n: int = 1 if i == 0 else GameState.KEYCAP_GACHA_BULK
 		_gacha_btns[i].text = tr("SHOP_GACHA_DRAW").format(
-				{"n": n, "price": GameState.keycap_price(n)})
-	_gacha_result.queue_redraw()
-	for b: Dictionary in GameState.BOOSTS:
-		var chip: Button = _boost_chips[b.id]
-		var pending: bool = b.id in GameState.pending_boosts
-		chip.text = "%s  ·  %d G\n%s\n%s" % [tr(b.name), b.price, tr(b.desc),
-				tr("SHOP_BOOST_READY") if pending else tr("SHOP_BOOST_BUY")]
-		UiKit.btn_chip(chip, pending, 20)
+				{"n": n, "price": GameState.keycap_price(n, _gacha_pick_mode)})
+	_gacha_machine.queue_redraw()
+	_gacha_tray.queue_redraw()
 
 
-func _open_shop() -> void:
-	_raise(_shop)
-	_refresh_shop()
-	_shop.visible = true
+func _open_gacha() -> void:
+	_raise(_gacha)
+	_refresh_gacha()
+	_gacha.visible = true
 
 
-func _close_shop() -> void:
-	_shop.visible = false
+func _close_gacha() -> void:
+	_gacha.visible = false
+	_pull_anim = false
 	queue_redraw()  # title cat may have changed outfit
 
 

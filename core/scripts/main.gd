@@ -322,7 +322,7 @@ func _on_game_over() -> void:
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record, earned, cost, endless, show_skip,
+			death_popup.open(stats, was_record, earned, cost, show_skip,
 					not picnic, tr("POP_PICNIC_END") if picnic else "",
 					tr("POP_CONTINUE_LEVEL").format({"level": board.level})
 					if classic else ""))

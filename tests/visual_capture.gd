@@ -28,8 +28,26 @@ func _ready() -> void:
 				inst._open_pick(2))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_shop.png",
-			func(inst: Node) -> void: inst._open_shop())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha.png",
+			func(inst: Node) -> void: inst._open_gacha())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pick.png",
+			func(inst: Node) -> void:
+				inst._gacha_pick_mode = true
+				inst._open_gacha())
+	# 10연차 캡슐이 굴러 나오는 중간 프레임. 뽑기는 진짜 저장을 건드리므로
+	# 지갑·키캡을 스냅샷 떠 두고 캡처가 끝나면 그대로 되돌린다.
+	var gold_before := GameState.gold
+	var caps_before: Dictionary = GameState.keycaps.duplicate(true)
+	GameState.gold = 9999
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pull.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._on_gacha(10)
+				inst._pull_t = 1.15
+				inst._gacha_tray.queue_redraw())
+	GameState.gold = gold_before
+	GameState.keycaps = caps_before
+	GameState.save_game()
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
 	var saved_caps: Dictionary = GameState.keycaps.duplicate()
@@ -39,17 +57,7 @@ func _ready() -> void:
 	GameState.keycaps = saved_caps
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_custom.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cream")))
-	var saved_custom: Dictionary = GameState.cat_custom.duplicate(true)
-	GameState.cat_custom = {"cream": {"body": 8, "ear": 9, "eye_col": 6, "pad_col": 3}}
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer.png",
-			func(inst: Node) -> void: inst._customizer.open("cream"))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_customizer_eyes.png",
-			func(inst: Node) -> void:
-				inst._customizer.open("cream")
-				inst._customizer._cur = 3  # 눈 색 탭 — 색 견본 그리드 확인용
-				inst._customizer._refresh())
-	GameState.cat_custom = saved_custom
-	# 나만의 캐릭터 — 슬롯 팝업 + 잠긴 파츠가 섞인 꾸미기 화면(눈 탭).
+	# 나만의 캐릭터 (꾸미기는 이 슬롯 전용) — 슬롯 팝업 + 잠긴 파츠가 섞인 꾸미기 화면(눈 탭).
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_popup.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("mycat")))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_custom.png",
@@ -57,7 +65,7 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_eyes.png",
 			func(inst: Node) -> void:
 				inst._customizer.open("mycat")
-				inst._customizer._cur = 4  # 눈 탭 — 잠긴 파츠 실루엣 확인용
+				inst._customizer._cur = 5  # 눈 칩 — 모양+색을 한 패널에서 확인
 				inst._customizer._refresh())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
@@ -158,8 +166,8 @@ func _ready() -> void:
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
-	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_shop.png",
-			func(inst: Node) -> void: inst._open_shop())
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_gacha.png",
+			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_pick.png",
 			func(inst: Node) -> void:
 				inst._pick_mode = GameState.MODE_CLASSIC
@@ -169,7 +177,7 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
 	GameState.keycaps = saved_caps
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
-			func(inst: Node) -> void: inst._customizer.open("cream"))
+			func(inst: Node) -> void: inst._customizer.open("mycat"))
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",

@@ -13,6 +13,9 @@ const CustomCat := preload("res://core/scripts/custom_cat.gd")
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const CREAM := Color("f4e3c8")
 const SCAN_TIME := 1.4  # 열릴 때 유전자 스캔 연출 길이(초)
+const TAB_W := 96.0  # 부위 칩 크기
+const TAB_H := 118.0
+const CLOSE_UP := 82.0  # 칩 안 부위 클로즈업 사각형 한 변
 
 var _cat_id := "cream"  # 지금 꾸미는 중인 캐릭터
 var _player := 1  # 꾸미는 자리 (1 = P1, 2 = P2)
@@ -23,11 +26,12 @@ var _portrait := false
 var _pv_rect := Rect2()  # 프리뷰(무대) 영역
 var _preview: Control
 var _tab_btns: Array[Button] = []
+var _tab_faces: Array[Control] = []  # 칩의 클로즈업 면
 var _tabs: HFlowContainer
-var _parts: Array[Dictionary] = []  # 이 캐릭터에 실제로 적용되는 부위 탭
+var _groups: Array[Dictionary] = []  # 이 캐릭터에 적용되는 부위 묶음
 var _preset_tab := false  # 0번 "원본 냥이" 프리셋 탭을 쓰는가
 var _custom_slot := false  # "나만의 캐릭터"인가 — 파츠마다 해금이 걸린다
-var _grid: GridContainer
+var _panel: VBoxContainer
 var _grid_w := 900.0
 var _flavor := ""
 var _flavor_col := Color(1, 1, 1, 0.8)
@@ -68,21 +72,23 @@ func _ready() -> void:
 	_grid_w = rw
 	_tabs = HFlowContainer.new()
 	_tabs.position = Vector2(rx, ry)
-	_tabs.size = Vector2(rw, 150.0)
-	_tabs.add_theme_constant_override("h_separation", 7)
-	_tabs.add_theme_constant_override("v_separation", 7)
+	_tabs.size = Vector2(rw, TAB_H * 2.0 + 10.0)
+	_tabs.add_theme_constant_override("h_separation", 8)
+	_tabs.add_theme_constant_override("v_separation", 8)
 	add_child(_tabs)
 	var bar_y := vs.y - 86.0
+	var top := ry + TAB_H * 2.0 + 24.0
 	var scroll := ScrollContainer.new()
-	scroll.position = Vector2(rx, ry + 158.0)
-	scroll.size = Vector2(rw, bar_y - (ry + 158.0) - 12.0)
+	scroll.position = Vector2(rx, top)
+	scroll.size = Vector2(rw, bar_y - top - 12.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
-	_grid = GridContainer.new()
-	_grid.add_theme_constant_override("h_separation", 10)
-	_grid.add_theme_constant_override("v_separation", 10)
-	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_grid)
+	# 부위 하나의 모양과 색을 한 패널에 쌓는다 — 둘을 같은 뎁스에 둔다.
+	_panel = VBoxContainer.new()
+	_panel.add_theme_constant_override("separation", 16)
+	_panel.custom_minimum_size = Vector2(rw, 0.0)
+	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_panel)
 	# 하단 액션 바: 운명의 주사위 / 공장 초기화 / 출격.
 	var bar := HBoxContainer.new()
 	bar.position = Vector2(rx, bar_y)
@@ -120,6 +126,9 @@ func _process(delta: float) -> void:
 
 
 func open(cat_id: String, player := 1) -> void:
+	# 꾸미기는 "나만의 캐릭터" 슬롯 전용 — 디자인 냥이는 컨셉 시트 원본 그대로.
+	if not GameState.is_custom_cat(cat_id):
+		return
 	_cat_id = cat_id
 	_player = player
 	_cur = 0
@@ -141,40 +150,78 @@ func _char_id() -> String:
 	return str(GameState.get_cat(_cat_id).get("char", "char01"))
 
 
-## 이 캐릭터에 실제로 반영되는 부위만 탭으로 세운다.
-## 컨셉 시트 그림으로 그리는 냥이는 파츠 레이어에 색을 입히는 것만 가능하고,
-## 아직 시트 그림이 없는 냥이는 코드 렌더라 전체 카탈로그를 다 쓸 수 있다.
-## 나만의 캐릭터는 그 중에서도 디자인 냥이들에게서 빌려 온 파츠만 쓴다.
+## 이 캐릭터에 실제로 반영되는 부위만 칩으로 세운다.
+## 시트 그림으로 그리는 냥이는 레이어 색만, 나만의 캐릭터는 디자인 냥이에게서
+## 빌려 온 파츠만 다룬다. 부위는 CustomCat.GROUPS 단위 — 모양과 색이 한 칩에 얽힌다.
 func _build_tabs() -> void:
 	var sprite := CatSprite.has(_char_id())
 	_custom_slot = GameState.is_custom_cat(_cat_id)
 	_preset_tab = not sprite
-	_parts.clear()
-	for part in CustomCat.PARTS:
-		if sprite and not CustomCat.SPRITE_TINTS.has(str(part.key)):
+	_groups.clear()
+	for group in CustomCat.GROUPS:
+		var keys: Array = []
+		for part in CustomCat.group_parts(group):
+			var key := str(part.key)
+			if sprite and not CustomCat.SPRITE_TINTS.has(key):
+				continue
+			# 고를 게 하나뿐인 자리는 내지 않는다.
+			if _custom_slot and CustomCat.my_options(key).size() < 2:
+				continue
+			keys.append(key)
+		if keys.is_empty():
 			continue
-		# 나만의 캐릭터는 디자인 냥이들이 실제로 쓰는 파츠만 다룬다.
-		# 고를 게 하나뿐인 부위(사실상 "없음"만 있는 자리)는 탭을 세우지 않는다.
-		if _custom_slot and CustomCat.my_options(str(part.key)).size() < 2:
-			continue
-		_parts.append(part)
+		var g: Dictionary = group.duplicate()
+		g["keys"] = keys
+		_groups.append(g)
 	for b in _tab_btns:
 		b.queue_free()
 	_tab_btns.clear()
-	var n := _parts.size() + (1 if _preset_tab else 0)
-	for i in n:
-		var idx := i  # captured (프리셋 탭이 있으면 0번이 프리셋)
-		var tb := Button.new()
-		tb.text = tr("CC_PRESET") if _preset_tab and i == 0 				else tr(str(_parts[i - (1 if _preset_tab else 0)].name))
-		tb.add_theme_font_size_override("font_size", 17)
-		tb.custom_minimum_size = Vector2(0.0, 42.0)
-		tb.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		tb.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_cur = idx
-			_refresh())
-		_tabs.add_child(tb)
-		_tab_btns.append(tb)
+	_tab_faces.clear()
+	if _preset_tab:
+		_add_chip(tr("CC_PRESET"), 0, {})
+	for i in _groups.size():
+		_add_chip(tr(str(_groups[i].name)), i + (1 if _preset_tab else 0), _groups[i])
+
+
+## 부위 칩 하나 — 지금 냥이를 그 부위만 확대해 보여 준다(빈 group = 전신).
+func _add_chip(label: String, i: int, group: Dictionary) -> void:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(TAB_W, TAB_H)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_cur = i
+		_refresh())
+	var face := Control.new()
+	face.position = Vector2((TAB_W - CLOSE_UP) / 2.0, 5.0)
+	face.size = Vector2(CLOSE_UP, CLOSE_UP)
+	face.clip_contents = true  # 클로즈업 — 부위 밖은 잘라 낸다
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.draw.connect(func() -> void: _draw_chip(face, group))
+	b.add_child(face)
+	var name_lbl := Label.new()
+	name_lbl.text = label
+	name_lbl.position = Vector2(0.0, CLOSE_UP + 6.0)
+	name_lbl.size = Vector2(TAB_W, 24.0)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.clip_text = true
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(name_lbl)
+	_tabs.add_child(b)
+	_tab_btns.append(b)
+	_tab_faces.append(face)
+
+
+## 칩 안의 그림: 부위 그룹이면 그 자리를 확대해, 프리셋 칩이면 전신을.
+func _draw_chip(face: Control, group: Dictionary) -> void:
+	var mid := Vector2(CLOSE_UP, CLOSE_UP) / 2.0
+	if group.is_empty():
+		Player.paint_cat(face, mid + Vector2(0.0, 2.0), CLOSE_UP * 0.78, 0.0,
+				true, false, _skin())
+		return
+	var s := CLOSE_UP / maxf(0.1, float(group.zoom))
+	Player.paint_cat(face, mid - Vector2(group.at) * s, s, 0.0, true, false, _skin())
 
 
 ## 현재 캐릭터의 파츠 + 저장된 커스터마이징(+ 미리보기용 임시 선택 하나).
@@ -215,10 +262,21 @@ func _bar_btn(text: String, accent: bool) -> Button:
 	return b
 
 
+## 지금 다루는 모든 부위 정의 (그룹을 펼친 것).
+func _all_parts() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for g in _groups:
+		for key: String in (g.keys as Array):
+			var part := CustomCat.get_part(key)
+			if not part.is_empty():
+				out.append(part)
+	return out
+
+
 func _randomize_all() -> void:
 	Sfx.play("record")
 	var sel := {}
-	for p in _parts:
+	for p in _all_parts():
 		var key := str(p.key)
 		# 나만의 캐릭터는 이미 열린 파츠 중에서만 굴린다.
 		var pool: Array = []
@@ -250,7 +308,9 @@ func _reset_all() -> void:
 func _refresh() -> void:
 	_preview.queue_redraw()
 	_restyle_tabs()
-	_rebuild_grid()
+	for f in _tab_faces:
+		f.queue_redraw()
+	_rebuild_panel()
 
 
 # --- 무대(프리뷰) ----------------------------------------------------------------
@@ -294,6 +354,14 @@ func _draw_preview() -> void:
 	var bob := sin(_t * 2.1) * 6.0
 	var look := sin(_t * 0.7) * 5.0
 	Player.paint_cat(ci, Vector2(pcx, cat_y + bob), cat_s, look, true, false, _skin())
+	# 지금 고르는 부위가 어디인지 냥이 위에 표시한다 — 칩과 몸을 이어 준다.
+	var gi := _cur - (1 if _preset_tab else 0)
+	if gi >= 0 and gi < _groups.size():
+		var at := Vector2(pcx, cat_y + bob) + Vector2(_groups[gi].at) * cat_s
+		var rr := cat_s * maxf(0.14, float(_groups[gi].zoom) * 0.5)
+		var pulse := 0.55 + 0.25 * sin(_t * 3.4)
+		ci.draw_arc(at, rr, 0.0, TAU, 40, Color(0.45, 0.95, 1.0, pulse), 2.5)
+		ci.draw_arc(at, rr + 5.0, 0.0, TAU, 40, Color(0.45, 0.95, 1.0, pulse * 0.3), 1.5)
 	for i in 3:
 		var a := _t * 0.6 + TAU * i / 3.0
 		var sp := Vector2(pcx + cos(a) * (cat_s * 1.05),
@@ -364,38 +432,53 @@ func _restyle_tabs() -> void:
 		var hover: StyleBoxFlat = sb.duplicate()
 		hover.bg_color = Color(1, 1, 1, 0.12)
 		b.add_theme_stylebox_override("hover", hover)
-		b.add_theme_stylebox_override("pressed", sb)
-
-
-func _rebuild_grid() -> void:
-	for c in _grid.get_children():
+## 선택한 부위 하나를 통째로 펀친다 — 모양 타일과 색 스와치가
+## 한 화면에 같이 다. 더 이상 "모양 탭 → 색 탭"으로 들어갈 필요가 없다.
+func _rebuild_panel() -> void:
+	for c in _panel.get_children():
 		c.queue_free()
 	if _preset_tab and _cur == 0:
-		_grid.columns = maxi(1, int(_grid_w / 120.0))
+		var grid := _section(tr("CC_PRESET"), 120.0)
 		for char_id: String in CustomCat.CHARS:
-			_grid.add_child(_make_preset_tile(char_id))
+			grid.add_child(_make_preset_tile(char_id))
 		return
-	var pi := _cur - (1 if _preset_tab else 0)
-	if pi < 0 or pi >= _parts.size():
+	var gi := _cur - (1 if _preset_tab else 0)
+	if gi < 0 or gi >= _groups.size():
 		return
-	var part: Dictionary = _parts[pi]
-	var key := str(part.key)
-	var picked: int = GameState.custom_idx(_cat_id, key, _player)
-	# 나만의 캐릭터는 디자인 냥이에게서 온 옵션만 (잠긴 것은 자물쇠로) 늘어놓는다.
-	var idxs: Array = CustomCat.my_options(key) if _custom_slot \
-			else range(CustomCat.option_count(part))
-	if part.get("type") == "color":
-		_grid.columns = maxi(1, int(_grid_w / 82.0))
-		var cols: Array = part.cols
+	for key: String in (_groups[gi].keys as Array):
+		var part := CustomCat.get_part(key)
+		if part.is_empty():
+			continue
+		var picked: int = GameState.custom_idx(_cat_id, key, _player)
+		var idxs: Array = range(CustomCat.option_count(part))
+		if _custom_slot:
+			idxs = CustomCat.my_options(key)
+		var color: bool = part.get("type") == "color"
+		var grid := _section(tr(str(part.name)), 82.0 if color else 120.0)
 		for i: int in idxs:
-			_grid.add_child(_make_swatch(key, i, cols[i], i == picked,
-					_locked(key, i)))
-	else:
-		_grid.columns = maxi(1, int(_grid_w / 120.0))
-		var opts: Array = part.opts
-		for i: int in idxs:
-			_grid.add_child(_make_style_tile(key, i, opts[i], i == picked,
-					_locked(key, i)))
+			if color:
+				grid.add_child(_make_swatch(key, i, (part.cols as Array)[i],
+						i == picked, _locked(key, i)))
+			else:
+				grid.add_child(_make_style_tile(key, i, (part.opts as Array)[i],
+						i == picked, _locked(key, i)))
+
+
+## 부위 안의 한 줄 — 소제목 + 그 아래 옵션 격자.
+func _section(title: String, cell: float) -> GridContainer:
+	var head := Label.new()
+	head.text = title
+	head.add_theme_font_size_override("font_size", 16)
+	head.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	_panel.add_child(head)
+	var grid := GridContainer.new()
+	grid.columns = maxi(1, int(_grid_w / cell))
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_panel.add_child(grid)
+	return grid
+
 
 
 ## 나만의 캐릭터에서 아직 못 쓰는 옵션인가 (출처 냥이가 잠겨 있다).
@@ -437,7 +520,7 @@ func _pick(key: String, idx: int) -> void:
 		_flavor_col = CustomCat.RARITY_COLS[r]
 	GameState.set_custom_part(_cat_id, key, idx, _player)
 	_preview.queue_redraw()
-	_rebuild_grid()
+	_rebuild_panel()
 	changed.emit()
 
 
@@ -509,6 +592,7 @@ func _shadow(skin: Dictionary) -> Dictionary:
 	out["body"] = parts["body_col"]
 	out["ear"] = parts["ear_col"]
 	out.erase("sprite")
+	out["gray"] = true
 	out.erase("tints")
 	return out
 

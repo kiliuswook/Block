@@ -146,6 +146,18 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	# 컨셉 시트 스프라이트 우선 — 소품만 그 위에 코드로 얹는다.
 	var sprite := str(skin.get("sprite", ""))
 	var gray: bool = not alive or bool(skin.get("gray", false))
+	# 나만의 캐릭터 — 여러 냥이의 시트 파츠 그림을 섞어 그린다.
+	var mix: Dictionary = skin.get("mix", {})
+	if not mix.is_empty() and CatSprite.paint_mix(ci, center, s, mix,
+			skin.get("tints", {}), not gray):
+		if not alive:
+			_paint_dead_face(ci, center, s, line)
+			return
+		if bool(skin.get("gray", false)):
+			return
+		for acc in skin.get("acc", []):
+			paint_acc(ci, center, s, acc)
+		return
 	if sprite != "" and CatSprite.paint(ci, center, s, sprite,
 			int(skin.get("tier", CatSprite.TIER_MAX)), not gray,
 			skin.get("tints", {})):
@@ -185,11 +197,14 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		_paint_dead_face(ci, center, s, line)
 		return
 	# Layer 50 — 볼터치.
-	_paint_cheek(ci, center, s, _sid(p, "cheek", _sid(p, "blush", "pink")))
+	_paint_cheek(ci, center, s, _sid(p, "cheek", "pink"),
+			p.get("cheek_col", Color(BLUSH)))
 	# Layer 51 — 수염.
-	_paint_whisker(ci, center, s, _sid(p, "whisker", "basic"), body_col, ink)
+	_paint_whisker(ci, center, s, _sid(p, "whisker", "basic"), body_col, ink,
+			p.get("whisker_col", null))
 	# Layer 52 — 입.
-	_paint_mouth(ci, center, s, look, mouth_open, _sid(p, "mouth", "w"), body_col, ink)
+	_paint_mouth(ci, center, s, look, mouth_open, _sid(p, "mouth", "w"), body_col, ink,
+			p.get("mouth_col", null))
 	# Layer 53 — 코.
 	_paint_nose(ci, center, s, look, _sid(p, "nose", "tri"),
 			p.get("nose_col", Color("e58a86")))
@@ -579,7 +594,18 @@ static func _paint_feet(ci: CanvasItem, center: Vector2, s: float, p: Dictionary
 # --- 볼 / 수염 -------------------------------------------------------------------
 
 
-static func _paint_cheek(ci: CanvasItem, center: Vector2, s: float, style: String) -> void:
+## 시트에서 뽑은 색(want)을 쓴다 — 단 몸 색과 명도 차가 없어 묻히면 fallback.
+static func _readable(want: Variant, fallback: Color, body_col: Color) -> Color:
+	if want == null:
+		return fallback
+	var col: Color = want
+	if absf(col.get_luminance() - body_col.get_luminance()) < 0.22:
+		return fallback
+	return Color(col, fallback.a)
+
+
+static func _paint_cheek(ci: CanvasItem, center: Vector2, s: float, style: String,
+		col := Color(BLUSH)) -> void:
 	if style == "none":
 		return
 	var y := s * 0.08
@@ -602,16 +628,17 @@ static func _paint_cheek(ci: CanvasItem, center: Vector2, s: float, style: Strin
 			"blue":
 				ci.draw_circle(at, s * 0.06, Color(0.5, 0.7, 0.95, 0.5))
 			_:  # "pink"
-				ellipse(ci, at, s * 0.07, s * 0.048, Color(BLUSH, 0.6))
+				ellipse(ci, at, s * 0.07, s * 0.048, Color(col, 0.6))
 
 
 static func _paint_whisker(ci: CanvasItem, center: Vector2, s: float, style: String,
-		body_col: Color, ink: Color) -> void:
+		body_col: Color, ink: Color, want: Variant = null) -> void:
 	if style == "none":
 		return
 	var col := Color(ink, 0.55)
 	if body_col.get_luminance() < 0.42:
 		col = Color(0.98, 0.97, 0.94, 0.7)
+	col = _readable(want, col, body_col)
 	var w := maxf(1.2, s * 0.024)
 	match style:
 		"thick":
@@ -695,10 +722,12 @@ static func _paint_nose(ci: CanvasItem, center: Vector2, s: float, look: float,
 
 
 static func _paint_mouth(ci: CanvasItem, center: Vector2, s: float, look: float,
-		open: bool, style: String, body_col: Color, ink: Color) -> void:
+		open: bool, style: String, body_col: Color, ink: Color,
+		want: Variant = null) -> void:
 	var col := Color(ink, 0.9)
 	if body_col.get_luminance() < 0.42:
 		col = Color(0.96, 0.94, 0.9, 0.9)
+	col = _readable(want, col, body_col)
 	var mc := center + Vector2(look * 0.5, s * 0.125)
 	var w := maxf(1.3, s * 0.032)
 	if open:
@@ -985,6 +1014,10 @@ static func _paint_head_prop(ci: CanvasItem, center: Vector2, s: float, style: S
 		line: float, ink: Color) -> void:
 	if style == "none":
 		return
+	if style == "headset" or style == "sleep_mask":
+		# 시트에선 둘 다 Prop_Head지만, 그림은 얼굴 높이에 걸린다.
+		_paint_face_prop(ci, center, s, style, line, ink)
+		return
 	var half := s / 2.0
 	var top := center + Vector2(0.0, -half)
 	match style:
@@ -1173,6 +1206,9 @@ static func _paint_hold(ci: CanvasItem, center: Vector2, s: float, style: String
 		line: float, ink: Color) -> void:
 	if style == "none":
 		return
+	if style == "tie":  # 시트의 Char02 넘타이는 Prop_Belly 슬롯 — 그림은 목 위치 그대로.
+		_paint_neck(ci, center, s, "tie", line, ink)
+		return
 	var half := s / 2.0
 	var at := center + Vector2(0.0, half - s * 0.12)
 	match style:
@@ -1254,6 +1290,9 @@ static func _paint_chest(ci: CanvasItem, center: Vector2, s: float, style: Strin
 		line: float, ink: Color) -> void:
 	if style == "none":
 		return
+	if style == "bowtie":  # 시트의 Char06 나비넘타이는 Prop_Chest 슬롯.
+		_paint_neck(ci, center, s, "bowtie", line, ink)
+		return
 	var at := center + Vector2(s * 0.28, s * 0.24)
 	match style:
 		"badge":
@@ -1330,6 +1369,10 @@ static func _paint_back(ci: CanvasItem, center: Vector2, s: float, style: String
 		return
 	var half := s / 2.0
 	match style:
+		"pillow":
+			_rrect(ci, Rect2(center + Vector2(-s * 0.64, -s * 0.52),
+					Vector2(s * 1.28, s * 1.10)), s * 0.24,
+					Color("cfd8e2"), line, INK)
 		"cape":
 			_poly(ci, PackedVector2Array([
 				center + Vector2(-s * 0.42, -half + s * 0.06),

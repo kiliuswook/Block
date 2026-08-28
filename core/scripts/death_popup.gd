@@ -19,9 +19,6 @@ var _stats_label: Label
 var _reward_label: Label
 var _cont: Button
 var _hint: Label
-var _boost_label: Label
-var _boost_row: HBoxContainer
-var _boost_chips := {}  # boost id -> Button
 var _skip_btn: Button
 
 
@@ -115,25 +112,6 @@ func _ready() -> void:
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	v.add_child(restart)
 
-	# One-tap boost rebuy for the next endless run (hidden in story mode).
-	_boost_label = Label.new()
-	_boost_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_boost_label.add_theme_font_size_override("font_size", 17)
-	_boost_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.65))
-	v.add_child(_boost_label)
-	_boost_row = HBoxContainer.new()
-	_boost_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	_boost_row.add_theme_constant_override("separation", 10)
-	v.add_child(_boost_row)
-	for b: Dictionary in GameState.BOOSTS:
-		var chip := Button.new()
-		chip.custom_minimum_size = Vector2(150.0, 60.0)
-		chip.add_theme_font_size_override("font_size", 17)
-		chip.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		chip.pressed.connect(_on_boost_chip.bind(b))
-		_boost_row.add_child(chip)
-		_boost_chips[b.id] = chip
-
 	# Story: after enough failures a paid skip past the stage appears.
 	_skip_btn = _make_button("", false)
 	_skip_btn.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
@@ -145,12 +123,12 @@ func _ready() -> void:
 	v.add_child(to_title)
 
 
-## revive_cost: gems this revive costs (0 = free). show_boosts: endless-only
-## next-run boost chips. show_skip: story skip offer after repeated failures.
+## revive_cost: gems this revive costs (0 = free).
+## show_skip: story skip offer after repeated failures.
 ## show_continue=false + title_text: timed modes end on the clock, not in
 ## death — no revive option and a cheerier headline.
 func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
-		show_boosts := false, show_skip := false, show_continue := true,
+		show_skip := false, show_continue := true,
 		title_text := "", continue_text := "") -> void:
 	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
 	# Classic revives restart the level, so its button says so.
@@ -175,10 +153,6 @@ func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 		_hint.text = tr("POP_REVIVE_LACK").format({"cost": revive_cost, "gems": GameState.gems})
 		_hint.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
 		_cont.disabled = true
-	_boost_label.visible = show_boosts
-	_boost_row.visible = show_boosts
-	if show_boosts:
-		_refresh_boosts()
 	_skip_btn.visible = show_skip
 	if show_skip:
 		_skip_btn.text = tr("POP_SKIP_STAGE").format({"cost": GameState.SKIP_COST})
@@ -197,34 +171,6 @@ func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
 
 func close() -> void:
 	visible = false
-
-
-func _on_boost_chip(boost: Dictionary) -> void:
-	if not GameState.toggle_boost(str(boost.id)):
-		Sfx.play("error")
-		return
-	Sfx.play("buy" if boost.id in GameState.pending_boosts else "click")
-	_refresh_boosts()
-
-
-func _refresh_boosts() -> void:
-	_boost_label.text = tr("POP_BOOST_LABEL").format({"gold": GameState.gold})
-	for b: Dictionary in GameState.BOOSTS:
-		var chip: Button = _boost_chips[b.id]
-		var pending: bool = b.id in GameState.pending_boosts
-		chip.text = "%s%s  %dG" % ["✓ " if pending else "", tr(b.name), b.price]
-		var sb := StyleBoxFlat.new()
-		sb.set_corner_radius_all(10)
-		sb.bg_color = Color(CREAM, 0.18) if pending else Color(1, 1, 1, 0.06)
-		sb.set_border_width_all(2)
-		sb.border_color = CREAM if pending else Color(1, 1, 1, 0.22)
-		chip.add_theme_stylebox_override("normal", sb)
-		var hover: StyleBoxFlat = sb.duplicate()
-		hover.bg_color = Color(CREAM, 0.26) if pending else Color(1, 1, 1, 0.12)
-		chip.add_theme_stylebox_override("hover", hover)
-		chip.add_theme_stylebox_override("pressed", sb)
-		chip.add_theme_color_override("font_color",
-				CREAM if pending else Color(1, 1, 1, 0.85))
 
 
 func _spacer(h: float) -> Control:

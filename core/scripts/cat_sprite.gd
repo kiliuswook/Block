@@ -94,3 +94,52 @@ static func _paint_layers(ci: CanvasItem, center: Vector2, s: float, char_id: St
 				Vector2(tex.get_size()) * k), false, col)
 		drawn = true
 	return drawn
+
+
+## 캐릭터 배치표에서 레이어 하나를 찾는다 (없으면 빈 사전).
+static func find_layer(char_id: String, name: String) -> Dictionary:
+	for l: Dictionary in CatLayouts.LAYOUTS.get(char_id, []):
+		if str(l.n) == name:
+			return l
+	return {}
+
+
+## 여러 냥이의 파츠 레이어를 섞어 한 마리를 그린다 — "나만의 캐릭터"가 쓴다.
+## mix   : 레이어 이름 → 그 그림을 빌려올 캐릭터 id (없는 레이어는 그리지 않는다).
+## tints : 레이어 이름 → 덮어쓸 색 (recolor 레이어만).
+## 캔버스 좌표계가 6종 공통이라 서로 다른 냥이의 파츠도 그대로 겹쳐진다.
+static func paint_mix(ci: CanvasItem, center: Vector2, s: float, mix: Dictionary,
+		tints: Dictionary = {}, alive := true) -> bool:
+	var tf := _place(center, s)
+	var k: Vector2 = tf.get_scale()
+	var items: Array[Dictionary] = []
+	for name: String in mix:
+		var l := find_layer(str(mix[name]), name)
+		if not l.is_empty():
+			items.append({"l": l, "c": str(mix[name])})
+	# 시트의 레이어 번호로 정렬 — 6종이 같은 번호 체계를 쓴다.
+	items.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return int((a.l as Dictionary).layer) < int((b.l as Dictionary).layer))
+	var drawn := false
+	for it in items:
+		var l: Dictionary = it.l
+		var tex := _load(DIR + "parts/%s/%s.png" % [it.c, l.n])
+		if tex == null:
+			continue
+		var col: Color = l.tint
+		if bool(l.recolor) and tints.has(str(l.n)):
+			col = tints[str(l.n)]
+		if col.a <= 0.0:
+			col = Color.WHITE  # 원본 색 그대로
+		if not alive:
+			col = _ashen(col)
+		ci.draw_texture_rect(tex, Rect2(tf.origin + (l.at as Vector2) * k,
+				Vector2(tex.get_size()) * k), false, col)
+		drawn = true
+	return drawn
+
+
+## 사망·잠금용 회청색 램프 — gray/ 완성 렌더와 같은 톤으로 눌러 준다.
+static func _ashen(col: Color) -> Color:
+	var g := col.get_luminance()
+	return Color(g * 0.70 + 0.10, g * 0.74 + 0.13, g * 0.79 + 0.17, col.a)

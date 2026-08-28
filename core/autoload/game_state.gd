@@ -114,6 +114,10 @@ const KEYCAP_GACHA_BULK := 10
 const KEYCAP_GACHA_BULK_PRICE := 250
 ## 이번 바퀴에서 아직 못 채운 글자가 나올 확률 (나머지는 완전 랜덤 = 중복).
 const KEYCAP_FRESH_CHANCE := 0.7
+## 선택 뽑기: 이만큼의 냥이를 골라 두면 그 냥이들만 캡슐에서 나온다.
+## 원하는 냥이를 겨냥할 수 있는 값이라 한 장 값이 그만큼 비싸다.
+const KEYCAP_PICK_SIZE := 5
+const KEYCAP_PICK_MARKUP := 1.5
 
 var mode: int = MODE_CLASSIC
 var split: bool = false  # 2-player split screen (escape race/endless only), not saved
@@ -137,6 +141,8 @@ var acc_neck: String = ""
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
+## 선택 뽑기에 걸어 둔 냥이 id들 (최대 KEYCAP_PICK_SIZE) — 뽑기 화면에서 유지된다.
+var gacha_pick: Array = []
 # 캐릭터별 커스터마이징: 저장 키(custom_key) -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
@@ -412,21 +418,19 @@ func has_keycap(cat_id: String, letter: String) -> bool:
 ## 인게임 드랍은 없다 — 키캡은 상점에서 골드로 뽑는다.
 
 
-## 키캡을 n장 뽑는다. 캐릭터는 아직 만렙이 아닌 냥이들 중에서 균등 랜덤
-## (잠긴 냥이 포함 — 아무나 먼저 완성한 순서대로 합류한다).
+## 키캡을 n장 뽑는다. 뽑기는 두 종류다:
+##  · 랜덤 뽑기 (pick 비움) — 아직 만렙이 아닌 냥이 전체에서 균등 랜덤
+##    (잠긴 냥이 포함 — 아무나 먼저 완성한 순서대로 합류한다).
+##  · 선택 뽑기 (pick = 냥이 id 배열) — 그 냥이들만 나온다. 대신 값이 비싸다.
 ## 반환: [{"cat": id, "letter": "A", "fresh": bool, "grade_up": bool}, ...]
-## 골드가 모자라면 빈 배열.
-func draw_keycaps(n: int) -> Array:
+## 골드가 모자라거나 풀이 비면 빈 배열.
+func draw_keycaps(n: int, pick: Array = []) -> Array:
 	n = maxi(1, n)
-	if not spend_gold(keycap_price(n)):
+	var pool := gacha_pool(pick)
+	if pool.is_empty():
 		return []
-	var pool: Array[String] = []
-	for cat in keycap_cats():
-		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
-			pool.append(str(cat.id))
-	if pool.is_empty():  # 전원 만렙이면 그냥 아무 냥이 몫으로 (중복 수집)
-		for cat in keycap_cats():
-			pool.append(str(cat.id))
+	if not spend_gold(keycap_price(n, not pick.is_empty())):
+		return []
 	var out: Array = []
 	for i in n:
 		var cat_id := pool[randi() % pool.size()]
@@ -440,8 +444,31 @@ func draw_keycaps(n: int) -> Array:
 	return out
 
 
-func keycap_price(n: int) -> int:
-	return KEYCAP_GACHA_BULK_PRICE if n >= KEYCAP_GACHA_BULK 			else KEYCAP_GACHA_PRICE * n
+## 이번 뽑기에서 캡슐에 들어가는 냥이들. 선택 뽑기는 고른 냥이 그대로,
+## 랜덤 뽑기는 아직 만렙이 아닌 냥이들 (전원 만렙이면 전체 = 중복 수집).
+func gacha_pool(pick: Array = []) -> Array[String]:
+	var pool: Array[String] = []
+	if not pick.is_empty():
+		for cid in pick:
+			var id := str(cid)
+			if not get_cat(id).is_empty() and not is_custom_cat(id) and id not in pool:
+				pool.append(id)
+		return pool
+	for cat in keycap_cats():
+		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
+			pool.append(str(cat.id))
+	if pool.is_empty():
+		for cat in keycap_cats():
+			pool.append(str(cat.id))
+	return pool
+
+
+## n장 값. 선택 뽑기는 겨냥하는 대가로 KEYCAP_PICK_MARKUP배.
+func keycap_price(n: int, pick := false) -> int:
+	var base := KEYCAP_GACHA_PRICE * n
+	if n >= KEYCAP_GACHA_BULK:
+		base = KEYCAP_GACHA_BULK_PRICE
+	return int(ceil(base * KEYCAP_PICK_MARKUP)) if pick else base
 
 
 ## 이번 바퀴에서 비어 있는 글자를 우선으로 하나 고른다. 확정이 아니라
@@ -755,6 +782,7 @@ func save_game() -> void:
 		"pending_boosts": pending_boosts,
 		"skipped_stages": skipped_stages,
 		"keycaps": keycaps,
+		"gacha_pick": gacha_pick,
 		"cat_custom": cat_custom,
 		"last_daily": last_daily,
 		"locale": locale,
@@ -826,6 +854,16 @@ func load_game() -> void:
 					var d0: Dictionary = keycaps.get(first, {})
 					d0[str(k)] = int(per)
 					keycaps[first] = d0
+		var picked: Variant = data.get("gacha_pick", [])
+		if picked is Array:
+			gacha_pick = []
+			for cid in picked:
+				# 저장 이후 사라진 냥이 id는 흘려보낸다.
+				var id := str(cid)
+				if id in gacha_pick or get_cat(id).is_empty() or is_custom_cat(id):
+					continue
+				gacha_pick.append(id)
+			gacha_pick.resize(mini(gacha_pick.size(), KEYCAP_PICK_SIZE))
 		var cst: Variant = data.get("cat_custom", {})
 		if cst is Dictionary:
 			cat_custom = {}
@@ -835,7 +873,15 @@ func load_game() -> void:
 					continue
 				var sel := {}
 				for k in (picks as Dictionary):
-					sel[str(k)] = int((picks as Dictionary)[k])
+					# 카탈로그가 시트 기준으로 재편되면 사라진 부위·범위 밖 선택이
+					# 남는다 — 불러올 때 정리해 저장본이 높은 값을 질질 끌지 않게 한다.
+					var part := CustomCat.get_part(str(k))
+					if part.is_empty():
+						continue
+					var idx := int((picks as Dictionary)[k])
+					if idx < 0 or idx >= CustomCat.option_count(part):
+						continue
+					sel[str(k)] = idx
 				if not sel.is_empty():
 					cat_custom[str(cid)] = sel
 		last_daily = str(data.get("last_daily", ""))
