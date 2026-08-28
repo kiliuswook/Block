@@ -31,6 +31,8 @@ var _tabs: HFlowContainer
 var _groups: Array[Dictionary] = []  # 이 캐릭터에 적용되는 부위 묶음
 var _preset_tab := false  # 0번 "원본 냥이" 프리셋 탭을 쓰는가
 var _custom_slot := false  # "나만의 캐릭터"인가 — 파츠마다 해금이 걸린다
+## 잠긴 파츠를 입혀 본 임시 선택 — 미리보기에만 쓰이고 저장되지 않는다.
+var _preview_sel: Dictionary = {}
 var _panel: VBoxContainer
 var _grid_w := 900.0
 var _flavor := ""
@@ -132,6 +134,7 @@ func open(cat_id: String, player := 1) -> void:
 	_cat_id = cat_id
 	_player = player
 	_cur = 0
+	_preview_sel.clear()
 	_build_tabs()
 	_open_t = 0.0
 	_flavor = tr("CC_FLAVOR_OPEN")
@@ -227,6 +230,8 @@ func _draw_chip(face: Control, group: Dictionary) -> void:
 ## 현재 캐릭터의 파츠 + 저장된 커스터마이징(+ 미리보기용 임시 선택 하나).
 func _skin(extra_key := "", extra_idx := 0) -> Dictionary:
 	var sel: Dictionary = GameState.custom_sel(_cat_id, _player).duplicate()
+	for key: Variant in _preview_sel:
+		sel[str(key)] = int(_preview_sel[key])
 	if extra_key != "":
 		sel[extra_key] = extra_idx
 	var char_id := _char_id()
@@ -274,6 +279,7 @@ func _all_parts() -> Array[Dictionary]:
 
 
 func _randomize_all() -> void:
+	_preview_sel.clear()
 	Sfx.play("record")
 	var sel := {}
 	for p in _all_parts():
@@ -297,6 +303,7 @@ func _randomize_all() -> void:
 
 
 func _reset_all() -> void:
+	_preview_sel.clear()
 	Sfx.play("click")
 	GameState.set_custom_all(_cat_id, {}, _player)
 	_flavor = tr("CC_FLAVOR_RESET")
@@ -391,6 +398,12 @@ func _draw_preview() -> void:
 		who = "2P  ·  " + who
 	ci.draw_string(font, Vector2(34.0, 118.0), who,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.85, 0.35))
+	# 잠긴 파츠를 입혀 보는 중이면 무대에 명시한다 — 저장되는 모습이 아니다.
+	if not _preview_sel.is_empty():
+		var note := tr("CC_PREVIEW_ON").format({"n": _preview_sel.size()})
+		var nw := font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+		ci.draw_string(font, Vector2(pcx - nw / 2.0, pcy + 46.0), note,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.45, 0.95, 1.0, 0.9))
 	# 플레이버 텍스트 (마지막 선택 파츠).
 	var fw := font.get_string_size(_flavor, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x
 	ci.draw_string(font, Vector2(pcx - fw / 2.0, pcy + 74.0), _flavor,
@@ -450,18 +463,23 @@ func _rebuild_panel() -> void:
 		if part.is_empty():
 			continue
 		var picked: int = GameState.custom_idx(_cat_id, key, _player)
+		# 잠긴 파츠를 입혀 보는 중이면 그쪽이 지금 모습이다.
+		if _preview_sel.has(key):
+			picked = int(_preview_sel[key])
 		var idxs: Array = range(CustomCat.option_count(part))
 		if _custom_slot:
 			idxs = CustomCat.my_options(key)
 		var color: bool = part.get("type") == "color"
 		var grid := _section(tr(str(part.name)), 82.0 if color else 120.0)
 		for i: int in idxs:
+			var lock := _locked(key, i)
+			var prev: bool = lock and int(_preview_sel.get(key, -1)) == i
 			if color:
 				grid.add_child(_make_swatch(key, i, (part.cols as Array)[i],
-						i == picked, _locked(key, i)))
+						i == picked, lock, prev))
 			else:
 				grid.add_child(_make_style_tile(key, i, (part.opts as Array)[i],
-						i == picked, _locked(key, i)))
+						i == picked, lock, prev))
 
 
 ## 부위 안의 한 줄 — 소제목 + 그 아래 옵션 격자.
@@ -486,27 +504,13 @@ func _locked(key: String, idx: int) -> bool:
 	return _custom_slot and not GameState.part_unlocked(key, idx)
 
 
-## 잠긴 옵션을 눌렀을 때 — 어느 냥이를 키우면 열리는지 알려 준다.
-func _deny(key: String, idx: int) -> void:
-	Sfx.play("error")
-	var hint := GameState.part_unlock_hint(key, idx)
-	if hint.is_empty():
-		_flavor = tr("CC_LOCKED_ANY")
-	else:
-		var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
-		if int(hint.grade) > 1:
-			_flavor = tr("CC_LOCKED_GRADE").format({"name": who, "grade": hint.grade})
-		else:
-			_flavor = tr("CC_LOCKED").format({"name": who})
-	_flavor_col = Color(1.0, 0.55, 0.5)
-	_preview.queue_redraw()
-
-
 func _pick(key: String, idx: int) -> void:
 	if _locked(key, idx):
-		_deny(key, idx)
+		_preview_locked(key, idx)
 		return
 	var part := CustomCat.get_part(key)
+	# 같은 부위에 걸려 있던 미리보기는 진짜 선택이 덮어쓴다.
+	_preview_sel.erase(key)
 	if part.get("type") == "color":
 		Sfx.play("click")
 		_flavor = tr("CC_FLAVOR_COLOR")
@@ -522,6 +526,39 @@ func _pick(key: String, idx: int) -> void:
 	_preview.queue_redraw()
 	_rebuild_panel()
 	changed.emit()
+
+
+## 잠긴 파츠는 입혀만 본다 — 미리보기에만 얻어가고 저장되지 않는다.
+## 다시 누르면 보기를 그만둔다 (토글).
+func _preview_locked(key: String, idx: int) -> void:
+	if int(_preview_sel.get(key, -1)) == idx:
+		_preview_sel.erase(key)
+		Sfx.play("click")
+		_flavor = tr("CC_PREVIEW_CLEAR")
+		_flavor_col = Color(1, 1, 1, 0.65)
+	else:
+		_preview_sel[key] = idx
+		Sfx.play("click")
+		_flavor = "%s  ·  %s" % [tr("CC_PREVIEW"), _lock_text(key, idx)]
+		_flavor_col = Color(0.5, 0.9, 0.95)
+	_preview.queue_redraw()
+	for f in _tab_faces:
+		f.queue_redraw()
+	_rebuild_panel()
+
+
+## 이 옵션을 여는 조건 문구 — 어느 냥이를 어디까지 키우면 되는지.
+func _lock_text(key: String, idx: int) -> String:
+	var hint := GameState.part_unlock_hint(key, idx)
+	if hint.is_empty():
+		return tr("CC_LOCKED_ANY")
+	var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
+	if int(hint.grade) > 1:
+		return tr("CC_LOCKED_GRADE").format({"name": who, "grade": hint.grade})
+	return tr("CC_LOCKED").format({"name": who})
+
+
+
 
 
 ## 디자인 캐릭터 한 마리를 통째로 불러오는 타일.
@@ -608,6 +645,7 @@ func _load_preset(char_id: String) -> void:
 		_preview.queue_redraw()
 		return
 	Sfx.play("record")
+	_preview_sel.clear()
 	GameState.set_custom_all(_cat_id,
 			CustomCat.char_selection(char_id, _preset_tier(char_id)), _player)
 	_flavor = tr("CC_FLAVOR_PRESET")
@@ -617,14 +655,20 @@ func _load_preset(char_id: String) -> void:
 
 
 func _make_swatch(key: String, idx: int, col: Color, selected: bool,
-		locked := false) -> Button:
+		locked := false, previewing := false) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(70.0, 70.0)
 	var sb := StyleBoxFlat.new()
 	sb.set_corner_radius_all(12)
-	sb.bg_color = Color(col.darkened(0.5), 0.55) if locked else col
+	# 미리보기 중인 잠긴 색은 진짜 색으로 보여 준다.
+	sb.bg_color = col if (previewing or not locked) else Color(col.darkened(0.5), 0.55)
 	sb.set_border_width_all(4 if selected else 1)
-	sb.border_color = CREAM if selected else Color(0, 0, 0, 0.4)
+	sb.border_color = Color(0, 0, 0, 0.4)
+	if previewing:
+		sb.set_border_width_all(4)
+		sb.border_color = Color(0.45, 0.95, 1.0)
+	elif selected:
+		sb.border_color = CREAM
 	b.add_theme_stylebox_override("normal", sb)
 	var hover: StyleBoxFlat = sb.duplicate()
 	hover.border_color = Color(1, 1, 1, 0.8)
@@ -652,7 +696,7 @@ func _draw_lock(ci: CanvasItem, at: Vector2, sc := 1.0) -> void:
 
 ## 이 옵션만 바꾼 미니 냥이를 그려주는 미리보기 타일 (이름은 희귀도 색).
 func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
-		locked := false) -> Button:
+		locked := false, previewing := false) -> Button:
 	var rar := int(opt.get("r", 0))
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(108.0, 124.0)
@@ -660,9 +704,16 @@ func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 	sb.set_corner_radius_all(12)
 	sb.bg_color = Color(CREAM, 0.12) if selected else Color(1, 1, 1, 0.05)
 	sb.set_border_width_all(3 if selected else 1)
-	sb.border_color = CREAM if selected \
-			else (Color(CustomCat.RARITY_COLS[rar], 0.55) if rar > 0
-					else Color(1, 1, 1, 0.2))
+	if previewing:
+		sb.bg_color = Color(0.45, 0.95, 1.0, 0.12)
+		sb.set_border_width_all(3)
+		sb.border_color = Color(0.45, 0.95, 1.0)
+	elif selected:
+		sb.border_color = CREAM
+	elif rar > 0:
+		sb.border_color = Color(CustomCat.RARITY_COLS[rar], 0.55)
+	else:
+		sb.border_color = Color(1, 1, 1, 0.2)
 	b.add_theme_stylebox_override("normal", sb)
 	var hover: StyleBoxFlat = sb.duplicate()
 	hover.bg_color = Color(1, 1, 1, 0.1)
@@ -675,16 +726,18 @@ func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var opt_name := ("★" if rar >= 3 else "") + str(opt.name)
 	face.draw.connect(func() -> void:
-		# 잠긴 파츠는 회색 실루엣으로만 — 뭔지는 보이되 쓸 수는 없다.
+		# 잠긴 파츠는 회색 실루엣 — 단, 입혀 보는 중이면 제 색으로 보여 준다.
 		Player.paint_cat(face, Vector2(54.0, 50.0), 52.0, 0.0, true, false,
-				_shadow(_skin(key, idx)) if locked else _skin(key, idx))
+				_skin(key, idx) if (previewing or not locked)
+				else _shadow(_skin(key, idx)))
 		if locked:
 			_draw_lock(face, Vector2(88.0, 24.0), 0.9)
 		var font := ThemeDB.fallback_font
 		var w := font.get_string_size(opt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 		face.draw_string(font, Vector2((108.0 - w) / 2.0, 112.0), opt_name,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 15,
-				Color(1, 1, 1, 0.35) if locked
-				else (CREAM if selected else CustomCat.RARITY_COLS[rar])))
+			Color(0.45, 0.95, 1.0) if previewing
+					else (Color(1, 1, 1, 0.35) if locked
+					else (CREAM if selected else CustomCat.RARITY_COLS[rar]))))
 	b.add_child(face)
 	return b

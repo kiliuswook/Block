@@ -2,6 +2,7 @@ extends Node
 ## Global game state: score, progress, currency, characters, save/load.
 
 const SAVE_PATH := "user://save.json"
+const KeyBinds := preload("res://core/scripts/key_binds.gd")
 
 const MODE_STORY := 0
 const MODE_ENDLESS := 1
@@ -151,6 +152,14 @@ var locale: String = ""  # chosen UI language ("" = follow the system locale)
 var vol_master: float = 1.0
 var vol_bgm: float = 0.8
 var vol_sfx: float = 1.0
+## 컨트롤러 진동 세기 0~3 (0 = 끄기).
+var vibration: int = 2
+## 창 해상도 "1920x1080" ("" = project.godot 기본값 그대로).
+var resolution: String = ""
+## 사용자가 바꾼 키 바인딩 {"<액션>#<슬롯>": physical_keycode}. 빈 값 = 기본.
+var keybinds: Dictionary = {}
+## 사용자가 바꾼 패드 바인딩 {"<액션>": {"t": "b"/"a", "i": 인덱스}}.
+var padbinds: Dictionary = {}
 
 var score: int = 0:
 	set(value):
@@ -160,6 +169,8 @@ var score: int = 0:
 
 func _ready() -> void:
 	load_game()
+	KeyBinds.apply_all(keybinds, padbinds)
+	apply_resolution()
 	if player_id == "":
 		randomize()
 		player_id = "%08x" % (randi() & 0x7fffffff)
@@ -177,6 +188,31 @@ func set_nickname(n: String) -> void:
 	nickname = n
 	save_game()
 	Ranks.rename_and_resubmit()
+
+
+## 창 해상도 적용 (데스크톱 전용 — 웹·모바일은 창 크기를 우리가 못 정한다).
+func apply_resolution() -> void:
+	if resolution == "" or OS.has_feature("web") or OS.has_feature("mobile"):
+		return
+	var parts := resolution.split("x")
+	if parts.size() != 2:
+		return
+	var want := Vector2i(int(parts[0]), int(parts[1]))
+	if want.x < 640 or want.y < 480:
+		return
+	DisplayServer.window_set_size(want)
+	var scr := DisplayServer.window_get_current_screen()
+	DisplayServer.window_set_position(DisplayServer.screen_get_position(scr)
+			+ (DisplayServer.screen_get_size(scr) - want) / 2)
+
+
+## 게임패드 진동 — 설정의 세기(0~3)를 곱해서 울린다. 0이면 아무것도 안 한다.
+func rumble(weak: float, strong: float, duration: float) -> void:
+	if vibration <= 0:
+		return
+	var k := vibration / 3.0
+	for dev in Input.get_connected_joypads():
+		Input.start_joy_vibration(dev, weak * k, strong * k, duration)
 
 
 func reset() -> void:
@@ -789,6 +825,10 @@ func save_game() -> void:
 		"vol_master": vol_master,
 		"vol_bgm": vol_bgm,
 		"vol_sfx": vol_sfx,
+		"vibration": vibration,
+		"resolution": resolution,
+		"keybinds": keybinds,
+		"padbinds": padbinds,
 	}
 	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if file:
@@ -889,6 +929,21 @@ func load_game() -> void:
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
 		vol_bgm = clampf(float(data.get("vol_bgm", 0.8)), 0.0, 1.0)
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
+		vibration = clampi(int(data.get("vibration", 2)), 0, 3)
+		resolution = str(data.get("resolution", ""))
+		var kb: Variant = data.get("keybinds", {})
+		if kb is Dictionary:
+			keybinds = {}
+			for k in kb:
+				keybinds[str(k)] = int(kb[k])
+		var pb: Variant = data.get("padbinds", {})
+		if pb is Dictionary:
+			padbinds = {}
+			for k in pb:
+				var b: Variant = pb[k]
+				if b is Dictionary:
+					padbinds[str(k)] = {"t": str(b.get("t", "b")), "i": int(b.get("i", 0)),
+							"d": int(b.get("d", 1))}
 		# 사라진 캐릭터(구버전 세이브)를 고르고 있었으면 기본냥으로 되돌린다.
 		var known := false
 		for cat in CATS:

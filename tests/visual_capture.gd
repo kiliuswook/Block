@@ -28,6 +28,19 @@ func _ready() -> void:
 				inst._open_pick(2))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_pad.png",
+			func(inst: Node) -> void:
+				inst._settings.open()
+				inst._settings._show_page(inst._settings.PAGE_PAD))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_keys.png",
+			func(inst: Node) -> void:
+				inst._settings.open()
+				inst._settings._show_page(inst._settings.PAGE_KEYS))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_keys_2p.png",
+			func(inst: Node) -> void:
+				inst._settings.open()
+				inst._settings._show_page(inst._settings.PAGE_KEYS)
+				inst._settings._set_keys_tab(1))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha.png",
 			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pick.png",
@@ -66,7 +79,9 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst._customizer.open("mycat")
 				inst._customizer._cur = 5  # 눈 칩 — 모양+색을 한 패널에서 확인
-				inst._customizer._refresh())
+				inst._customizer._refresh()
+				# 잠긴 파츠 미리보기 — 눈 3번(잠금)을 입혀 본 상태
+				inst._customizer._pick("eyes", 3))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
 				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "door": 0,
