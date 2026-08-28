@@ -55,6 +55,16 @@ func _ready() -> void:
 				inst._customizer._cur = 3  # 눈 색 탭 — 색 견본 그리드 확인용
 				inst._customizer._refresh())
 	GameState.cat_custom = saved_custom
+	# 나만의 캐릭터 — 슬롯 팝업 + 잠긴 파츠가 섞인 꾸미기 화면(눈 탭).
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_popup.png",
+			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("mycat")))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_custom.png",
+			func(inst: Node) -> void: inst._customizer.open("mycat"))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_eyes.png",
+			func(inst: Node) -> void:
+				inst._customizer.open("mycat")
+				inst._customizer._cur = 4  # 눈 탭 — 잠긴 파츠 실루엣 확인용
+				inst._customizer._refresh())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
 				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "door": 0,

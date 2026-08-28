@@ -39,6 +39,13 @@ const CATS: Array[Dictionary] = [
 	{"id": "gray", "char": "char06", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
 		"unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
+	# 나만의 캐릭터 — 디자인 냥이가 아니라 백지 몸통(CustomCat.BLANK_CHAR)이다.
+	# 처음부터 열려 있고 키캡을 모으지 않는다(가챠 풀·도감에서 제외).
+	# 꾸미기에 쓸 수 있는 파츠는 "해금한 디자인 냥이가 가진 파츠"뿐이다.
+	{"id": "mycat", "char": "custom", "name": "CAT_MINE", "body": Color("fbf6ee"),
+		"ear": Color("e8d9c8"), "custom": true, "unlock": {"type": "free"},
+		"trait": "TRAIT_MINE",
+		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
 ]
 
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
@@ -424,11 +431,11 @@ func draw_keycaps(n: int) -> Array:
 	if not spend_gold(keycap_price(n)):
 		return []
 	var pool: Array[String] = []
-	for cat in CATS:
+	for cat in keycap_cats():
 		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
 			pool.append(str(cat.id))
 	if pool.is_empty():  # 전원 만렙이면 그냥 아무 냥이 몫으로 (중복 수집)
-		for cat in CATS:
+		for cat in keycap_cats():
 			pool.append(str(cat.id))
 	var out: Array = []
 	for i in n:
@@ -640,6 +647,81 @@ func get_cat(id: String) -> Dictionary:
 		if cat.id == id:
 			return cat
 	return CATS[0]
+
+
+## 나만의 캐릭터(백지 슬롯)인가 — 키캡·해금 진행이 없는 자리.
+func is_custom_cat(id: String) -> bool:
+	return bool(get_cat(id).get("custom", false))
+
+
+## 키캡을 모으는 냥이들 (가챠 풀·도감 탭 — 나만의 캐릭터는 빠진다).
+func keycap_cats() -> Array:
+	var out: Array = []
+	for cat in CATS:
+		if not cat.get("custom", false):
+			out.append(cat)
+	return out
+
+
+## 디자인 캐릭터(char01…) → 그 캐릭터를 쓰는 냥이 id ("" = 없음).
+func cat_id_for_char(char_id: String) -> String:
+	for cat in CATS:
+		if cat.get("char", "") == char_id and not cat.get("custom", false):
+			return str(cat.id)
+	return ""
+
+
+# --- 나만의 캐릭터의 파츠 해금 ------------------------------------------------------
+## 파츠는 전부 디자인 냥이에게서 빌려 온다 — 그 냥이를 해금해야(그리고 그 파츠가
+## 붙는 단계까지 키캡을 모아야) 나만의 캐릭터에 쓸 수 있다.
+
+
+## 이 출처(냥이 + 파츠 단계)가 열려 있는가. 단계 t는 등급 1+t에서 붙는다.
+func _source_open(src: Dictionary) -> bool:
+	var cid := cat_id_for_char(str(src.get("char", "")))
+	return cid != "" and cat_grade(cid) >= 1 + int(src.get("tier", 0))
+
+
+## 나만의 캐릭터가 이 부위 옵션을 쓸 수 있는가 (출처가 없는 "없음"은 항상 가능).
+func part_unlocked(key: String, idx: int) -> bool:
+	var srcs: Variant = CustomCat.option_sources(key, idx)
+	if not srcs is Array:
+		return false
+	for src: Dictionary in srcs:
+		if _source_open(src):
+			return true
+	return (srcs as Array).is_empty()
+
+
+## 나만의 캐릭터가 지금 쓸 수 있는 파츠 수 / 전체 (타일·팝업 표시용).
+func my_parts_progress() -> Vector2i:
+	var open := 0
+	var total := 0
+	for part in CustomCat.PARTS:
+		var key := str(part.key)
+		for i: int in CustomCat.my_options(key):
+			total += 1
+			if part_unlocked(key, i):
+				open += 1
+	return Vector2i(open, total)
+
+
+## 잠긴 옵션을 여는 가장 가까운 조건 — {"cat": id, "grade": n}. 없으면 빈 사전.
+func part_unlock_hint(key: String, idx: int) -> Dictionary:
+	var srcs: Variant = CustomCat.option_sources(key, idx)
+	if not srcs is Array:
+		return {}
+	var best := {}
+	for src: Dictionary in srcs:
+		var cid := cat_id_for_char(str(src.get("char", "")))
+		if cid == "":
+			continue
+		var need := 1 + int(src.get("tier", 0))
+		# 이미 해금된 냥이의 다음 단계가 가장 가깝다 — 등급 차이로 고른다.
+		var gap := need - cat_grade(cid)
+		if best.is_empty() or gap < int(best.get("gap", 99)):
+			best = {"cat": cid, "grade": need, "gap": gap}
+	return best
 
 
 ## Stat multiplier dictionary for a cat (speed / jump / dash / weight),

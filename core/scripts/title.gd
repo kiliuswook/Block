@@ -815,12 +815,13 @@ func _build_keycap_dex() -> void:
 	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
 	tabs.add_theme_constant_override("separation", 6)
 	v.add_child(tabs)
-	for cat: Dictionary in GameState.CATS:
+	# 키캡은 디자인 냥이들만 모은다 — 나만의 캐릭터는 도감에 자리가 없다.
+	var dex_cats := GameState.keycap_cats()
+	for cat: Dictionary in dex_cats:
 		var id := str(cat.id)
 		var tab := Button.new()
 		tab.custom_minimum_size = Vector2(
-				(pw - 60.0 - 6.0 * (GameState.CATS.size() - 1)) / GameState.CATS.size(),
-				46.0)
+				(pw - 60.0 - 6.0 * (dex_cats.size() - 1)) / dex_cats.size(), 46.0)
 		tab.pressed.connect(func() -> void:
 			Sfx.play("click")
 			_keycap_cat = id
@@ -855,7 +856,7 @@ func _build_keycap_dex() -> void:
 
 ## cat_id를 주면 그 냥이 도감을 펼친 채로 연다 (캐릭터 팝업의 도감 버튼).
 func _open_keycap_dex(cat_id := "") -> void:
-	if cat_id != "":
+	if cat_id != "" and not GameState.is_custom_cat(cat_id):
 		_keycap_cat = cat_id
 	_raise(_keycap_dex)
 	_refresh_keycap_dex()
@@ -996,7 +997,8 @@ func _build_ranks() -> void:
 		sb_btn.pressed.connect(func() -> void:
 			Sfx.play("click")
 			_rank_weekly = entry[0]
-			_refresh_rank_list())
+			_refresh_rank_list()
+			Ranks.view(_rank_mode, _rank_weekly))
 		scopes.add_child(sb_btn)
 		_rank_scopes[entry[0]] = sb_btn
 	# Mode tabs.
@@ -1047,13 +1049,15 @@ func _open_ranks() -> void:
 	_nick_edit.text = GameState.nickname
 	_ranks.visible = true
 	_refresh_rank_list()
-	Ranks.refresh()  # board_loaded will re-render with fresh data
+	Ranks.view(_rank_mode, _rank_weekly)  # board_loaded will re-render
 
 
 func _on_rank_tab(mode_key: String) -> void:
 	Sfx.play("click")
 	_rank_mode = mode_key
 	_refresh_rank_list()
+	# 스팀 백엔드는 보드를 하나씩 받아 오므로 탭을 옮길 때마다 불러야 한다.
+	Ranks.view(_rank_mode, _rank_weekly)
 
 
 func _refresh_rank_list() -> void:
@@ -1067,7 +1071,7 @@ func _refresh_rank_list() -> void:
 				{"time": Ranks.week_remaining_text()})
 	for child in _rank_list.get_children():
 		child.queue_free()
-	var mine := GameState.player_id
+	var mine := Ranks.my_id()
 	var local_v := GameState.weekly_value(_rank_mode) if _rank_weekly \
 			else Ranks.local_value(_rank_mode)
 	var list := Ranks.entries(_rank_mode, _rank_weekly)
@@ -1144,7 +1148,7 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 		UiKit.btn_card(play, UiKit.ORANGE_DEEP, 16)
 		play.pressed.connect(func() -> void:
 			Sfx.play("click")
-			var rep: Dictionary = Ranks.replay_for(mode_key, entry)
+			var rep: Dictionary = await Ranks.replay_for(mode_key, entry)
 			if rep.is_empty():
 				_show_toast(tr("RANK_REPLAY_FAIL"), Color(1.0, 0.55, 0.5))
 				return
@@ -1402,7 +1406,13 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 		# 잠긴 냥이는 해금 게이지 = 이번 바퀴 키캡 진행 (기호+숫자라 번역 불필요).
 		_draw_center_text(ci, font, "▦ %d / 26" % GameState.keycap_ring(str(cat.id)),
 				142.0, 18, GOLD_COL)
-	_draw_grade_pips(ci, str(cat.id), 158.0)
+	# 나만의 캐릭터는 키캡을 모으지 않는다 — 등급 칩 대신 파츠 해금 수를 띄운다.
+	if GameState.is_custom_cat(str(cat.id)):
+		var prog := GameState.my_parts_progress()
+		_draw_center_text(ci, font, "🎨 %d / %d" % [prog.x, prog.y], 162.0, 16,
+				UiKit.PURPLE_DEEP)
+	else:
+		_draw_grade_pips(ci, str(cat.id), 158.0)
 
 
 ## 타일 아래 등급 칩 — 채워진 개수가 지금 등급(키캡 A~Z를 채운 바퀴 수)이다.
@@ -1540,6 +1550,8 @@ func _open_popup(cat: Dictionary) -> void:
 	var char_id := str(cat.get("char", "char01"))
 	_popup_custom.visible = unlocked and (CatSprite.is_layered(char_id)
 			or not CatSprite.has(char_id))
+	# 나만의 캐릭터는 키캡을 모으지 않으므로 도감 버튼이 없다.
+	_popup_dex.visible = not GameState.is_custom_cat(str(cat.id))
 	# Bottom row: visible buttons side by side, centered — 다 들어가지 않으면
 	# 폭을 같은 비율로 줄인다 (긴 번역 + 버튼 4개).
 	var y := POPUP_SIZE.y - 70.0
@@ -1548,7 +1560,8 @@ func _open_popup(cat: Dictionary) -> void:
 		row.append([_popup_action, 200.0])
 	if _popup_custom.visible:
 		row.append([_popup_custom, 170.0])
-	row.append([_popup_dex, 170.0])
+	if _popup_dex.visible:
+		row.append([_popup_dex, 170.0])
 	row.append([_popup_close, 200.0 if row.is_empty() else 140.0])
 	var total := -18.0
 	for entry: Array in row:
@@ -1670,7 +1683,17 @@ func _draw_popup(ci: Control) -> void:
 			var col := UiKit.ORANGE if p < pips else Color(INK, 0.12)
 			ci.draw_rect(r, col)
 	# 키캡 수집 현황 — 잠긴 냥이에겐 이게 곧 해금 조건이다.
-	_draw_keycap_progress(ci, str(cat.id), 530.0)
+	# 나만의 캐릭터는 모을 키캡이 없다: 대신 파츠 해금 규칙을 알려 준다.
+	if GameState.is_custom_cat(str(cat.id)):
+		var prog := GameState.my_parts_progress()
+		_draw_center_text(ci, font, tr("CHAR_MINE_HINT"), 522.0, 20,
+				UiKit.PURPLE_DEEP, POPUP_SIZE.x)
+		_draw_center_text(ci, font, "🎨 %d / %d" % [prog.x, prog.y], 556.0, 24,
+				GOLD_COL, POPUP_SIZE.x)
+		_draw_center_text(ci, font, tr("CHAR_MINE_HINT2"), 584.0, 17,
+				UiKit.MUTED, POPUP_SIZE.x)
+	else:
+		_draw_keycap_progress(ci, str(cat.id), 530.0)
 	# Affection hearts (snacks fed) — unlocked cats only.
 	if unlocked:
 		var level := GameState.affection_level(cat.id)

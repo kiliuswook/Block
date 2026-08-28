@@ -340,6 +340,21 @@ const CHARS: Dictionary = {
 
 const TIER_MAX := 3
 
+## "나만의 캐릭터"(GameState의 custom 슬롯)가 쓰는 백지 몸통 — 디자인 캐릭터가
+## 아니므로 CHARS에 넣지 않는다. 여기에 사용자가 고른 파츠가 얹힌다.
+const BLANK_CHAR: Dictionary = {
+	"name": "CAT_MINE",
+	"parts": {
+		"body_col": Color("fbf6ee"), "ear_col": Color("e8d9c8"),
+		"tail_col": Color("e8d9c8"), "foot_col": Color("fbf6ee"),
+		"ear": "pointy", "eyes": "oval", "eye_col": Color("241f28"),
+		"nose": "tri", "nose_col": Color("e58a86"), "mouth": "w",
+		"whisker": "basic", "cheek": "pink", "feet": "beans",
+		"pattern": "none", "tail": "none",
+	},
+	"tiers": [],
+}
+
 ## 컨셉 시트 스프라이트(cat_sprite.gd)의 레이어로 표현할 수 있는 부위 — 색상뿐이다.
 ## 부위 key → 그 색이 칠해지는 레이어들. 여기 없는 부위(모양 교체)를 건드리면
 ## 스프라이트로는 그릴 수 없으므로 코드 렌더(CatArt)로 넘어간다.
@@ -375,7 +390,7 @@ static func pick(sel: Dictionary, key: String) -> int:
 
 ## 디자인 캐릭터의 파츠 묶음 — tier(0~3)만큼 해금 파츠를 얹어 돌려준다.
 static func char_parts(char_id: String, tier := TIER_MAX) -> Dictionary:
-	var def: Dictionary = CHARS.get(char_id, CHARS["char01"])
+	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
 	var parts: Dictionary = (def.parts as Dictionary).duplicate(true)
 	var tiers: Array = def.tiers
 	for i in mini(maxi(tier, 0), tiers.size()):
@@ -394,17 +409,7 @@ static func char_selection(char_id: String, tier := TIER_MAX) -> Dictionary:
 		if want == null:
 			continue
 		if part.get("type") == "color":
-			var cols: Array = part.cols
-			var best := 0
-			var best_d := 1e9
-			for i in cols.size():
-				var c: Color = cols[i]
-				var w: Color = want
-				var d: float = absf(c.r - w.r) + absf(c.g - w.g) + absf(c.b - w.b)
-				if d < best_d:
-					best_d = d
-					best = i
-			sel[key] = best
+			sel[key] = nearest_col(part.cols, want)
 		else:
 			var opts: Array = part.opts
 			for i in opts.size():
@@ -489,3 +494,89 @@ static func sprite_tints(sel: Dictionary) -> Dictionary:
 		for layer: String in SPRITE_TINTS[k]:
 			out[layer] = col
 	return out
+
+
+# --- 나만의 캐릭터(커스텀 슬롯) 파츠 출처 -------------------------------------------
+## "나만의 캐릭터"의 부품은 전부 디자인 냥이 6종에게서 빌려 온 것이다.
+## 그래서 옵션마다 출처(어느 냥이의 몇 번째 파츠 단계인가)를 들고 있고,
+## 그 냥이를 해금(+그 단계까지 성장)해야 쓸 수 있다 — 잠긴 옵션은 자물쇠로 뜬다.
+## 출처가 비어 있는 옵션("없음")은 언제나 열려 있다.
+
+## {부위 key: {옵션 index: [{"char": id, "tier": n}, ...]}} — 빈 배열 = 상시 개방.
+static var _sources: Dictionary = {}
+
+
+static func my_sources() -> Dictionary:
+	if not _sources.is_empty():
+		return _sources
+	var out := {}
+	for part in PARTS:
+		var key := str(part.key)
+		out[key] = {}
+		# "없음"은 어느 냥이의 것도 아니다 — 늘 고를 수 있어야 원상복구가 된다.
+		if part.get("type") != "color":
+			var opts: Array = part.opts
+			for i in opts.size():
+				if str(opts[i].id) == "none":
+					out[key][i] = []
+	for char_id: String in CHARS:
+		var def: Dictionary = CHARS[char_id]
+		_collect_sources(out, char_id, 0, def.parts)
+		var tiers: Array = def.tiers
+		for t in tiers.size():
+			_collect_sources(out, char_id, t + 1, tiers[t])
+	_sources = out
+	return out
+
+
+## 파츠 묶음 하나(기본 파츠 또는 해금 단계 하나)를 출처표에 적는다.
+static func _collect_sources(out: Dictionary, char_id: String, tier: int,
+		parts: Dictionary) -> void:
+	for part in PARTS:
+		var key := str(part.key)
+		var want: Variant = parts.get(_parts_key(key))
+		if want == null:
+			continue
+		var idx := -1
+		if part.get("type") == "color":
+			idx = nearest_col(part.cols, want)
+		else:
+			var opts: Array = part.opts
+			for i in opts.size():
+				if str(opts[i].id) == str(want):
+					idx = i
+					break
+		if idx < 0:
+			continue
+		var slot: Dictionary = out[key]
+		if not slot.has(idx):
+			slot[idx] = [{"char": char_id, "tier": tier}]
+		elif not (slot[idx] as Array).is_empty():
+			(slot[idx] as Array).append({"char": char_id, "tier": tier})
+
+
+## 이 부위에서 나만의 캐릭터가 쓸 수 있는 옵션 index들 (잠긴 것 포함, 오름차순).
+static func my_options(key: String) -> Array:
+	var slot: Dictionary = my_sources().get(key, {})
+	var out: Array = slot.keys()
+	out.sort()
+	return out
+
+
+## 이 옵션의 출처 목록 ([] = 상시 개방, 없는 옵션이면 null).
+static func option_sources(key: String, idx: int) -> Variant:
+	var slot: Dictionary = my_sources().get(key, {})
+	return slot.get(idx)
+
+
+## 팔레트에서 가장 가까운 색의 index.
+static func nearest_col(cols: Array, want: Color) -> int:
+	var best := 0
+	var best_d := 1e9
+	for i in cols.size():
+		var c: Color = cols[i]
+		var d: float = absf(c.r - want.r) + absf(c.g - want.g) + absf(c.b - want.b)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best

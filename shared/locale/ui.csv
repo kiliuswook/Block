@@ -266,3 +266,8 @@ MENU_START,Start Game,게임 시작,[Şţàřţ Ğàɱé ———————�
 MENU_QUIT,Quit,종료,[Ɋüïţ ———]
 CHAR_PICK,Pick Your Cat,참가 냥이 고르기,[Þïçķ Ÿôüř Çàţ ——————————]
 CHAR_PICK_TURN,Choosing...,고르는 중...,[Çĥôôşïńğ... ————————]
+CHAR_MINE_HINT,Built from the parts you own,해금한 냥이들의 파츠로 꾸미는 자리,[Ɓüïłţ ƒřôɱ ţĥé þàřţş ÿôü ôŵń ——————————————————————]
+CHAR_MINE_HINT2,Grow your cats to unlock parts,냥이를 키울수록 쓸 파츠가 늘어난다,[Ğřôŵ ÿôüř çàţş ţô üńłôçķ þàřţş ————————————————————————]
+CC_LOCKED,🔒 Recruit {name} to use this part,🔒 {name} 냥이를 합류시키면 쓸 수 있어요,[🔒 Řéçřüïţ {name} ţô üşé ţĥïş þàřţ ——————————————————————————]
+CC_LOCKED_GRADE,🔒 {name} needs Grade {grade} for this part,🔒 {name} 냥이가 {grade}등급이 되면 열려요,[🔒 {name} ńééðş Ğřàðé {grade} ƒôř ţĥïş þàřţ —————————————————————————————————]
+CC_LOCKED_ANY,🔒 This part is still locked,🔒 아직 잠긴 파츠예요,[🔒 Ţĥïş þàřţ ïş şţïłł łôçķéð —————————————————————]
