@@ -16,16 +16,18 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",
 			func(inst: Node) -> void: inst._open_chars())
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_players.png",
-			func(inst: Node) -> void: inst._on_mode_picked(GameState.MODE_ENDLESS))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes_2p.png",
+			func(inst: Node) -> void:
+				inst._set_players(2)
+				inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_1p.png",
 			func(inst: Node) -> void:
-				inst._pick_mode = GameState.MODE_CLASSIC
-				inst._open_pick(1))
+				inst._set_players(1)
+				inst._open_chars())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_2p.png",
 			func(inst: Node) -> void:
-				inst._pick_mode = GameState.MODE_ENDLESS
-				inst._open_pick(2))
+				inst._set_players(2)
+				inst._open_chars())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_pad.png",
@@ -165,14 +167,14 @@ func _ready() -> void:
 				inst.get_node("Board")._kill_player()
 				inst.get_node("PopupLayer/DeathPopup").open(
 						"도달 높이 23층      최고 기록 41층", true,
-						"획득   +87 G   +1 ◆", 2, true, false))
+						"획득   +87 G"))
 	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/death_popup_skip.png",
 			func(inst: Node) -> void:
 				inst._hide_story_intro()
 				inst.get_node("Board")._kill_player()
 				inst.get_node("PopupLayer/DeathPopup").open(
-						"STAGE 7      SCORE 4200", false, "", 1, false, true))
+						"STAGE 7      SCORE 4200", false, ""))
 	GameState.mode = GameState.MODE_ENDLESS
 	# --- 모바일(세로 1080×1920) 레이아웃 ---
 	get_window().size = Vector2i(540, 960)
@@ -184,9 +186,7 @@ func _ready() -> void:
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_gacha.png",
 			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_pick.png",
-			func(inst: Node) -> void:
-				inst._pick_mode = GameState.MODE_CLASSIC
-				inst._open_pick(1))
+			func(inst: Node) -> void: inst._open_chars())
 	GameState.keycaps = _demo_keycaps()
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))

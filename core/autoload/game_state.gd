@@ -78,7 +78,7 @@ const ACCESSORIES: Array[Dictionary] = [
 		"price": {"type": "gold", "amount": 3000},
 		"col": Color("f2c94c"), "col2": Color("e05f5f")},
 	{"id": "halo", "name": "ACC_HALO", "slot": "head", "kind": "halo",
-		"price": {"type": "gems", "amount": 12},
+		"price": {"type": "gold", "amount": 5000},
 		"col": Color("fff3d0"), "col2": Color("f7d354")},
 	{"id": "bell", "name": "ACC_BELL", "slot": "neck", "kind": "bell",
 		"price": {"type": "gold", "amount": 200},
@@ -96,7 +96,7 @@ const ACCESSORIES: Array[Dictionary] = [
 		"price": {"type": "gold", "amount": 3000},
 		"col": Color("f2c94c"), "col2": Color("c9982a")},
 	{"id": "gemchain", "name": "ACC_GEMCHAIN", "slot": "neck", "kind": "gemchain",
-		"price": {"type": "gems", "amount": 10},
+		"price": {"type": "gold", "amount": 4000},
 		"col": Color("d8dee8"), "col2": Color("6fd0e8")},
 ]
 
@@ -105,7 +105,6 @@ const BOOSTS: Array[Dictionary] = [
 	{"id": "warmup", "name": "BOOST_WARMUP", "desc": "BOOST_WARMUP_DESC", "price": 50},
 ]
 
-const SKIP_COST := 3  # gems to skip a story stage after repeated failures
 ## 캐릭터 등급 1~4 (0 = 잠김). 등급 하나 = 그 캐릭터의 키캡 A~Z 한 바퀴.
 const KEYCAP_GRADE_MAX := 4
 ## 키캡 가챠 — 상점에서 골드로 뽑는다. 10연차는 한 장 값을 깎아 준다.
@@ -128,7 +127,6 @@ var picnic_best: int = 0  # jelly picnic all-time high score
 var story_stage: int = 0  # highest story stage cleared
 var games_played: int = 0
 var gold: int = 0
-var gems: int = 0
 var selected_cat: String = "cream"
 ## 2P(화면 분할) 몫으로 고른 냥이 — 1P와 같은 냥이여도 커스터마이징은 따로 간다.
 var selected_cat2: String = "cream"
@@ -156,6 +154,8 @@ var vol_sfx: float = 1.0
 var vibration: int = 2
 ## 창 해상도 "1920x1080" ("" = project.godot 기본값 그대로).
 var resolution: String = ""
+## 타이틀에서 미리 정해 두는 참가 인원 (1 또는 2) — 모드를 고를 때마다 묻지 않는다.
+var players: int = 1
 ## 사용자가 바꾼 키 바인딩 {"<액션>#<슬롯>": physical_keycode}. 빈 값 = 기본.
 var keybinds: Dictionary = {}
 ## 사용자가 바꾼 패드 바인딩 {"<액션>": {"t": "b"/"a", "i": 인덱스}}.
@@ -230,7 +230,6 @@ func reset_all() -> void:
 	story_stage = 0
 	games_played = 0
 	gold = 0
-	gems = 0
 	selected_cat = "cream"
 	selected_cat2 = "cream"
 	weekly = {}
@@ -247,8 +246,8 @@ func reset_all() -> void:
 
 
 ## Records a cleared story stage (progress only ever moves forward).
-## A first-time clear pays a reward: 20~50 gold scaling with the stage, plus
-## 2 gems at every 10-stage boss. Announced via EventBus.story_reward.
+## A first-time clear pays a reward: 20~50 gold scaling with the stage.
+## Announced via EventBus.story_reward.
 func story_clear(stage_num: int) -> void:
 	# Weekly board counts every clear — replayed stages included.
 	var weekly_up := record_weekly("story", stage_num)
@@ -258,9 +257,8 @@ func story_clear(stage_num: int) -> void:
 		return
 	story_stage = stage_num
 	var reward_gold := 20 + stage_num / 4
-	var reward_gems := 2 if stage_num % 10 == 0 else 0
-	add_currency(reward_gold, reward_gems)  # save_game included
-	EventBus.story_reward.emit(reward_gold, reward_gems)
+	add_currency(reward_gold)  # save_game included
+	EventBus.story_reward.emit(reward_gold)
 	Ranks.submit("story", story_stage)
 
 
@@ -327,9 +325,8 @@ func record_weekly(mode_key: String, v: int) -> bool:
 	return true
 
 
-func add_currency(add_gold: int, add_gems: int) -> void:
+func add_currency(add_gold: int) -> void:
 	gold += add_gold
-	gems += add_gems
 	save_game()
 
 
@@ -337,14 +334,6 @@ func spend_gold(amount: int) -> bool:
 	if gold < amount:
 		return false
 	gold -= amount
-	save_game()
-	return true
-
-
-func spend_gems(amount: int) -> bool:
-	if gems < amount:
-		return false
-	gems -= amount
 	save_game()
 	return true
 
@@ -536,9 +525,7 @@ func try_buy_acc(id: String) -> bool:
 	if id in acc_owned:
 		return false
 	var price: Dictionary = get_acc(id).get("price", {})
-	var paid := spend_gold(int(price.amount)) if price.get("type") == "gold" \
-			else spend_gems(int(price.amount))
-	if not paid:
+	if not spend_gold(int(price.amount)):
 		return false
 	acc_owned.append(id)
 	save_game()
@@ -586,7 +573,7 @@ func toggle_boost(id: String) -> bool:
 	var price := int(get_boost(id).get("price", 0))
 	if id in pending_boosts:
 		pending_boosts.erase(id)
-		add_currency(price, 0)  # save included
+		add_currency(price)  # save included
 		return true
 	if not spend_gold(price):
 		return false
@@ -805,7 +792,6 @@ func save_game() -> void:
 		"story_stage": story_stage,
 		"games_played": games_played,
 		"gold": gold,
-		"gems": gems,
 		"selected_cat": selected_cat,
 		"selected_cat2": selected_cat2,
 		"nickname": nickname,
@@ -827,6 +813,7 @@ func save_game() -> void:
 		"vol_sfx": vol_sfx,
 		"vibration": vibration,
 		"resolution": resolution,
+		"players": players,
 		"keybinds": keybinds,
 		"padbinds": padbinds,
 	}
@@ -850,7 +837,6 @@ func load_game() -> void:
 		story_stage = int(data.get("story_stage", 0))
 		games_played = int(data.get("games_played", 0))
 		gold = int(data.get("gold", 0))
-		gems = int(data.get("gems", 0))
 		selected_cat = str(data.get("selected_cat", "cream"))
 		selected_cat2 = str(data.get("selected_cat2", "cream"))
 		nickname = str(data.get("nickname", ""))
@@ -931,6 +917,7 @@ func load_game() -> void:
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
 		vibration = clampi(int(data.get("vibration", 2)), 0, 3)
 		resolution = str(data.get("resolution", ""))
+		players = clampi(int(data.get("players", 1)), 1, 2)
 		var kb: Variant = data.get("keybinds", {})
 		if kb is Dictionary:
 			keybinds = {}

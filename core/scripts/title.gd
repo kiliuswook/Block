@@ -91,7 +91,8 @@ var _pull_anim := false
 var _spin_t := 0.0  # 기계 손잡이/캡슐 상시 애니메이션
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
-var _players_ui: Control  # 2인 가능 모드에서 PLAY 다음에 뜨는 인원 선택
+var _players_chips: Array[Button] = []  # 타이틀 메뉴에 상주하는 1인 / 2인 토글
+var _mode_rows: Array = []  # 모드 행 [{mode, btn, desc, tag, face, deep, size}]
 var _pick := false  # 캐릭터 선택이 "게임 시작 전 픽" 모드인가
 var _pick_mode := GameState.MODE_CLASSIC  # 픽이 끝나면 시작할 모드
 var _pick_count := 1  # 이번 판 인원 (1 또는 2)
@@ -142,7 +143,6 @@ func _ready() -> void:
 	_build_toast()
 	_build_settings()
 	_build_mode_select()
-	_build_players_select()
 	_build_menu()
 	_build_gacha()
 	_build_ranks()
@@ -161,12 +161,9 @@ func _ready() -> void:
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
 		if _ranks and _ranks.visible:
 			_refresh_rank_list())
-	Ranks.weekly_reward.connect(func(g: int, gm: int) -> void:
+	Ranks.weekly_reward.connect(func(g: int) -> void:
 		Sfx.play("record")
-		var line := tr("MENU_WEEKLY_PRIZE").format({"gold": g})
-		if gm > 0:
-			line += "  +%d ◆" % gm
-		_show_toast(line, GOLD_COL)
+		_show_toast(tr("MENU_WEEKLY_PRIZE").format({"gold": g}), GOLD_COL)
 		_refresh_currency())
 	Sfx.play_bgm("title")
 
@@ -220,8 +217,9 @@ func _build_menu() -> void:
 	var area := _menu_rect()
 	var gap := 16.0
 	var card_w := (area.size.x - gap) / 2.0
-	var play_h := area.size.y * 0.24
-	var card_h := area.size.y * 0.21
+	var play_h := area.size.y * 0.22
+	var seat_h := area.size.y * 0.125 if allow_2p else 0.0
+	var card_h := area.size.y * 0.195
 	var play := Button.new()
 	play.text = "▶   PLAY"
 	play.position = area.position
@@ -231,6 +229,22 @@ func _build_menu() -> void:
 		Sfx.play("click")
 		_open_modes())
 	$UI.add_child(play)
+	# 인원은 여기서 미리 정해 둔다 — 모드를 고를 때마다 다시 묻지 않는다.
+	var seat_y := play_h + gap
+	if allow_2p:
+		_players_chips.clear()
+		for i in 2:
+			var count := i + 1
+			var chip := Button.new()
+			chip.text = "%s  %s" % ["👤" if count == 1 else "👥",
+					tr("MENU_PLAYERS_1" if count == 1 else "MENU_PLAYERS_2")]
+			chip.position = area.position + Vector2(i * (card_w + gap), seat_y)
+			chip.size = Vector2(card_w, seat_h)
+			chip.pressed.connect(func() -> void: _set_players(count))
+			$UI.add_child(chip)
+			_players_chips.append(chip)
+		_refresh_players_chips()
+		seat_y += seat_h + gap
 	var cards := [
 		[tr("MENU_CHARACTER"), UiKit.GOLD_DEEP, func() -> void: _open_chars()],
 		[tr("MENU_GACHA"), UiKit.CYAN_DEEP, func() -> void: _open_gacha()],
@@ -242,7 +256,7 @@ func _build_menu() -> void:
 		var b := Button.new()
 		b.text = str(entry[0])
 		b.position = area.position + Vector2((i % 2) * (card_w + gap),
-				play_h + gap + (i / 2) * (card_h + gap))
+				seat_y + (i / 2) * (card_h + gap))
 		b.size = Vector2(card_w, card_h)
 		UiKit.btn_card(b, entry[1], int(card_h * 0.3))
 		var act: Callable = entry[2]
@@ -253,7 +267,7 @@ func _build_menu() -> void:
 	# 키캡 도감은 한 줄짜리 얇은 알약 버튼으로 카드 아래에.
 	var cap := Button.new()
 	cap.text = tr("MENU_KEYCAP_DEX")
-	cap.position = area.position + Vector2(0.0, play_h + card_h * 2.0 + gap * 3.0)
+	cap.position = area.position + Vector2(0.0, seat_y + card_h * 2.0 + gap * 2.0)
 	cap.size = Vector2(area.size.x, card_h * 0.62)
 	UiKit.btn_card(cap, UiKit.CYAN_DEEP, int(card_h * 0.24))
 	cap.pressed.connect(func() -> void:
@@ -284,6 +298,7 @@ func _build_mode_select() -> void:
 				GameState.MODE_ENDLESS],
 	]
 	var row_h := minf(120.0, panel.size.y / entries.size() - 40.0)
+	_mode_rows.clear()
 	var y := 8.0
 	for i in entries.size():
 		var e: Array = entries[i]
@@ -300,18 +315,43 @@ func _build_mode_select() -> void:
 		desc.size = Vector2(pw, 26.0)
 		desc.add_theme_font_size_override("font_size", 18)
 		desc.add_theme_color_override("font_color", UiKit.MUTED)
-		# 2인까지 되는 모드에는 인원 뱃지를 달아 둔다 (숫자·기호뿐 — 번역 불필요).
-		if _max_players(int(e[5])) > 1:
-			var tag := Label.new()
-			tag.text = "1–2P"
-			tag.position = Vector2(pw - 116.0, y + row_h + 2.0)
-			tag.size = Vector2(112.0, 26.0)
-			tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			tag.add_theme_font_size_override("font_size", 20)
-			tag.add_theme_color_override("font_color", UiKit.CYAN_DEEP)
-			panel.add_child(tag)
+		# 인원 뱃지 — 인원을 먼저 고르는 흐름이라 여기서 "이 모드가 되는지"를 알린다.
+		var tag := Label.new()
+		tag.position = Vector2(pw - 240.0, y + row_h + 2.0)
+		tag.size = Vector2(236.0, 26.0)
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		tag.add_theme_font_size_override("font_size", 20)
+		panel.add_child(tag)
+		_mode_rows.append({"mode": int(e[5]), "btn": btn, "desc": desc, "tag": tag,
+				"face": e[3], "deep": e[4], "size": int(row_h * 0.3)})
 		y += row_h + 40.0
 	_modes.visible = false
+
+
+## 인원 선택 결과에 맞춰 모드 행을 켜고 끈다 (2인 불가 모드는 회색 + 안내 뱃지).
+func _refresh_mode_rows() -> void:
+	for row: Dictionary in _mode_rows:
+		var btn: Button = row["btn"]
+		var tag: Label = row["tag"]
+		var maxp := _max_players(int(row["mode"]))
+		var ok := maxp >= _pick_count
+		btn.disabled = not ok
+		if ok:
+			UiKit.style_button(btn, row["face"], row["deep"], INK, int(row["size"]), 16)
+		else:
+			UiKit.style_button(btn, Color("dcdae0"), Color("b0adb8"),
+					Color("6b6875"), int(row["size"]), 16)
+		(row["desc"] as Label).add_theme_color_override("font_color",
+				UiKit.MUTED if ok else Color(0.17, 0.16, 0.2, 0.32))
+		if not ok:
+			tag.text = tr("MENU_MODE_SOLO_ONLY")
+			tag.add_theme_color_override("font_color", UiKit.RED_DEEP)
+		elif maxp > 1:
+			tag.text = "1–2P"
+			tag.add_theme_color_override("font_color", UiKit.CYAN_DEEP)
+		else:
+			tag.text = "1P"
+			tag.add_theme_color_override("font_color", UiKit.MUTED)
 
 
 ## 오버레이를 항상 메뉴 위로 올린다 (형제 순서 = 그리는 순서).
@@ -321,9 +361,24 @@ func _raise(c: Control) -> void:
 
 
 func _open_modes() -> void:
+	# 인원은 타이틀에서 미리 정해 둔 값을 그대로 따른다.
+	_pick_count = _seats()
 	_raise(_modes)
 	_refresh_classic_desc()
+	_refresh_mode_rows()
+	# 지금 몇 명으로 시작하는지를 제목에 계속 붙여 둔다.
+	var head: Label = _modes.get_meta("head")
+	head.text = tr("MENU_MODE_SELECT")
+	if allow_2p:
+		head.text += "  ·  %s" % tr("MENU_PLAYERS_1" if _pick_count < 2 else "MENU_PLAYERS_2")
 	_modes.visible = true
+
+
+## 타이틀에 미리 세팅해 둔 참가 인원 (2인이 없는 플랫폼은 항상 1인).
+func _seats() -> int:
+	if not allow_2p:
+		return 1
+	return clampi(GameState.players, 1, 2)
 
 
 ## 이 모드가 받을 수 있는 최대 인원 (모바일 타이틀은 항상 1인).
@@ -333,66 +388,48 @@ func _max_players(mode: int) -> int:
 	return int(MODE_PLAYERS.get(mode, 1))
 
 
-## 모드가 정해진 다음 단계: 2인 가능하면 인원 선택, 아니면 바로 캐릭터 선택.
+## 인원이 이미 정해진 뒤의 단계 — 모드를 고르면 바로 캐릭터 픽으로 넘어간다.
 func _on_mode_picked(mode: int) -> void:
-	Sfx.play("click")
+	if _max_players(mode) < _pick_count:
+		Sfx.play("error")
+		_show_toast(tr("MENU_MODE_SOLO_ONLY"), UiKit.RED_DEEP)
+		return
 	_pick_mode = mode
 	if _modes:
 		_modes.visible = false
-	if _max_players(mode) > 1:
-		_open_players()
-	else:
-		_open_pick(1)
+	# 캐릭터는 타이틀에서 이미 정해 뒀다 — 모드를 고르면 곧장 시작.
+	_start(mode, _pick_count > 1)
 
 
-# --- 인원 선택 오버레이 ---------------------------------------------------------
+# --- 타이틀에 상주하는 인원 토글 -------------------------------------------------
 
 
-## 2인까지 되는 모드에서만 뜨는 단계. 1인 / 2인(화면 분할) 둘 중 하나.
-func _build_players_select() -> void:
-	_players_ui = _make_overlay(tr("MENU_PLAYERS"),
-			func() -> void: _back_to_modes(),
-			Vector2(minf(vw - 80.0, 820.0), minf(vh - 160.0, 420.0)))
-	var body: Control = _players_ui.get_meta("body")
-	var entries := [
-		[1, "MENU_PLAYERS_1", "MENU_PLAYERS_1_DESC", UiKit.GOLD, UiKit.GOLD_DEEP],
-		[2, "MENU_PLAYERS_2", "MENU_PLAYERS_2_DESC", UiKit.CYAN, UiKit.CYAN_DEEP],
-	]
-	var row_h := minf(112.0, body.size.y / entries.size() - 40.0)
-	var y := 8.0
-	for e: Array in entries:
-		var count := int(e[0])
-		var b := Button.new()
-		b.text = "%d.  %s" % [count, tr(str(e[1]))]
-		b.position = Vector2(0.0, y)
-		b.size = Vector2(body.size.x, row_h)
-		UiKit.style_button(b, e[3], e[4], INK, int(row_h * 0.3), 16)
-		b.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_players_ui.visible = false
-			_open_pick(count))
-		body.add_child(b)
-		var d := Label.new()
-		d.text = tr(str(e[2]))
-		d.position = Vector2(0.0, y + row_h + 4.0)
-		d.size = Vector2(body.size.x, 26.0)
-		d.add_theme_font_size_override("font_size", 18)
-		d.add_theme_color_override("font_color", UiKit.MUTED)
-		body.add_child(d)
-		y += row_h + 40.0
-	_players_ui.visible = false
+## 1인 / 2인을 타이틀에서 미리 정해 둔다 (save.json에 남아 다음 실행에도 유지).
+func _set_players(count: int) -> void:
+	if GameState.players == count:
+		return
+	Sfx.play("click")
+	GameState.players = count
+	GameState.save_game()
+	_pick_count = _seats()
+	_refresh_players_chips()
+	# 모드 선택이 떠 있는 채로 바꿨다면 잠금 상태도 곧바로 다시 계산한다.
+	if _modes and _modes.visible:
+		_open_modes()
+	# 캐릭터 세팅이 열려 있으면 자리 수를 바로 맞춘다.
+	if _chars and _chars.visible:
+		_pick_slot = mini(_pick_slot, _pick_count - 1)
+		_commit_pick()
+		_refresh_chars_head()
+		_layout_pick_footer()
+		_refresh_pick_cards()
+		_refresh_tiles()
 
 
-func _open_players() -> void:
-	_raise(_players_ui)
-	_players_ui.visible = true
-
-
-## 픽 흐름에서 한 단계 뒤로 (인원 선택 → 모드 선택).
-func _back_to_modes() -> void:
-	if _players_ui:
-		_players_ui.visible = false
-	_open_modes()
+func _refresh_players_chips() -> void:
+	for i in _players_chips.size():
+		var chip: Button = _players_chips[i]
+		UiKit.btn_chip(chip, _seats() == i + 1, int(chip.size.y * 0.42))
 
 
 ## 어두운 배경 + 흰 패널 + 제목 + 닫기 버튼을 갖춘 공용 오버레이 껍데기.
@@ -496,19 +533,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
 			_close_chars()
-		return
-	# 인원 선택: 1 / 2 로 고르고 Esc로 모드 선택으로 돌아간다.
-	if _players_ui and _players_ui.visible:
-		if event is InputEventKey and event.pressed and not event.echo:
-			match event.physical_keycode:
-				KEY_ESCAPE:
-					_back_to_modes()
-				KEY_1, KEY_KP_1:
-					_players_ui.visible = false
-					_open_pick(1)
-				KEY_2, KEY_KP_2:
-					_players_ui.visible = false
-					_open_pick(2)
 		return
 	# 모드 오버레이는 숫자 단축키를 그대로 통과시킨다 (Esc는 닫기).
 	if _modes and _modes.visible and event is InputEventKey and event.pressed \
@@ -909,8 +933,7 @@ func _process(delta: float) -> void:
 
 
 func _refresh_gacha() -> void:
-	_gacha_wallet.text = tr("SHOP_WALLET").format(
-			{"gold": GameState.gold, "gems": GameState.gems})
+	_gacha_wallet.text = tr("SHOP_WALLET").format({"gold": GameState.gold})
 	for i in _gacha_mode_btns.size():
 		UiKit.btn_chip(_gacha_mode_btns[i], _gacha_pick_mode == (i == 1), 22)
 	var picked: int = GameState.gacha_pick.size()
@@ -1365,45 +1388,46 @@ func _build_character_row() -> void:
 	_build_pick_footer(body, grid_h)
 
 
+## 캐릭터는 타이틀에서 미리 정해 둔다 — 인원 세팅에 맞춰 1P(+2P) 자리가 뜨고,
+## 고르는 즉시 GameState에 저장된다. 플레이 입장 때는 다시 묻지 않는다.
 func _open_chars() -> void:
-	_pick = false
-	_pick_count = 1
-	(_chars.get_meta("head") as Label).text = tr("CHAR_SELECT")
-	_pick_footer.visible = false
-	_raise(_chars)
-	_refresh_tiles()
-	_chars.visible = true
-
-
-func _close_chars() -> void:
-	# 픽 도중이면 한 단계 뒤로, 둘러보기면 그냥 닫는다.
-	_chars.visible = false
-	if not _pick:
-		return
-	_pick = false
-	if _max_players(_pick_mode) > 1:
-		_open_players()
-	else:
-		_open_modes()
-
-
-# --- 참가자 픽 (마리오 파티식 슬롯) -----------------------------------------------
-
-
-## 게임 시작 전 캐릭터 픽을 연다. count = 1이면 1P 슬롯 하나, 2면 1P·2P 둘.
-func _open_pick(count: int) -> void:
 	_pick = true
-	_pick_count = count
+	_pick_count = _seats()
 	_pick_slot = 0
 	_pick_cats[0] = _first_unlocked(GameState.selected_cat)
 	_pick_cats[1] = _first_unlocked(GameState.selected_cat2)
-	(_chars.get_meta("head") as Label).text = tr("CHAR_PICK")
+	_commit_pick()
+	_refresh_chars_head()
 	_pick_footer.visible = true
 	_layout_pick_footer()
 	_raise(_chars)
 	_refresh_tiles()
 	_refresh_pick_cards()
 	_chars.visible = true
+
+
+## 오버레이 제목에 지금 세팅한 인원을 붙인다.
+func _refresh_chars_head() -> void:
+	var head: Label = _chars.get_meta("head")
+	head.text = tr("CHAR_SELECT")
+	if allow_2p:
+		head.text += "  ·  " + tr("MENU_PLAYERS_1" if _pick_count < 2 else "MENU_PLAYERS_2")
+
+
+## 자리별 선택을 저장한다 (고를 때마다 즉시 — 따로 확정 단계가 없다).
+func _commit_pick() -> void:
+	GameState.select_cat(_pick_cats[0], 1)
+	if _pick_count > 1:
+		GameState.select_cat(_pick_cats[1], 2)
+
+
+func _close_chars() -> void:
+	_chars.visible = false
+	_pick = false
+	queue_redraw()  # 타이틀 고양이를 새 선택으로 다시 그린다
+
+
+# --- 참가자 자리 카드 (마리오 파티식 슬롯) ---------------------------------------
 
 
 ## 저장된 선택이 아직 잠겨 있으면 해금된 첫 냥이로 대체한다.
@@ -1450,10 +1474,12 @@ func _build_pick_footer(body: Control, top: float) -> void:
 		_pick_footer.add_child(card)
 		_slot_cards.append([card, face, custom])
 	_pick_start = Button.new()
-	_pick_start.text = tr("MENU_START")
+	_pick_start.text = tr("CHAR_DONE")
 	_pick_start.size = Vector2(300.0, 58.0)
 	UiKit.btn_primary(_pick_start, 26)
-	_pick_start.pressed.connect(_start_picked)
+	_pick_start.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_close_chars())
 	_pick_footer.add_child(_pick_start)
 
 
@@ -1512,19 +1538,11 @@ func _draw_slot_card(ci: Control, slot: int) -> void:
 func _assign_pick(cat_id: String) -> void:
 	Sfx.play("buy")
 	_pick_cats[_pick_slot] = cat_id
+	_commit_pick()
 	if _pick_count > 1:
 		_pick_slot = (_pick_slot + 1) % _pick_count
 	_refresh_pick_cards()
 	_refresh_tiles()
-
-
-func _start_picked() -> void:
-	GameState.select_cat(_pick_cats[0], 1)
-	if _pick_count > 1:
-		GameState.select_cat(_pick_cats[1], 2)
-	_chars.visible = false
-	_pick = false
-	_start(_pick_mode, _pick_count > 1)
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -1875,7 +1893,7 @@ func _build_currency_display() -> void:
 
 
 func _refresh_currency() -> void:
-	_currency_label.text = "%d G      ◆ %d" % [GameState.gold, GameState.gems]
+	_currency_label.text = "%d G" % GameState.gold
 	_currency_label.add_theme_color_override("font_color", GOLD_COL)
 
 
