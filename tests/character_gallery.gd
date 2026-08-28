@@ -161,7 +161,7 @@ func _cat_with_pose(c: Dictionary, center: Vector2, rot: float, sx: float,
 	else:
 		# Afterimage: base cat only, colors faded to the given alpha.
 		var skin := {"body": Color(c.body, c.body.a * alpha),
-			"ear": Color(c.ear, c.ear.a * alpha), "aff": 1,
+			"ear": Color(c.ear, c.ear.a * alpha),
 			"ink": Color(c.get("ink", Color("2c2430")), alpha)}
 		Player.paint_cat(self, center, S, look, true, false, skin)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
@@ -169,7 +169,7 @@ func _cat_with_pose(c: Dictionary, center: Vector2, rot: float, sx: float,
 
 
 func _paint_full(c: Dictionary, center: Vector2, look: float, blink: bool) -> void:
-	var skin := {"body": c.body, "ear": c.ear, "aff": stage}
+	var skin := {"body": c.body, "ear": c.ear}
 	if c.has("ink"):
 		skin["ink"] = c.ink
 	if c.id == "siam" and stage >= 2:

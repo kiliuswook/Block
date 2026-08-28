@@ -12,12 +12,6 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
 			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
-	# Max-affection looks (stage 3): aura, eye sparkles, floating heart.
-	var saved_aff: Dictionary = GameState.affection.duplicate()
-	GameState.affection = {"black": 25}
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_aff.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
-	GameState.affection = saved_aff
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes.png",
 			func(inst: Node) -> void: inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",

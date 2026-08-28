@@ -104,14 +104,6 @@ const BOOSTS: Array[Dictionary] = [
 	{"id": "warmup", "name": "BOOST_WARMUP", "desc": "BOOST_WARMUP_DESC", "price": 50},
 ]
 
-## Snack price scales with the cat's current level: 50 + 50×level gold.
-const SNACK_PRICE_BASE := 50
-const SNACK_PRICE_STEP := 50
-## Cumulative snacks needed for affection level 1..10 (level 1 is the base).
-const AFFECTION_STEPS := [0, 1, 2, 4, 6, 9, 12, 16, 20, 25]
-const SNACK_MAX := 25
-## Stat growth per affection level above 1 (speed/jump/dash), +9% at Lv.10.
-const AFFECTION_STAT_STEP := 0.01
 const SKIP_COST := 3  # gems to skip a story stage after repeated failures
 ## 캐릭터 등급 1~4 (0 = 잠김). 등급 하나 = 그 캐릭터의 키캡 A~Z 한 바퀴.
 const KEYCAP_GRADE_MAX := 4
@@ -142,7 +134,6 @@ var weekly_claimed: int = 0  # last finished week whose prize was checked
 var acc_owned: Array = []  # ids of purchased accessories
 var acc_head: String = ""  # equipped accessory per slot ("" = none)
 var acc_neck: String = ""
-var affection: Dictionary = {}  # cat id -> total snacks fed
 var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
 var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
@@ -187,7 +178,7 @@ func reset() -> void:
 
 
 ## Full progress wipe (설정 > 게임 초기화): records, story progress, wallet,
-## unlocked cats, accessories, affection, keycaps, custom cat, weekly bests.
+## unlocked cats, accessories, keycaps, custom cat, weekly bests.
 ## Keeps the volume settings, language, nickname and player_id (same identity).
 func reset_all() -> void:
 	score = 0
@@ -205,7 +196,6 @@ func reset_all() -> void:
 	acc_owned = []
 	acc_head = ""
 	acc_neck = ""
-	affection = {}
 	pending_boosts = []
 	skipped_stages = []
 	keycaps = {}
@@ -551,57 +541,6 @@ func take_boosts() -> Array:
 	return taken
 
 
-# --- Affection (snacks) ---------------------------------------------------------
-
-
-func affection_fed(id: String) -> int:
-	return int(affection.get(id, 0))
-
-
-## Affection level 1..10 from cumulative snacks fed.
-func affection_level(id: String) -> int:
-	var fed := affection_fed(id)
-	var level := 1
-	for i in range(AFFECTION_STEPS.size()):
-		if fed >= AFFECTION_STEPS[i]:
-			level = i + 1
-	return level
-
-
-## Snacks still needed for the next affection level (0 at max).
-func snacks_to_next(id: String) -> int:
-	var level := affection_level(id)
-	if level >= 10:
-		return 0
-	return AFFECTION_STEPS[level] - affection_fed(id)
-
-
-## Snacks get pricier as the cat levels up: 100G at Lv.1 up to 500G at Lv.9.
-func snack_price(id: String) -> int:
-	return SNACK_PRICE_BASE + SNACK_PRICE_STEP * affection_level(id)
-
-
-## Multiplier bonus on speed/jump/dash from affection (+1% per level above 1).
-func affection_bonus(id: String) -> float:
-	return AFFECTION_STAT_STEP * (affection_level(id) - 1)
-
-
-## Looks stage 1..3: base / sparkling eyes (Lv.5+) / aura + heart (Lv.10).
-func aff_stage(id: String) -> int:
-	var level := affection_level(id)
-	if level >= 10:
-		return 3
-	return 2 if level >= 5 else 1
-
-
-func feed_cat(id: String) -> bool:
-	if affection_fed(id) >= SNACK_MAX or not spend_gold(snack_price(id)):
-		return false
-	affection[id] = affection_fed(id) + 1
-	save_game()
-	return true
-
-
 # --- 캐릭터 커스터마이징 ----------------------------------------------------------
 ## 캐릭터마다 따로 저장된다. sel에는 사용자가 손댄 부위만 들어가고,
 ## 나머지는 그 캐릭터의 디자인 파츠가 그대로 남는다 (빈 sel = 완전 기본 상태).
@@ -724,15 +663,10 @@ func part_unlock_hint(key: String, idx: int) -> Dictionary:
 	return best
 
 
-## Stat multiplier dictionary for a cat (speed / jump / dash / weight),
-## including the affection growth bonus on speed/jump/dash.
+## Stat multiplier dictionary for a cat (speed / jump / dash / weight).
 func cat_stats(id: String) -> Dictionary:
-	var stats: Dictionary = get_cat(id).get("stats",
+	return get_cat(id).get("stats",
 			{"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}).duplicate()
-	var bonus := 1.0 + affection_bonus(id)
-	for k in ["speed", "jump", "dash"]:
-		stats[k] = float(stats.get(k, 1.0)) * bonus
-	return stats
 
 
 ## Skin dictionary consumed by Player.paint_cat. The selected cat also
@@ -754,9 +688,6 @@ func cat_skin(id: String, player := 1) -> Dictionary:
 	var accs: Array = equipped_accs(id) if player <= 1 else []
 	if not accs.is_empty():
 		skin["acc"] = accs
-	var stage := aff_stage(id)
-	if stage > 1:
-		skin["aff"] = stage
 	return skin
 
 
@@ -821,7 +752,6 @@ func save_game() -> void:
 		"acc_owned": acc_owned,
 		"acc_head": acc_head,
 		"acc_neck": acc_neck,
-		"affection": affection,
 		"pending_boosts": pending_boosts,
 		"skipped_stages": skipped_stages,
 		"keycaps": keycaps,
@@ -872,11 +802,6 @@ func load_game() -> void:
 			acc_head = ""
 		if acc_neck not in acc_owned:
 			acc_neck = ""
-		var aff: Variant = data.get("affection", {})
-		if aff is Dictionary:
-			affection = {}
-			for k in aff:
-				affection[str(k)] = int(aff[k])
 		var boosts: Variant = data.get("pending_boosts", [])
 		if boosts is Array:
 			pending_boosts = boosts

@@ -25,7 +25,7 @@ const PURPLE := Color("9b5de5")
 const PURPLE_DEEP := Color("7038c0")
 const RED := Color("ef5f45")
 const RED_DEEP := Color("c53a24")
-const PINK := Color("f9a9a0")  # 볼터치 / 애정도
+const PINK := Color("f9a9a0")  # 볼터치
 
 const MUTED := Color(0.17, 0.16, 0.2, 0.55)  # 보조 텍스트 (흰 패널 위)
 const SOFT := Color(0.17, 0.16, 0.2, 0.35)  # 더 흐린 보조 텍스트

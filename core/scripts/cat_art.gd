@@ -129,7 +129,7 @@ static func _sid(p: Dictionary, key: String, def: String) -> String:
 
 
 ## 큐브 고양이를 아무 CanvasItem에나 그린다.
-## skin: {"body","ear","ink","aff","acc","parts"} — parts가 실제 외형을 결정한다.
+## skin: {"body","ear","ink","acc","parts"} — parts가 실제 외형을 결정한다.
 static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		alive := true, mouth_open := false, skin: Dictionary = {}) -> void:
 	var p := parts_of(skin)
@@ -141,10 +141,9 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		body_col = DEAD_BODY
 		ear_col = DEAD_EAR
 	var ink: Color = p.get("ink", skin.get("ink", INK))
-	var aff := int(skin.get("aff", 1))
 	var body_rect := Rect2(center - Vector2.ONE * half, Vector2.ONE * s)
 
-	# 컨셉 시트 스프라이트 우선 — 소품·애정도 연출만 그 위에 코드로 얹는다.
+	# 컨셉 시트 스프라이트 우선 — 소품만 그 위에 코드로 얹는다.
 	var sprite := str(skin.get("sprite", ""))
 	var gray: bool = not alive or bool(skin.get("gray", false))
 	if sprite != "" and CatSprite.paint(ci, center, s, sprite,
@@ -155,14 +154,10 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			return
 		if bool(skin.get("gray", false)):
 			return
-		if aff >= 2:
-			_paint_affection(ci, center, s, aff, ink)
 		for acc in skin.get("acc", []):
 			paint_acc(ci, center, s, acc)
 		return
 
-	if alive and aff >= 3:
-		_paint_halo(ci, center, s)
 	# Layer 6 — 등 소품 (망토·날개).
 	if alive:
 		_paint_back(ci, center, s, _sid(p, "back", "none"), line)
@@ -171,7 +166,7 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	_paint_tail(ci, center, s, _sid(p, "tail", "curl"), tail_col, line, ink)
 	# 귀 (몸 뒤로 솟은 부분).
 	var ear_style := _sid(p, "ear", "round")
-	_paint_ears(ci, center, s, ear_style, ear_col, line, ink, aff)
+	_paint_ears(ci, center, s, ear_style, ear_col, line, ink)
 	# Layer 20~22 — 몸통.
 	_rrect(ci, body_rect, s * 0.26, body_col, line, ink)
 	# Layer 21 — 무늬 / 얼굴 마스크.
@@ -179,8 +174,6 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		_paint_pattern(ci, center, s, p, body_col, line, ink)
 	# 귀 안쪽 패치 (몸통 위 모서리).
 	_paint_ear_patch(ci, center, s, ear_style, ear_col, ink)
-	if alive and aff >= 3:
-		_paint_glow(ci, center, s)
 	if alive:
 		# Layer 30 / 35 — 손에 든 소품, 가슴 소품.
 		_paint_hold(ci, center, s, _sid(p, "hold", "none"), line, ink)
@@ -209,44 +202,8 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	_paint_face_prop(ci, center, s, _sid(p, "face", "none"), line, ink)
 	# Layer 85 — 머리 소품 (모자·과일·리본).
 	_paint_head_prop(ci, center, s, _sid(p, "head", "none"), line, ink)
-	if aff >= 2:
-		_paint_affection(ci, center, s, aff, ink)
 	for acc in skin.get("acc", []):
 		paint_acc(ci, center, s, acc)
-
-
-# --- 애정도 연출 -----------------------------------------------------------------
-
-
-static func _paint_halo(ci: CanvasItem, center: Vector2, s: float) -> void:
-	ci.draw_circle(center, s * 0.85, Color(1.0, 0.9, 0.6, 0.14))
-	ci.draw_circle(center, s * 0.70, Color(1.0, 0.88, 0.55, 0.18))
-	for i in range(8):
-		var a := TAU * i / 8.0 + 0.39
-		ci.draw_line(center + Vector2.from_angle(a) * s * 0.74,
-				center + Vector2.from_angle(a) * s * 0.98,
-				Color(1.0, 0.9, 0.6, 0.4), s * 0.05)
-
-
-static func _paint_glow(ci: CanvasItem, center: Vector2, s: float) -> void:
-	var half := s / 2.0
-	_rrect(ci, Rect2(center - Vector2.ONE * (half + s * 0.045),
-			Vector2.ONE * (s + s * 0.09)), s * 0.3, Color(0, 0, 0, 0),
-			maxf(2.0, s * 0.045), Color(1.0, 0.85, 0.4, 0.8))
-
-
-static func _paint_affection(ci: CanvasItem, center: Vector2, s: float, aff: int,
-		ink: Color) -> void:
-	var half := s / 2.0
-	var mark_col := Color(1.0, 0.82, 0.35, 0.95) if aff >= 3 else Color(ink, 0.45)
-	sparkle(ci, center + Vector2(-s * 0.62, -s * 0.5), s * 0.08, Color(1, 1, 1, 0.85))
-	sparkle(ci, center + Vector2(s * 0.66, -s * 0.14), s * 0.055, Color(1, 1, 1, 0.7))
-	if aff >= 3:
-		heart(ci, center + Vector2(s * 0.52, -half - s * 0.24), s * 0.075,
-				Color(0.95, 0.5, 0.6, 0.95))
-		heart(ci, center + Vector2(-s * 0.56, -half - s * 0.10), s * 0.05,
-				Color(0.95, 0.55, 0.62, 0.85))
-		sparkle(ci, center + Vector2(s * 0.56, -s * 0.66), s * 0.095, mark_col)
 
 
 static func _paint_dead_face(ci: CanvasItem, center: Vector2, s: float,
@@ -262,9 +219,8 @@ static func _paint_dead_face(ci: CanvasItem, center: Vector2, s: float,
 
 
 static func _paint_ears(ci: CanvasItem, center: Vector2, s: float, style: String,
-		col: Color, line: float, ink: Color, aff: int) -> void:
+		col: Color, line: float, ink: Color) -> void:
 	var half := s / 2.0
-	var grow := 1.25 if aff >= 2 else 1.0
 	match style:
 		"none":
 			return
@@ -273,7 +229,7 @@ static func _paint_ears(ci: CanvasItem, center: Vector2, s: float, style: String
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.10, -half + s * 0.06),
-					center + Vector2(sg * s * 0.24, -half - s * 0.11 * grow),
+					center + Vector2(sg * s * 0.24, -half - s * 0.11),
 					center + Vector2(sg * s * 0.52, -half - s * 0.02),
 					center + Vector2(sg * s * 0.51, -half + s * 0.14),
 				]), col, line, ink)
@@ -281,39 +237,39 @@ static func _paint_ears(ci: CanvasItem, center: Vector2, s: float, style: String
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.07, -half + s * 0.04),
-					center + Vector2(sg * s * 0.28, -half - s * 0.17 * grow),
+					center + Vector2(sg * s * 0.28, -half - s * 0.17),
 					center + Vector2(sg * s * 0.50, -half + s * 0.04),
 				]), col, line, ink)
 		"big":
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.06, -half + s * 0.03),
-					center + Vector2(sg * s * 0.22, -half - s * 0.22 * grow),
-					center + Vector2(sg * s * 0.40, -half - s * 0.19 * grow),
+					center + Vector2(sg * s * 0.22, -half - s * 0.22),
+					center + Vector2(sg * s * 0.40, -half - s * 0.19),
 					center + Vector2(sg * s * 0.50, -half + s * 0.03),
 				]), col, line, ink)
 		"chip":
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.18, -half + s * 0.02),
-					center + Vector2(sg * s * 0.30, -half - s * 0.10 * grow),
+					center + Vector2(sg * s * 0.30, -half - s * 0.10),
 					center + Vector2(sg * s * 0.42, -half + s * 0.02),
 				]), col, line, ink)
 		"tuft":
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.12, -half + s * 0.03),
-					center + Vector2(sg * s * 0.26, -half - s * 0.20 * grow),
+					center + Vector2(sg * s * 0.26, -half - s * 0.20),
 					center + Vector2(sg * s * 0.34, -half - s * 0.09),
-					center + Vector2(sg * s * 0.40, -half - s * 0.18 * grow),
+					center + Vector2(sg * s * 0.40, -half - s * 0.18),
 					center + Vector2(sg * s * 0.48, -half + s * 0.03),
 				]), col, line, ink)
 		_:  # "round"
 			for sg in [-1.0, 1.0]:
 				_poly(ci, PackedVector2Array([
 					center + Vector2(sg * s * 0.08, -half + s * 0.04),
-					center + Vector2(sg * s * 0.20, -half - s * 0.15 * grow),
-					center + Vector2(sg * s * 0.38, -half - s * 0.15 * grow),
+					center + Vector2(sg * s * 0.20, -half - s * 0.15),
+					center + Vector2(sg * s * 0.38, -half - s * 0.15),
 					center + Vector2(sg * s * 0.50, -half + s * 0.04),
 				]), col, line, ink)
 

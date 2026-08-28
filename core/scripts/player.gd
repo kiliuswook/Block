@@ -286,18 +286,18 @@ func _draw() -> void:
 ## (아래는 다른 스크립트가 쓰는 얇은 위임 래퍼 — 호출부는 그대로 Player.* 사용)
 
 
-## Small heart glyph — affection marks (forehead, floating by the ears).
+## Small heart glyph (forehead marks, UI 장식).
 static func paint_heart(ci: CanvasItem, at: Vector2, r: float, col: Color) -> void:
 	CatArt.heart(ci, at, r, col)
 
 
-## Four-point twinkle star (affection stage 2+).
+## Four-point twinkle star (UI 반짝임).
 static func paint_sparkle(ci: CanvasItem, at: Vector2, r: float, col: Color) -> void:
 	CatArt.sparkle(ci, at, r, col)
 
 
 ## Draws the cube cat onto any canvas item (player, title screen, ...).
-## skin carries the part set: {"body", "ear", "ink", "aff", "acc", "parts"}.
+## skin carries the part set: {"body", "ear", "ink", "acc", "parts"}.
 static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		cat_alive := true, mouth_open := false, skin: Dictionary = {}) -> void:
 	CatArt.paint(ci, center, s, look, cat_alive, mouth_open, skin)

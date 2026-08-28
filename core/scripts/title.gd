@@ -57,7 +57,6 @@ var _popup: Control
 var _popup_face: Control
 var _popup_action: Button
 var _popup_close: Button
-var _popup_feed: Button
 var _popup_custom: Button
 var _popup_dex: Button  # 이 냥이의 키캡 도감 열기
 var _popup_cat: Dictionary = {}
@@ -70,7 +69,6 @@ var _shop_wallet: Label
 var _gacha_btns: Array[Button] = []  # [1회, 10연차]
 var _gacha_result: Control  # 마지막으로 뽑은 키캡이 깔리는 자리
 var _last_pull: Array = []  # draw_keycaps()가 돌려준 마지막 결과
-var _bob := 0.0  # title cat idle bounce (affection level 5+)
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
 var _players_ui: Control  # 2인 가능 모드에서 PLAY 다음에 뜨는 인원 선택
@@ -151,13 +149,6 @@ func _ready() -> void:
 		_show_toast(line, GOLD_COL)
 		_refresh_currency())
 	Sfx.play_bgm("title")
-
-
-## The selected cat bounces on the title once affection reaches level 5.
-func _process(delta: float) -> void:
-	if GameState.affection_level(GameState.selected_cat) >= 5:
-		_bob += delta
-		queue_redraw()
 
 
 ## 스테이지 모드 설명줄에 최고 기록을 얹는다.
@@ -1395,8 +1386,6 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 			by += 30.0
 	var name_col := INK if unlocked else UiKit.MUTED
 	var tile_name := tr(str(cat.name))
-	if unlocked and GameState.affection_level(cat.id) >= 10:
-		tile_name = "★" + tile_name
 	_draw_center_text(ci, font, tile_name, 112.0, 22, name_col)
 	if unlocked:
 		# 해금된 냥이는 특성 태그를 달고, 선택된 냥이는 진한 금색.
@@ -1501,9 +1490,6 @@ func _build_popup() -> void:
 	_popup_close = _make_popup_button(panel, false)
 	_popup_close.text = tr("SET_CLOSE")
 	_popup_close.pressed.connect(_close_popup)
-	_popup_feed = _make_popup_button(panel, false)
-	_popup_feed.add_theme_font_size_override("font_size", 19)
-	_popup_feed.pressed.connect(_on_popup_feed)
 	_popup_custom = _make_popup_button(panel, false)
 	_popup_custom.text = tr("CHAR_CUSTOMIZE")
 	_popup_custom.pressed.connect(func() -> void:
@@ -1544,7 +1530,6 @@ func _open_popup(cat: Dictionary) -> void:
 		_popup_action.text = tr("CHAR_SELECT_BTN")
 	else:
 		_popup_action.visible = false
-	_refresh_feed_button()
 	# 꾸미기는 결과가 실제로 보이는 냥이에만 — 컨셉 시트 그림으로 그리는 냥이는
 	# 파츠 레이어 아트가 있어야 색을 갈아끼울 수 있다.
 	var char_id := str(cat.get("char", "char01"))
@@ -1587,55 +1572,6 @@ func _close_popup() -> void:
 	_popup.visible = false
 
 
-## Feed button doubles as the affection progress readout.
-func _refresh_feed_button() -> void:
-	var cat := _popup_cat
-	if cat.is_empty() or not GameState.is_unlocked(cat.id):
-		_popup_feed.visible = false
-		return
-	_popup_feed.visible = true
-	_popup_feed.size = Vector2(400.0, 46.0)
-	_popup_feed.position = Vector2((POPUP_SIZE.x - 400.0) / 2.0, POPUP_SIZE.y - 158.0)
-	var to_next := GameState.snacks_to_next(str(cat.id))
-	if to_next == 0:
-		_popup_feed.text = tr("CHAR_FEED_MAX")
-		_popup_feed.disabled = true
-	else:
-		_popup_feed.text = tr("CHAR_FEED").format(
-				{"price": GameState.snack_price(str(cat.id)), "left": to_next})
-		_popup_feed.disabled = false
-
-
-func _on_popup_feed() -> void:
-	var cat := _popup_cat
-	if cat.is_empty():
-		return
-	var before_level := GameState.affection_level(cat.id)
-	var before_stage := GameState.aff_stage(cat.id)
-	if GameState.feed_cat(str(cat.id)):
-		var level := GameState.affection_level(cat.id)
-		if GameState.aff_stage(cat.id) > before_stage:
-			Sfx.play("record")
-			_show_toast(tr("CHAR_FEED_EVOLVE").format(
-					{"name": tr(str(cat.name)), "level": level}), GOLD_COL)
-		elif level > before_level:
-			Sfx.play("record")
-			_show_toast(tr("CHAR_FEED_LEVEL").format({"level": level,
-					"pct": roundi(GameState.affection_bonus(cat.id) * 100)}),
-					Color(0.96, 0.62, 0.7))
-		else:
-			Sfx.play("buy")
-			_show_toast(tr("CHAR_FEED_HAPPY").format({"name": tr(str(cat.name))}),
-					Color(0.96, 0.62, 0.7))
-		_refresh_feed_button()
-		_refresh_currency()
-		_popup_face.queue_redraw()
-		_refresh_tiles()
-	else:
-		Sfx.play("error")
-		_show_toast(tr("SHOP_NO_GOLD"), Color(1.0, 0.55, 0.5))
-
-
 func _on_popup_action() -> void:
 	var cat := _popup_cat
 	if not GameState.is_unlocked(cat.id):
@@ -1666,8 +1602,6 @@ func _draw_popup(ci: Control) -> void:
 		_draw_lock(ci, center + Vector2(52.0, 38.0))
 	var name_col := INK if unlocked else UiKit.MUTED
 	var pop_name := tr(str(cat.name))
-	if unlocked and GameState.affection_level(cat.id) >= 10:
-		pop_name = "★ %s ★" % pop_name
 	_draw_center_text(ci, font, pop_name, 226.0, 34, name_col, POPUP_SIZE.x)
 	_draw_center_text(ci, font, "「%s」" % tr(str(cat.get("trait", ""))), 262.0, 21,
 			GOLD_COL, POPUP_SIZE.x)
@@ -1694,16 +1628,6 @@ func _draw_popup(ci: Control) -> void:
 				UiKit.MUTED, POPUP_SIZE.x)
 	else:
 		_draw_keycap_progress(ci, str(cat.id), 530.0)
-	# Affection hearts (snacks fed) — unlocked cats only.
-	if unlocked:
-		var level := GameState.affection_level(cat.id)
-		var hearts := "♥".repeat(level) + "♡".repeat(10 - level)
-		var line := tr("CHAR_AFFECTION").format({"level": level, "hearts": hearts})
-		if level > 1:
-			line += tr("CHAR_AFFECTION_BONUS").format(
-					{"pct": roundi(GameState.affection_bonus(cat.id) * 100)})
-		_draw_center_text(ci, font, line, 620.0, 20,
-				Color("e0578a"), POPUP_SIZE.x)
 	if unlocked and GameState.selected_cat == cat.id:
 		_draw_center_text(ci, font, tr("CHAR_EQUIPPED"), POPUP_SIZE.y - 92.0, 19,
 				GOLD_COL, POPUP_SIZE.x)
@@ -1801,10 +1725,7 @@ func _draw() -> void:
 	UiKit.paint_backdrop(self, vp)
 	_draw_logo()
 	# 선택한 냥이가 로고 옆(세로 화면은 아래)에 앉아 손님을 맞는다.
-	# 애정도 5 이상이면 기분 좋게 통통 튄다.
 	var at := _cat_anchor
-	if GameState.affection_level(GameState.selected_cat) >= 5:
-		at.y += sin(_bob * 5.0) * 7.0
 	# 발밑 그림자 — 밝은 배경에서 캐릭터를 띄워 준다.
 	UiKit.ellipse(self, _cat_anchor + Vector2(0.0, _cat_size * 0.56),
 			Vector2(_cat_size * 0.42, _cat_size * 0.1), Color(0.2, 0.35, 0.45, 0.16))
