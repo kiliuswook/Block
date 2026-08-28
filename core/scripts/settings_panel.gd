@@ -551,7 +551,7 @@ func _step_vib(dir: int) -> void:
 
 
 func _refresh() -> void:
-	_wallet_label.text = "%d G      ◆ %d" % [GameState.gold, GameState.gems]
+	_wallet_label.text = "%d G" % GameState.gold
 	if not _res_opts.is_empty():
 		var r := _res_opts[_res_idx]
 		_res_label.text = "%d X %d" % [r.x, r.y]

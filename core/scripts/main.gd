@@ -45,16 +45,8 @@ var intro_hint: Label
 var intro_prompt: Label
 var stage_header := ""
 var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
-# Rewards already paid out this run — a revived player only earns the delta.
+# Gold already paid out this run.
 var gold_awarded := 0
-var gems_awarded := 0
-# Revive jelly pricing: endless — first free, then 2/3/4... gems per run;
-# story — one free per stage, then 1 gem.
-var revives_used := 0
-var story_revived := {}  # story stage -> true once its free revive is spent
-# Story skip offer: consecutive deaths on the same stage unlock a paid skip.
-var fail_stage := 0
-var stage_fails := 0
 var p1_wins := 0
 var p2_wins := 0
 var versus_tally: Label
@@ -73,10 +65,8 @@ func _ready() -> void:
 	EventBus.game_started.connect(_on_game_started)
 	EventBus.game_over.connect(_on_game_over)
 	EventBus.player_escaped.connect(_on_escaped)
-	death_popup.continue_pressed.connect(_on_revive)
 	death_popup.restart_pressed.connect(_restart)
 	death_popup.title_pressed.connect(_to_title)
-	death_popup.skip_pressed.connect(_on_story_skip)
 	EventBus.story_reward.connect(_on_story_reward)
 	EventBus.versus_round_over.connect(_on_versus_round)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
@@ -151,9 +141,6 @@ func _on_game_started() -> void:
 	height = 0
 	record_broken = false
 	gold_awarded = 0
-	gems_awarded = 0
-	revives_used = 0
-	story_revived = {}
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
@@ -306,71 +293,39 @@ func _on_game_over() -> void:
 			Ranks.submit("picnic", GameState.picnic_best)
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
-		# Track consecutive deaths on the same stage for the skip offer.
-		if board.level == fail_stage:
-			stage_fails += 1
-		else:
-			fail_stage = board.level
-			stage_fails = 1
-	var earned := _award_run_rewards(was_record)
-	var cost := _revive_cost()
-	var show_skip: bool = not endless and not classic and not picnic \
-			and stage_fails >= 3 and GameState.story_stage < StoryStages.TOTAL
+	var earned := _award_run_rewards()
 	# Let the death sink in for a beat before the popup slides up.
-	# Picnic ends on the clock, not in defeat: no revive, cheerier title.
+	# Picnic ends on the clock, not in defeat: a cheerier title.
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record, earned, cost, show_skip,
-					not picnic, tr("POP_PICNIC_END") if picnic else "",
-					tr("POP_CONTINUE_LEVEL").format({"level": board.level})
-					if classic else ""))
+			death_popup.open(stats, was_record, earned,
+					tr("POP_PICNIC_END") if picnic else ""))
 
 
-## Gems the next revive costs right now (0 = free). Endless and classic use
-## the arcade-continue escalation; story gives one free per stage, then 1.
-func _revive_cost() -> int:
-	if GameState.mode != GameState.MODE_STORY:
-		return 0 if revives_used == 0 else revives_used + 1
-	return 1 if story_revived.has(board.level) else 0
-
-
-## Pays out gold/gems for the whole run so far (minus what a previous death in
-## this run already paid). Gems are deliberately scarce. Returns a display line.
-func _award_run_rewards(was_record: bool) -> String:
+## Pays out gold for the whole run so far (minus what this run already paid).
+## Returns a display line.
+func _award_run_rewards() -> String:
 	var run_gold := 0
-	var run_gems := 0
 	if GameState.mode == GameState.MODE_ENDLESS:
 		run_gold = height * 3
-		run_gems = mini(height / 30, 3)
 	elif GameState.mode == GameState.MODE_CLASSIC:
-		# Arcade scores swing bigger (1200 × level tetrises + shutter bonuses),
-		# so gold divides harder and gems come from how many levels fell.
+		# Arcade scores swing bigger (1200 x level tetrises + shutter bonuses),
+		# so gold divides harder.
 		run_gold = GameState.score / 40
-		run_gems = mini((board.level - 1) / 2, 3)
-	elif GameState.mode == GameState.MODE_PICNIC:
-		run_gold = GameState.score / 20
-		run_gems = mini(GameState.score / 1500, 2)
 	else:
 		run_gold = GameState.score / 20
-		run_gems = mini(board.level - 1, 3)
-	if was_record and run_gold > 0:
-		run_gems += 1
 	var earn_gold := maxi(run_gold - gold_awarded, 0)
-	var earn_gems := maxi(run_gems - gems_awarded, 0)
 	gold_awarded = maxi(run_gold, gold_awarded)
-	gems_awarded = maxi(run_gems, gems_awarded)
-	if earn_gold <= 0 and earn_gems <= 0:
+	if earn_gold <= 0:
 		return ""
 	# First rewarded run of the day pays double gold.
-	var daily := earn_gold > 0 and GameState.claim_daily_bonus()
+	var daily := GameState.claim_daily_bonus()
 	if daily:
 		earn_gold *= 2
-	GameState.add_currency(earn_gold, earn_gems)
+	GameState.add_currency(earn_gold)
 	var line := tr("HUD_EARNED").format({"gold": earn_gold})
-	if earn_gems > 0:
-		line += "   +%d ◆" % earn_gems
 	if daily:
 		line = tr("HUD_DAILY_DOUBLE") + line
 	return line
@@ -546,37 +501,9 @@ func _duel_round(winner: int, who: String) -> void:
 			_start_boards())
 
 
-func _on_revive() -> void:
-	var cost := _revive_cost()
-	if cost > 0 and not GameState.spend_gems(cost):
-		Sfx.play("error")
-		return
-	if GameState.mode == GameState.MODE_STORY:
-		story_revived[board.level] = true
-	else:
-		revives_used += 1
-	death_popup.close()
-	board.revive_player()
-	_screen_flash(0.25)
-
-
-## Paid story skip: mark the stage passed and restart into the next one.
-func _on_story_skip() -> void:
-	if not GameState.spend_gems(GameState.SKIP_COST):
-		Sfx.play("error")
-		return
-	Sfx.play("buy")
-	GameState.story_skip(board.level)
-	stage_fails = 0
-	fail_stage = 0
-	_restart()
-
-
 ## Floating banner for a first-clear story payout.
-func _on_story_reward(reward_gold: int, reward_gems: int) -> void:
+func _on_story_reward(reward_gold: int) -> void:
 	var text := tr("HUD_STORY_REWARD").format({"gold": reward_gold})
-	if reward_gems > 0:
-		text += "   +%d ◆" % reward_gems
 	var vp := get_viewport_rect().size
 	var pop := Label.new()
 	pop.text = text
@@ -819,7 +746,7 @@ func _on_story_doors_opened() -> void:
 
 func _on_story_completed() -> void:
 	Sfx.play("record")
-	var earned := _award_run_rewards(false)
+	var earned := _award_run_rewards()
 	intro_mode = "complete"
 	intro_clear.text = tr("STORY_ALL_CLEAR")
 	intro_stage.text = tr("STORY_COMPLETE")

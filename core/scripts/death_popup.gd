@@ -1,12 +1,10 @@
 extends Control
-## Death popup: dead cat portrait, run stats and three choices —
-## continue (revive), restart from scratch, or back to the title.
+## Death popup: dead cat portrait, run stats and two choices —
+## restart from scratch, or back to the title.
 ## The whole UI is built in code, matching the project's draw-in-code style.
 
-signal continue_pressed
 signal restart_pressed
 signal title_pressed
-signal skip_pressed  # story: give up and buy past this stage with gems
 
 const CREAM := Color("f4e3c8")
 const GOLD := Color(1.0, 0.85, 0.35)
@@ -17,9 +15,6 @@ var _title: Label
 var _record_label: Label
 var _stats_label: Label
 var _reward_label: Label
-var _cont: Button
-var _hint: Label
-var _skip_btn: Button
 
 
 func _ready() -> void:
@@ -95,68 +90,24 @@ func _ready() -> void:
 
 	v.add_child(_spacer(10.0))
 
-	_cont = _make_button(tr("POP_CONTINUE"), true)
-	_cont.pressed.connect(func() -> void: continue_pressed.emit())
-	v.add_child(_cont)
-
-	# Revive jelly price line — open() fills in the cost for this death.
-	_hint = Label.new()
-	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.add_theme_font_size_override("font_size", 18)
-	_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
-	v.add_child(_hint)
-
-	v.add_child(_spacer(6.0))
-
-	var restart := _make_button(tr("POP_RESTART"), false)
+	var restart := _make_button(tr("POP_RESTART"), true)
 	restart.pressed.connect(func() -> void: restart_pressed.emit())
 	v.add_child(restart)
-
-	# Story: after enough failures a paid skip past the stage appears.
-	_skip_btn = _make_button("", false)
-	_skip_btn.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
-	_skip_btn.pressed.connect(func() -> void: skip_pressed.emit())
-	v.add_child(_skip_btn)
 
 	var to_title := _make_button(tr("POP_TO_TITLE"), false)
 	to_title.pressed.connect(func() -> void: title_pressed.emit())
 	v.add_child(to_title)
 
 
-## revive_cost: gems this revive costs (0 = free).
-## show_skip: story skip offer after repeated failures.
-## show_continue=false + title_text: timed modes end on the clock, not in
-## death — no revive option and a cheerier headline.
-func open(stats: String, new_record: bool, earned := "", revive_cost := 0,
-		show_skip := false, show_continue := true,
-		title_text := "", continue_text := "") -> void:
+## title_text: timed modes end on the clock, not in death — a cheerier headline.
+func open(stats: String, new_record: bool, earned := "", title_text := "") -> void:
 	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
-	# Classic revives restart the level, so its button says so.
-	_cont.text = continue_text if continue_text != "" else tr("POP_CONTINUE")
 	_title.add_theme_color_override("font_color",
 			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
-	_cont.visible = show_continue
-	_hint.visible = show_continue
 	_stats_label.text = stats
 	_record_label.visible = new_record
 	_reward_label.text = earned
 	_reward_label.visible = earned != ""
-	if revive_cost <= 0:
-		_hint.text = tr("POP_REVIVE_FREE")
-		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
-		_cont.disabled = false
-	elif GameState.gems >= revive_cost:
-		_hint.text = tr("POP_REVIVE_USE").format({"cost": revive_cost, "gems": GameState.gems})
-		_hint.add_theme_color_override("font_color", Color(GOLD, 0.75))
-		_cont.disabled = false
-	else:
-		_hint.text = tr("POP_REVIVE_LACK").format({"cost": revive_cost, "gems": GameState.gems})
-		_hint.add_theme_color_override("font_color", Color(1.0, 0.55, 0.5))
-		_cont.disabled = true
-	_skip_btn.visible = show_skip
-	if show_skip:
-		_skip_btn.text = tr("POP_SKIP_STAGE").format({"cost": GameState.SKIP_COST})
-		_skip_btn.disabled = GameState.gems < GameState.SKIP_COST
 	visible = true
 	_panel.modulate.a = 0.0
 	await get_tree().process_frame

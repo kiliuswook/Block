@@ -46,11 +46,8 @@ const LAVA_SPEED_BASE := 8.0
 const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the player by more than this
-const LAVA_REVIVE_GAP := CELL * 5.0  # revive pushes the lava this far below the feet
-const REVIVE_BLAST := 2  # revive clears this radius of cells around the cat
-const REVIVE_PLATFORM_GAP := 3  # revive platform floats this many cells above the lava
-const REVIVE_FX_RADIUS := 16.0  # revive blast: cells beyond this erase without FX (off-screen)
-const REVIVE_FX_WAVE := 0.018  # revive blast ripple: FX delay per cell of distance from the cat
+const BLAST_FX_RADIUS := 16.0  # blast: cells beyond this erase without FX (off-screen)
+const BLAST_FX_WAVE := 0.018  # blast ripple: FX delay per cell of distance from the cat
 const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
 # Jelly picnic (casual): a 2-minute no-death timed run. Pieces fall slow and
 # never speed up; anything that would kill the cat pops like jelly instead.
@@ -1053,7 +1050,7 @@ func _rec_tick(delta: float) -> void:
 
 
 ## Grid changes land as diff events against a shadow copy — locks, clears,
-## breaks and revive blasts all reduce to added/removed cells.
+## breaks and rescue blasts all reduce to added/removed cells.
 func _rec_diff() -> void:
 	var adds := PackedInt32Array()
 	var dels := PackedInt32Array()
@@ -1331,94 +1328,15 @@ func _escape() -> void:
 	EventBus.player_escaped.emit(level)
 
 
-## Revive after death ("continue"): blast the blocks around the cat open,
-## push the lava back down and resume the run right where it ended.
-## Endless: the blast rips through the whole stack in a ripple spreading out
-## from the cat, and a flat rescue bar appears above the lava so the cat
-## never free-falls straight back into it.
-func revive_player() -> void:
-	loose.clear()  # mid-air pieces vanish too — no instant re-crush
-	if mode == Mode.CLASSIC:
-		# Arcade continue: the level restarts from its opening board — same
-		# LEVEL, fresh garbage floor, line goal back to zero. Score is kept.
-		shutter_phase = Shutter.NONE
-		shutter_row = 0
-		shutter_bonus = 0
-		shutter_pop = 0.0
-		_classic_setup_level(level)
-		player.respawn(_spawn_point())
-		player.visible = true
-		playing = true
-		is_paused = false
-		_spawn_piece()
-		_classic_announce_level()
-		Sfx.play("revive")
-		queue_redraw()
-		return
-	var center := Vector2i((player.position / CELL).floor())
-	if mode == Mode.ENDLESS:
-		_blast_all_cells(center)
-	else:
-		_erase_cells_around(center, REVIVE_BLAST)
-	var spot := _find_revive_spot()
-	player.respawn(spot)
-	if mode == Mode.ENDLESS:
-		lava_y = maxf(lava_y, spot.y + Player.SIZE / 2.0 + LAVA_REVIVE_GAP)
-		_build_revive_platform(spot)
-	playing = true
-	is_paused = false
-	_clear_spawn_window()
-	_spawn_piece()
-	Sfx.play("revive")
-	queue_redraw()
-
-
-## Endless revive: every locked block explodes, the burst rippling outward
-## from the cat. Cells beyond the visible radius skip the FX entry.
+## Blows the whole stack apart, the burst rippling outward from the cat.
+## Cells beyond the visible radius skip the FX entry.
 func _blast_all_cells(center: Vector2i) -> void:
 	for c: Vector2i in grid:
 		var dist := Vector2(c - center).length()
-		if dist <= REVIVE_FX_RADIUS:
-			break_fx.append([c, -dist * REVIVE_FX_WAVE])
+		if dist <= BLAST_FX_RADIUS:
+			break_fx.append([c, -dist * BLAST_FX_WAVE])
 	grid.clear()
 	cracked.clear()
-
-
-## Endless revive: a flat bar floats a few cells above the lava as a rescue
-## floor. One edge cell (the side away from the cat) stays open so the row
-## never counts as a clearable line — a line clear would drop this floor out
-## from under the freshly revived cat.
-func _build_revive_platform(spot: Vector2) -> void:
-	var row := int(floor(lava_y / CELL)) - REVIVE_PLATFORM_GAP
-	if row >= rows:  # lava still below the pit floor — the floor itself catches the cat
-		return
-	var gap := 0 if spot.x > COLS * CELL / 2.0 else COLS - 1
-	for x in range(COLS):
-		if x == gap:
-			continue
-		var c := Vector2i(x, row)
-		grid[c] = "I"
-		cracked.erase(c)
-
-
-## Nearest free spot for the revived cat: death position first, then upward,
-## then sideways columns. Falls back to the pit-bottom spawn point.
-func _find_revive_spot() -> Vector2:
-	var half := Player.SIZE / 2.0
-	var size := Vector2.ONE * Player.SIZE
-	for radius in range(0, COLS):
-		var offsets: Array = [0] if radius == 0 else [-radius, radius]
-		for sx in offsets:
-			var x: float = clampf(player.position.x + sx * CELL, half, COLS * CELL - half)
-			for up in range(0, rows * 2):
-				var p := Vector2(x, player.position.y - up * CELL)
-				if p.y - half < 0.0 and mode != Mode.ENDLESS:
-					break
-				if p.y + half > rows * CELL:
-					continue
-				if not rect_hits_solid(Rect2(p - Vector2.ONE * half, size)):
-					return p
-	return _spawn_point()
 
 
 func _erase_cells_around(center: Vector2i, radius: int) -> void:
@@ -1427,7 +1345,7 @@ func _erase_cells_around(center: Vector2i, radius: int) -> void:
 			_erase_cell(Vector2i(x, y))
 
 
-## Clears the 4x4 window where the next piece will spawn, so reviving can
+## Clears the 4x4 window where the next piece will spawn, so a rescue can
 ## never immediately block out again ([_spawn_piece] would kill on collide).
 func _clear_spawn_window() -> void:
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
@@ -1576,7 +1494,7 @@ func _draw() -> void:
 				_draw_crack(c)
 	for fx in break_fx:
 		if fx[1] < 0.0:
-			continue  # revive ripple: the blast hasn't reached this cell yet
+			continue  # blast ripple: it hasn't reached this cell yet
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))

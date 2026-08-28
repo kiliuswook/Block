@@ -12,7 +12,7 @@ extends Node
 ## 어느 쪽이든 UI는 `entries()` / `my_rank()`만 보면 된다.
 
 signal board_loaded(ok: bool)
-signal weekly_reward(gold: int, gems: int)  # last week's top-3 payout landed
+signal weekly_reward(gold: int)  # last week's top-3 payout landed
 
 enum Backend { OFFLINE, HTTP, STEAM }
 
@@ -33,7 +33,7 @@ const STEAM_FETCH := 50
 # starts fresh. Weeks flip Monday 00:00 KST.
 const WEEK_ANCHOR := 313200  # unix time of Monday 1970-01-05 00:00 KST
 const WEEK_LEN := 604800
-const WEEKLY_REWARDS := [[500, 5], [300, 3], [200, 2]]  # rank 1..3: [gold, gems]
+const WEEKLY_REWARDS := [500, 300, 200]  # rank 1..3 gold
 
 ## Offline placeholder crowd: until the backend goes live, boards are filled
 ## with these bot entries (deterministic per mode) plus the real local record.
@@ -243,7 +243,6 @@ func _claim_rewards() -> void:
 	if lw < 0 or lw <= GameState.weekly_claimed:
 		return
 	var gold := 0
-	var gems := 0
 	for m: String in MODES:
 		var list: Array = board.get("lw_" + m, [])
 		list = list.filter(func(e: Variant) -> bool: return e is Dictionary)
@@ -251,13 +250,12 @@ func _claim_rewards() -> void:
 			return int(a.get("v", 0)) > int(b.get("v", 0)))
 		for i in mini(3, list.size()):
 			if str(list[i].get("id")) == GameState.player_id:
-				gold += WEEKLY_REWARDS[i][0]
-				gems += WEEKLY_REWARDS[i][1]
+				gold += WEEKLY_REWARDS[i]
 	GameState.weekly_claimed = lw
 	GameState.save_game()
-	if gold > 0 or gems > 0:
-		GameState.add_currency(gold, gems)
-		weekly_reward.emit(gold, gems)
+	if gold > 0:
+		GameState.add_currency(gold)
+		weekly_reward.emit(gold)
 
 
 ## 랭킹 화면이 지금 보고 있는 보드 하나를 불러온다. HTTP 백엔드는 blob이 통째로
@@ -287,19 +285,17 @@ func _claim_rewards_steam() -> void:
 	if lw <= GameState.weekly_claimed:
 		return
 	var gold := 0
-	var gems := 0
 	var mine := my_id()
 	for m: String in LIVE_MODES:
 		var list: Array = await Platform.fetch_board(board_name(m, true, lw), 3)
 		for i in mini(3, list.size()):
 			if str(list[i].get("id")) == mine:
-				gold += WEEKLY_REWARDS[i][0]
-				gems += WEEKLY_REWARDS[i][1]
+				gold += WEEKLY_REWARDS[i]
 	GameState.weekly_claimed = lw
 	GameState.save_game()
-	if gold > 0 or gems > 0:
-		GameState.add_currency(gold, gems)
-		weekly_reward.emit(gold, gems)
+	if gold > 0:
+		GameState.add_currency(gold)
+		weekly_reward.emit(gold)
 
 
 ## Refreshes the whole board; listeners get board_loaded(ok). Viewing also

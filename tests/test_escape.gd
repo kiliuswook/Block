@@ -234,7 +234,6 @@ func _ready() -> void:
 	b2._endless_line_reward(endless_cleared)
 	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
 
-	b2.lava_y = p2.position.y  # restore the lava-death state for the revive tests
 	GameState.mode = GameState.MODE_STORY
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
@@ -267,47 +266,6 @@ func _ready() -> void:
 	b4._spawn_piece()
 	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
 	GameState.mode = GameState.MODE_STORY
-
-	# --- Revive ("이어서 하기") ---
-	# Escape block-out: revive reopens the spawn window and resumes play
-	b3.revive_player()
-	_check(b3.playing, "revive resumes an escape run")
-	_check(p3.alive, "revived player is alive")
-	_check(not b3.rect_hits_solid(p3.rect()), "revived player stands in a free spot")
-	_check(b3.piece_state == b3.PieceState.TRACKING, "revive spawns a fresh tracking piece")
-
-	# Endless lava death: revive pushes the lava back below the feet
-	b2.revive_player()
-	_check(b2.playing, "revive resumes an endless run")
-	_check(p2.alive, "lava-killed player revives")
-	_check(b2.lava_y >= p2.position.y + Player.SIZE / 2.0 + c,
-			"revive pushes the lava back down")
-
-	# Endless revive: the blast wipes the whole stack, and a rescue bar
-	# floats above the lava so the cat lands on it instead of falling back in
-	b2.grid[Vector2i(2, 5)] = "T"
-	b2.grid[Vector2i(7, -3)] = "L"
-	b2.revive_player()
-	_check(not b2.grid.has(Vector2i(2, 5)) and not b2.grid.has(Vector2i(7, -3)),
-			"endless revive blasts the whole stack")
-	var plat_row := int(floor(b2.lava_y / c)) - EscapeBoard.REVIVE_PLATFORM_GAP
-	var plat_cells := 0
-	for x in range(EscapeBoard.COLS):
-		if b2.grid.has(Vector2i(x, plat_row)):
-			plat_cells += 1
-	_check(plat_cells == EscapeBoard.COLS - 1, "rescue bar spans the row with one edge gap")
-	_check(b2._clear_lines() == 0, "rescue bar never counts as a clearable line")
-	_check(plat_row * c > p2.position.y, "rescue bar sits below the revived cat")
-	b2.grid.clear()
-
-	# Crushed under blocks: the revive blast clears the cells around the cat
-	for x in range(3, 8):
-		for y in range(10, board.rows):
-			board.grid[Vector2i(x, y)] = "T"
-	player.position = Vector2(5 * c + c / 2.0, 12 * c)
-	board.revive_player()
-	_check(player.alive and board.playing, "crushed player revives")
-	_check(not board.rect_hits_solid(player.rect()), "revive blast frees the crushed cat")
 
 	# --- Story mode stages ---
 	# Stage 1: movement tutorial — prefilled stairs, no pieces, doors open
@@ -577,17 +535,6 @@ func _ready() -> void:
 		cl._update_shutter(1.0)
 		skip_guard += 1
 	_check(cl.level == 4, "classic: the skip lands on the next level")
-	# Continue: the arcade revive restarts the level from its opening board.
-	cl._classic_setup_level(6)
-	cl.level_lines = 6
-	cl.grid[Vector2i(3, 4)] = "T"
-	var revive_score: int = GameState.score
-	cl.playing = false
-	cl.revive_player()
-	_check(cl.playing and cl.level == 6 and cl.level_lines == 0,
-			"classic: revive restarts the same level from zero lines")
-	_check(not cl.grid.has(Vector2i(3, 4)) and GameState.score == revive_score,
-			"classic: revive deals a fresh board and keeps the score")
 	cl._classic_setup_level(1)
 	cl.piece_type = "O"
 	cl.grid[Vector2i(0, cl.rows - 1)] = "O"  # the replay diff needs a live grid
