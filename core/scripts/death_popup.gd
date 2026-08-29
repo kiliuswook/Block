@@ -9,12 +9,14 @@ signal title_pressed
 const CREAM := Color("f4e3c8")
 const GOLD := Color(1.0, 0.85, 0.35)
 const INK := Color("2a2230")
+const XP_COL := Color(0.55, 0.85, 1.0)  # 계정 경험치 (골드와 구분되는 하늘색)
 
 var _panel: PanelContainer
 var _title: Label
 var _record_label: Label
 var _stats_label: Label
 var _reward_label: Label
+var _xp_label: Label  # 계정 경험치 + 레벨업 줄
 
 
 func _ready() -> void:
@@ -88,6 +90,14 @@ func _ready() -> void:
 	_reward_label.visible = false
 	v.add_child(_reward_label)
 
+	# 경험치는 골드와 다른 축이라 색도 다르다 (지갑 = 금색, 계정 레벨 = 하늘색).
+	_xp_label = Label.new()
+	_xp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_xp_label.add_theme_font_size_override("font_size", 26)
+	_xp_label.add_theme_color_override("font_color", XP_COL)
+	_xp_label.visible = false
+	v.add_child(_xp_label)
+
 	v.add_child(_spacer(10.0))
 
 	var restart := _make_button(tr("POP_RESTART"), true)
@@ -100,7 +110,9 @@ func _ready() -> void:
 
 
 ## title_text: timed modes end on the clock, not in death — a cheerier headline.
-func open(stats: String, new_record: bool, earned := "", title_text := "") -> void:
+## xp_line: 이 판이 준 계정 경험치(+레벨업). 분할 화면처럼 안 주는 판은 빈 문자열.
+func open(stats: String, new_record: bool, earned := "", title_text := "",
+		xp_line := "") -> void:
 	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
 	_title.add_theme_color_override("font_color",
 			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
@@ -108,6 +120,8 @@ func open(stats: String, new_record: bool, earned := "", title_text := "") -> vo
 	_record_label.visible = new_record
 	_reward_label.text = earned
 	_reward_label.visible = earned != ""
+	_xp_label.text = xp_line
+	_xp_label.visible = xp_line != ""
 	visible = true
 	_panel.modulate.a = 0.0
 	await get_tree().process_frame

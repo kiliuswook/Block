@@ -47,6 +47,7 @@ var stage_header := ""
 var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
 # Gold already paid out this run.
 var gold_awarded := 0
+var xp_awarded := 0  # 이 판이 이미 지급한 계정 경험치 (중복 지급 방지)
 var p1_wins := 0
 var p2_wins := 0
 var versus_tally: Label
@@ -141,6 +142,7 @@ func _on_game_started() -> void:
 	height = 0
 	record_broken = false
 	gold_awarded = 0
+	xp_awarded = 0
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
@@ -294,6 +296,13 @@ func _on_game_over() -> void:
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 	var earned := _award_run_rewards()
+	var xp_line := _award_run_xp(was_record)
+	# 업적: 무한 첫 완주는 판이 끝난 그 순간에만 알 수 있고, 나머지(기록·골드)는
+	# 위에서 갱신된 세이브 값으로 판정된다. 분할 화면은 지갑·기록이 없어 제외.
+	if not GameState.split:
+		if endless:
+			Achv.unlock(Achv.FIRST_ESCAPE)
+		Achv.check()
 	# Let the death sink in for a beat before the popup slides up.
 	# Picnic ends on the clock, not in defeat: a cheerier title.
 	var tw := create_tween()
@@ -301,7 +310,7 @@ func _on_game_over() -> void:
 	tw.tween_callback(func() -> void:
 		if not board.playing:
 			death_popup.open(stats, was_record, earned,
-					tr("POP_PICNIC_END") if picnic else ""))
+					tr("POP_PICNIC_END") if picnic else "", xp_line))
 
 
 ## Pays out gold for the whole run so far (minus what this run already paid).
@@ -328,6 +337,28 @@ func _award_run_rewards() -> String:
 	var line := tr("HUD_EARNED").format({"gold": earn_gold})
 	if daily:
 		line = tr("HUD_DAILY_DOUBLE") + line
+	return line
+
+
+## 이 판의 계정 경험치를 지급한다 — 골드와 달리 소비할 수 없는 축이라
+## 성적이 나빠도 참가비만큼은 들어온다. 오른 레벨이 있으면 그 줄까지 붙여 준다.
+## 분할 화면(2인)은 지갑도 기록도 없는 대전이라 제외.
+func _award_run_xp(record: bool) -> String:
+	if GameState.split:
+		return ""
+	var run_xp := Account.run_xp(GameState.mode, GameState.score, height,
+			board.level if is_instance_valid(board) else 0, record)
+	var earn_xp := maxi(run_xp - xp_awarded, 0)
+	xp_awarded = maxi(run_xp, xp_awarded)
+	if earn_xp <= 0:
+		return ""
+	var got := Account.add_xp(earn_xp)
+	var line := tr("HUD_XP_EARNED").format({"xp": earn_xp})
+	var levels: Array = got.get("levels", [])
+	if not levels.is_empty():
+		Sfx.play("record")
+		line += "\n" + tr("HUD_LEVEL_UP").format(
+				{"level": int(levels[-1]), "gold": int(got.get("gold", 0))})
 	return line
 
 
@@ -623,6 +654,11 @@ func _build_skip_level_button() -> void:
 ## A new board was dealt. No banner — the shutter lifting is the announcement;
 ## the HUD just rolls over to the new level.
 func _on_classic_level_started(level: int, quota: int, _garbage: int) -> void:
+	# 도달 LEVEL은 판이 끝나면 사라지는 값이라 여기서 최고치를 남긴다 (LV5/LV10 업적).
+	if not GameState.split and level > GameState.classic_level_best:
+		GameState.classic_level_best = level
+		GameState.save_game()
+		Achv.check()
 	height_label.text = "%d" % level
 	lines_label.text = "0 / %d" % quota
 	goal_meter.set_goal(0, quota)
@@ -747,6 +783,7 @@ func _on_story_doors_opened() -> void:
 func _on_story_completed() -> void:
 	Sfx.play("record")
 	var earned := _award_run_rewards()
+	var xp_line := _award_run_xp(true)
 	intro_mode = "complete"
 	intro_clear.text = tr("STORY_ALL_CLEAR")
 	intro_stage.text = tr("STORY_COMPLETE")

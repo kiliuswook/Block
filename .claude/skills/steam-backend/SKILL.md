@@ -129,8 +129,11 @@ GodotSteam의 콜백은 **Steam 싱글톤의 전역 시그널**로 온다. `lead
 ## 업적 / 클라우드 세이브
 
 - 업적: `Platform.unlock_achievement(id)` → `setAchievement` + `storeStats`.
-  **id는 파트너 사이트에 등록한 API Name과 정확히 같아야 한다.** 아직 등록된
-  업적이 없어서 호출해도 아무 일도 안 일어난다.
+  **id는 파트너 사이트에 등록한 API Name과 정확히 같아야 한다.** 아직 파트너
+  사이트에 등록된 업적이 없어서 호출해도 아무 일도 안 일어난다.
+  **업적을 추가·수정·검토할 때는 `/achievements` 스킬을 따를 것** — 정의·판정은
+  `core/autoload/achievements.gd`(autoload `Achv`)가 소유하고, 여기(스팀 쪽)는
+  받은 id를 그대로 넘기는 통로일 뿐이다.
 - 클라우드 세이브: **파트너 사이트의 Auto-Cloud 설정이 정답이다** — `user://`
   폴더를 지정하면 코드 한 줄 없이 양방향 동기화된다.
   `sync_cloud_save()`는 save.json을 Remote Storage에 올리기만 하는 보조 수단이고
@@ -165,7 +168,8 @@ GodotSteam의 콜백은 **Steam 싱글톤의 전역 시그널**로 온다. `lead
    `findOrCreateLeaderboard`가 첫 실행 때 만든다. 다만 **표시 이름·정렬을 손보려면**
    파트너 사이트에서 만드는 쪽이 낫다 (정렬 내림차순 / 표시 Numeric).
 3. Steam Cloud: 파트너 사이트 → Cloud → Auto-Cloud에 `user://` 경로 등록.
-4. 업적을 만들면 API Name을 `unlock_achievement()` 호출부와 맞춘다.
+4. 업적: 파트너 사이트에 등록·게시한 API Name이 `Achv.DEFS`의 id와 같아야 한다.
+   검증 절차와 되돌리는 법은 `/achievements` 스킬에 있다.
 5. 익스포트: `Steam` 프리셋(`build/steam/cattris.exe`). `.gdextension`의
    `[dependencies]`가 `steam_api64.dll`을 exe 옆에 같이 복사해 준다.
 6. `addons/godotsteam/*`는 **Web/WebMobile/Mobile 프리셋에서 제외**돼 있다.

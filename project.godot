@@ -25,6 +25,8 @@ Sfx="*res://core/autoload/sfx.gd"
 Replays="*res://core/autoload/replays.gd"
 Ranks="*res://core/autoload/ranks.gd"
 Platform="*res://platform/platform.gd"
+Achv="*res://core/autoload/achievements.gd"
+Account="*res://core/autoload/account.gd"
 
 [cattris]
 

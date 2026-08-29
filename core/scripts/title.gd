@@ -63,6 +63,7 @@ var allow_2p := true  # 모바일 타이틀은 false (키보드 한 대가 필�
 
 var _tiles := {}  # cat id -> Button
 var _currency_label: Label
+var _level_pill: Control  # 지갑 아래 계정 레벨 알약 (Lv · 칭호 · 경험치 바)
 var _toast: Label
 var _toast_tween: Tween
 var _popup: Control
@@ -129,6 +130,11 @@ func _ready() -> void:
 	vw = get_viewport_rect().size.x
 	vh = get_viewport_rect().size.y
 	UiKit.apply_theme($UI)
+	# 세이브 상태로 판정되는 업적을 소급 적용한다 (업적을 나중에 추가해도
+	# 이미 조건을 만족한 세이브는 여기서 해금된다).
+	Achv.check()
+	# 커브를 손댔거나 구버전 세이브라면 밀린 레벨 보상을 여기서 따라잡는다.
+	Account.sync()
 	# 로고는 코드로 그린다 — 씬의 텍스트 타이틀은 숨긴다.
 	$UI/TitleLabel.visible = false
 	$UI/SubtitleLabel.visible = false
@@ -138,6 +144,7 @@ func _ready() -> void:
 	_refresh_classic_desc()
 	_compute_layout()
 	_build_currency_display()
+	_build_level_pill()
 	_build_character_row()
 	_build_popup()
 	_build_toast()
@@ -1352,6 +1359,7 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 			if rep.is_empty():
 				_show_toast(tr("RANK_REPLAY_FAIL"), Color(1.0, 0.55, 0.5))
 				return
+			Achv.unlock(Achv.REPLAY_WATCH)
 			_replay_viewer.open(rep, "%s  ·  %s" % [name_text,
 					Ranks.value_text(mode_key, v)]))
 		h.add_child(play)
@@ -1895,6 +1903,65 @@ func _build_currency_display() -> void:
 func _refresh_currency() -> void:
 	_currency_label.text = "%d G" % GameState.gold
 	_currency_label.add_theme_color_override("font_color", GOLD_COL)
+	if _level_pill:
+		_level_pill.queue_redraw()
+
+
+## 지갑 바로 아래 계정 레벨 알약. 골드가 "쓰는 축"이라면 이쪽은 **쌓이기만 하는
+## 축** — 판을 마칠 때마다 차오르는 경험치 바를 여기 하나로 보여 준다.
+func _build_level_pill() -> void:
+	var pill := Panel.new()
+	pill.size = Vector2(320.0, 74.0)
+	pill.position = Vector2(vw - 350.0, 86.0)
+	pill.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 24, 0.0))
+	$UI.add_child(pill)
+	_level_pill = Control.new()
+	_level_pill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_level_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_level_pill.draw.connect(func() -> void: _draw_level_pill(_level_pill))
+	pill.add_child(_level_pill)
+
+
+func _draw_level_pill(ci: Control) -> void:
+	var font := ThemeDB.fallback_font
+	var w: float = ci.size.x
+	var pad := 18.0
+	# 윗줄: Lv.N + 칭호 (왼쪽) / 다음 레벨까지 (오른쪽, 보조색)
+	var need := Account.xp_to_next()
+	var count := tr("MENU_LEVEL_MAX")
+	if need > 0:
+		count = tr("MENU_LEVEL_XP").format(
+				{"xp": Account.xp_in_level(), "need": need})
+	var count_size := UiKit.fit_size(font, count, w * 0.42, 17)
+	var count_w := font.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			count_size).x
+	ci.draw_string(font, Vector2(w - pad - count_w, 32.0), count,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, count_size, UiKit.MUTED)
+	var lv_text := tr("MENU_LEVEL").format({"level": Account.level()})
+	var lv_size := UiKit.fit_size(font, lv_text, w * 0.3, 26)
+	var lv_w := font.get_string_size(lv_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			lv_size).x
+	ci.draw_string(font, Vector2(pad, 32.0), lv_text, HORIZONTAL_ALIGNMENT_LEFT,
+			-1, lv_size, INK)
+	# 칭호는 남는 폭에만 그린다 — 긴 번역이 오면 줄어들고, 자리가 없으면 생략.
+	var tier_x := pad + lv_w + 10.0
+	var tier_w := w - pad - count_w - 12.0 - tier_x
+	if tier_w > 30.0:
+		var tier := tr(Account.tier_key())
+		ci.draw_string(font, Vector2(tier_x, 32.0), tier,
+				HORIZONTAL_ALIGNMENT_LEFT, -1,
+				UiKit.fit_size(font, tier, tier_w, 18), UiKit.MUTED)
+	# 아랫줄: 경험치 바.
+	var bar := Rect2(pad, 44.0, w - pad * 2.0, 16.0)
+	_round_box(ci, bar, Color(UiKit.INK, 0.10), 8)
+	# 채움은 홈 안쪽에 그린다 — 외곽선은 홈에만 있어야 두 겹으로 안 보인다.
+	var groove := bar.grow(-3.0)
+	var fill := groove
+	fill.size.x = maxf(6.0, groove.size.x * Account.progress())
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = UiKit.CYAN
+	sb.set_corner_radius_all(5)
+	ci.draw_style_box(sb, fill)
 
 
 func _build_toast() -> void:

@@ -126,6 +126,14 @@ var classic_best: int = 0  # classic mode all-time high score
 var picnic_best: int = 0  # jelly picnic all-time high score
 var story_stage: int = 0  # highest story stage cleared
 var games_played: int = 0
+## 계정 레벨 — 판을 마칠 때마다 쌓이는 누적 경험치와, 보상까지 지급이 끝난 레벨.
+## 커브·보상·경험치 계산은 전부 Account(autoload)가 소유한다.
+var xp: int = 0
+var account_level: int = 1
+var classic_level_best: int = 0  # 스테이지 모드에서 도달한 최고 LEVEL (업적용)
+var gold_earned: int = 0  # 누적 획득 골드 — 쓴 것과 무관한 총합 (업적용)
+var gacha_drawn: int = 0  # 키캡 가챠로 뽑은 누적 장수 (업적용)
+var achv: Array = []  # 이미 해금한 업적 id — Achv가 소유, 재해금 방지용
 var gold: int = 0
 var selected_cat: String = "cream"
 ## 2P(화면 분할) 몫으로 고른 냥이 — 1P와 같은 냥이여도 커스터마이징은 따로 간다.
@@ -229,7 +237,12 @@ func reset_all() -> void:
 	picnic_best = 0
 	story_stage = 0
 	games_played = 0
+	xp = 0
+	account_level = 1
+	classic_level_best = 0
 	gold = 0
+	gold_earned = 0
+	gacha_drawn = 0
 	selected_cat = "cream"
 	selected_cat2 = "cream"
 	weekly = {}
@@ -327,6 +340,8 @@ func record_weekly(mode_key: String, v: int) -> bool:
 
 func add_currency(add_gold: int) -> void:
 	gold += add_gold
+	if add_gold > 0:
+		gold_earned += add_gold
 	save_game()
 
 
@@ -465,7 +480,9 @@ func draw_keycaps(n: int, pick: Array = []) -> Array:
 		add_keycap(cat_id, letter, false)
 		out.append({"cat": cat_id, "letter": letter, "fresh": fresh,
 				"grade_up": cat_grade(cat_id) > before})
+	gacha_drawn += n
 	save_game()
+	Achv.check()  # 키캡·등급·누적 뽑기 업적
 	return out
 
 
@@ -783,7 +800,15 @@ func cat_for(player: int) -> String:
 	return selected_cat if player <= 1 else selected_cat2
 
 
+## 테스트가 실제 세이브를 덮어쓰지 못하게 막는 스위치. 헤드리스 테스트는
+## user:// 를 실기와 공유하므로, GameState 값을 갈아 끼우는 테스트는 반드시
+## 첫 줄에서 이걸 끄고 시작할 것.
+var save_enabled := true
+
+
 func save_game() -> void:
+	if not save_enabled:
+		return
 	var data := {
 		"score": score,
 		"best_height": best_height,
@@ -791,6 +816,12 @@ func save_game() -> void:
 		"picnic_best": picnic_best,
 		"story_stage": story_stage,
 		"games_played": games_played,
+		"xp": xp,
+		"account_level": account_level,
+		"classic_level_best": classic_level_best,
+		"gold_earned": gold_earned,
+		"gacha_drawn": gacha_drawn,
+		"achv": achv,
 		"gold": gold,
 		"selected_cat": selected_cat,
 		"selected_cat2": selected_cat2,
@@ -836,6 +867,14 @@ func load_game() -> void:
 		picnic_best = int(data.get("picnic_best", 0))
 		story_stage = int(data.get("story_stage", 0))
 		games_played = int(data.get("games_played", 0))
+		xp = int(data.get("xp", 0))
+		account_level = maxi(int(data.get("account_level", 1)), 1)
+		classic_level_best = int(data.get("classic_level_best", 0))
+		gold_earned = int(data.get("gold_earned", 0))
+		gacha_drawn = int(data.get("gacha_drawn", 0))
+		var got: Variant = data.get("achv", [])
+		if got is Array:
+			achv = got
 		gold = int(data.get("gold", 0))
 		selected_cat = str(data.get("selected_cat", "cream"))
 		selected_cat2 = str(data.get("selected_cat2", "cream"))

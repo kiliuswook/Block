@@ -11,7 +11,7 @@ func _ready() -> void:
 
 ## 열려 있는 오버레이가 하나라도 있으면 Esc는 "닫기"로 쓰인다.
 func _any_overlay_open() -> bool:
-	for c: Control in [_popup, _modes, _players_ui, _chars, _gacha, _ranks,
+	for c: Control in [_popup, _modes, _chars, _gacha, _ranks,
 			_keycap_dex, _customizer, _replay_viewer]:
 		if c != null and c.visible:
 			return true

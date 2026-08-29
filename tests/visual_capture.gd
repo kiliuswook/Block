@@ -167,7 +167,8 @@ func _ready() -> void:
 				inst.get_node("Board")._kill_player()
 				inst.get_node("PopupLayer/DeathPopup").open(
 						"도달 높이 23층      최고 기록 41층", true,
-						"획득   +87 G"))
+						"획득   +87 G", "",
+						"경험치   +56\n레벨 업!   Lv.7   +220 G"))
 	GameState.mode = GameState.MODE_STORY
 	await _capture("res://core/scenes/main.tscn", OUT + "/death_popup_skip.png",
 			func(inst: Node) -> void:

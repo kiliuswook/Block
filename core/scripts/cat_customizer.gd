@@ -296,6 +296,7 @@ func _randomize_all() -> void:
 			continue
 		sel[key] = pool[randi() % pool.size()]
 	GameState.set_custom_all(_cat_id, sel, _player)
+	Achv.unlock(Achv.CUSTOM_CAT)
 	_flavor = tr("CC_FLAVOR_RANDOM")
 	_flavor_col = Color(1.0, 0.85, 0.35)
 	_refresh()
@@ -523,6 +524,7 @@ func _pick(key: String, idx: int) -> void:
 				str(opt.get("d", ""))]
 		_flavor_col = CustomCat.RARITY_COLS[r]
 	GameState.set_custom_part(_cat_id, key, idx, _player)
+	Achv.unlock(Achv.CUSTOM_CAT)  # 업적: 냥이 크리에이터로 부위를 하나라도 바꿔 저장
 	_preview.queue_redraw()
 	_rebuild_panel()
 	changed.emit()
