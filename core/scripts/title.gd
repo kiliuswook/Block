@@ -11,16 +11,23 @@ const INK := UiKit.INK
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const USER_HUD := preload("res://core/scripts/user_hud.gd")
 const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
+## [개발용 · 출시 빌드에서 제거] 업적·리더보드를 눈으로 확인하는 임시 패널.
+const DEV_PANEL := preload("res://core/scripts/dev_panel.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
-const POPUP_SIZE := Vector2(620.0, 812.0)
 const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
 		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 const KEY_GAP := 8.0
-## 캐릭터 선택 아래에 깔리는 참가자 슬롯 영역 (마리오 파티식 픽 화면).
-const SLOT_CARD := Vector2(340.0, 168.0)
-const PICK_FOOTER_H := 258.0
+## 캐릭터 페이지 (UI 문서 19~23p): 헤더 · 캐릭터 스트립 · 본문 3단.
+const CHAR_HEAD_H := 132.0
+const CHAR_STRIP_H := 208.0
+const CHAR_MARGIN := 28.0
+const CHAR_COL_GAP := 20.0
+const CHAR_LEFT_W := 380.0
+const CHAR_RIGHT_W := 250.0
+## 가운데 카드에서 꾸미기 패널이 시작하는 y (카드 제목 아래).
+const CHAR_CUSTOM_TOP := 74.0
 ## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단과
 ## 스테이지 모드가 지원한다 (분할에서는 LINES 랙 대신 좌석 라벨로 진행을 읽는다).
 const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2, GameState.MODE_CLASSIC: 2}
@@ -57,7 +64,6 @@ const CAPSULE_OPEN := 0.26
 # 레이아웃은 뷰포트 크기 기준으로 계산 — 모바일(세로 1080×1920)도 같은 코드를 쓴다.
 var vw := 1920.0
 var vh := 1080.0
-var tile_y := 780.0  # 캐릭터 타일 첫 줄 y (_build_character_row에서 계산)
 var max_tiles_per_row := 99  # 모바일 타이틀이 줄바꿈을 위해 줄인다
 var main_scene := "res://core/scenes/main.tscn"  # 플랫폼 타이틀이 교체 가능
 var allow_2p := true  # 모바일 타이틀은 false (키보드 한 대가 필요한 2인 모드 없음)
@@ -66,13 +72,6 @@ var _tiles := {}  # cat id -> Button
 var _user_hud: CanvasLayer  # 좌상단 고정 유저 HUD (이름 · 레벨 · 경험치 · 골드)
 var _toast: Label
 var _toast_tween: Tween
-var _popup: Control
-var _popup_face: Control
-var _popup_action: Button
-var _popup_close: Button
-var _popup_custom: Button
-var _popup_dex: Button  # 이 냥이의 키캡 도감 열기
-var _popup_cat: Dictionary = {}
 var _customizer: Control
 var _settings: Control
 var _gacha: Control  # 뽑기 오버레이 (캡슐 가챠)
@@ -98,10 +97,17 @@ var _pick_mode := GameState.MODE_CLASSIC  # 픽이 끝나면 시작할 모드
 var _pick_count := 1  # 이번 판 인원 (1 또는 2)
 var _pick_slot := 0  # 지금 고르는 자리 (0 = 1P, 1 = 2P)
 var _pick_cats: Array[String] = ["cream", "cream"]  # 자리별 고른 냥이
-var _pick_footer: Control  # 슬롯 카드 + 시작 버튼이 놓이는 영역
-var _slot_cards: Array = []  # 자리별 카드 [Button, face Control, 꾸미기 Button]
-var _pick_start: Button
-var _char_rows: Control  # 캐릭터 타일이 놓이는 컨테이너
+var _char_view := "cream"  # 본문 3단에 펼쳐 놓은 냥이
+var _char_strip: HBoxContainer  # 캐릭터 타일이 늘어서는 스트립
+var _char_scroll: ScrollContainer  # 스트립을 담는 가로 스크롤
+var _char_seat_tabs: Array[Button] = []  # 2인 세팅에서 뜨는 1P / 2P 좌석 탭
+var _char_left: Control  # 능력치 카드
+var _char_center: Control  # 키캡 도감 / 커스터마이징 카드
+var _char_right: Control  # 보상 열
+var _char_star: Button  # 대표 캐릭터 지정 (★)
+var _customizer_on := false  # 가운데 카드가 꾸미기 패널을 띄우고 있는가
+var _feature_ask: Control  # 대표 캐릭터 확인 팝업
+var _feature_face: Control
 var _cat_anchor := Vector2(1420.0, 660.0)  # 타이틀 큐브 고양이 자리
 var _cat_size := 300.0
 var _logo_top := 90.0
@@ -119,6 +125,7 @@ var _rank_weekly := true
 var _rank_list: VBoxContainer
 var _rank_status: Label
 var _rank_sub: Label
+var _dev: Control  # [개발용] 업적·리더보드 확인 패널 (DEV_PANEL.ENABLED)
 var _nick_edit: LineEdit
 var _replay_viewer: Control
 
@@ -143,8 +150,7 @@ func _ready() -> void:
 	_refresh_classic_desc()
 	_compute_layout()
 	_build_user_hud()
-	_build_character_row()
-	_build_popup()
+	_build_character_page()
 	_build_toast()
 	_build_settings()
 	_build_mode_select()
@@ -152,18 +158,15 @@ func _ready() -> void:
 	_build_gacha()
 	_build_ranks()
 	_build_keycap_dex()
-	_customizer = CAT_CUSTOMIZER.new()
-	$UI.add_child(_customizer)
+	_build_dev_panel()
 	UiKit.apply_theme($UI)  # 코드로 만든 오버레이까지 컨셉 테마를 덮는다
-	# 냥이 크리에이터·리플레이 뷰어는 의도적으로 어두운 무대 연출 — 테마 제외.
-	_customizer.theme = null
+	# 리플레이 뷰어는 의도적으로 어두운 무대 연출 — 테마 제외.
 	_replay_viewer.theme = null
 	_customizer.changed.connect(func() -> void:
 		_refresh_tiles()
 		_refresh_currency()  # HUD 아바타
-		_refresh_pick_cards()
-		if _popup and _popup.visible:
-			_popup_face.queue_redraw())
+		if _chars and _chars.visible:
+			_refresh_char_page())
 	Ranks.board_loaded.connect(func(_ok: bool) -> void:
 		if _ranks and _ranks.visible:
 			_refresh_rank_list())
@@ -428,9 +431,7 @@ func _set_players(count: int) -> void:
 		_pick_slot = mini(_pick_slot, _pick_count - 1)
 		_commit_pick()
 		_refresh_chars_head()
-		_layout_pick_footer()
-		_refresh_pick_cards()
-		_refresh_tiles()
+		_refresh_char_page()
 
 
 func _refresh_players_chips() -> void:
@@ -499,6 +500,12 @@ func _settings_open() -> bool:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# [개발용 · 출시 빌드에서 제거] 확인 패널은 우상단 DEV 버튼으로만 연다
+	# (웹 빌드에서 단축키가 브라우저에 먹히는 경우가 있어 버튼 하나로 통일).
+	if _dev and _dev.visible:
+		if event is InputEventKey and event.pressed 				and event.physical_keycode == KEY_ESCAPE:
+			_dev.close()
+		return
 	if _settings_open():
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
@@ -514,11 +521,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				and event.physical_keycode == KEY_ESCAPE:
 			_keycap_dex.visible = false
 		return
-	if _customizer and _customizer.visible:
-		if event is InputEventKey and event.pressed \
-				and event.physical_keycode == KEY_ESCAPE:
-			_customizer.close()
-		return
 	if _replay_viewer and _replay_viewer.visible:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
@@ -530,11 +532,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				and event.physical_keycode == KEY_ESCAPE:
 			_ranks.visible = false
 		return
-	if _popup and _popup.visible:
-		# The popup swallows mode hotkeys; Esc closes it.
+	if _feature_ask and _feature_ask.visible:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
-			_close_popup()
+			_feature_ask.visible = false
 		return
 	if _chars and _chars.visible:
 		if event is InputEventKey and event.pressed \
@@ -1037,7 +1038,8 @@ func _build_keycap_dex() -> void:
 	_keycap_board = Control.new()
 	_keycap_board.custom_minimum_size = Vector2(pw - 60.0, plate_h)
 	_keycap_board.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_keycap_board.draw.connect(_draw_keycap_dex_board)
+	_keycap_board.draw.connect(func() -> void: _draw_keycap_plate(_keycap_board,
+			Rect2(Vector2.ZERO, _keycap_board.size), _keycap_cat))
 	v.add_child(_keycap_board)
 	var hint := Label.new()
 	hint.text = tr("KEYCAP_HINT")
@@ -1085,24 +1087,22 @@ func _refresh_keycap_dex() -> void:
 
 ## The keyboard: three staggered QWERTY rows on a light plate. Letters banked
 ## this round wear that cat's own keycap; the rest are dim empty sockets.
-func _draw_keycap_dex_board() -> void:
-	var ci := _keycap_board
-	var bw := ci.size.x
-	var key := (bw - KEY_GAP * 9.0) / 10.0
-	var plate := Rect2(0.0, 0.0, bw, key * 3.0 + KEY_GAP * 2.0 + 44.0)
+## 캐릭터 페이지의 도감 카드와 도감 오버레이가 같은 판을 그린다.
+func _draw_keycap_plate(ci: Control, plate: Rect2, cat_id: String) -> void:
+	var key := (plate.size.x - KEY_GAP * 9.0) / 10.0
 	ci.draw_style_box(UiKit.panel_box(Color("e8f4fb"), 20, 0.0), plate)
 	var font := ThemeDB.fallback_font
 	for r in KEY_ROWS.size():
 		var letters := KEY_ROWS[r]
 		var row_w := letters.length() * key + (letters.length() - 1) * KEY_GAP
-		var x := (bw - row_w) / 2.0
-		var y := 22.0 + r * (key + KEY_GAP)
+		var x := plate.position.x + (plate.size.x - row_w) / 2.0
+		var y := plate.position.y + 22.0 + r * (key + KEY_GAP)
 		for i in letters.length():
 			var letter := letters[i]
 			var rect := Rect2(x + i * (key + KEY_GAP), y, key, key)
-			var count := GameState.keycap_count(_keycap_cat, letter)
-			if GameState.has_keycap(_keycap_cat, letter):
-				EscapeBoard.paint_keycap(ci, rect, letter, 0.6, false, _keycap_cat)
+			var count := GameState.keycap_count(cat_id, letter)
+			if GameState.has_keycap(cat_id, letter):
+				EscapeBoard.paint_keycap(ci, rect, letter, 0.6, false, cat_id)
 				if count > 1:
 					var badge := rect.position + Vector2(key - 14.0, key - 8.0)
 					ci.draw_circle(badge + Vector2(0.0, -6.0), 15.0, Color("b8433f"))
@@ -1124,6 +1124,27 @@ func _draw_keycap_dex_board() -> void:
 						HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 				ci.draw_string(font, rect.get_center() + Vector2(-w / 2.0, fs * 0.36),
 						letter, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(INK, 0.3))
+
+
+# --- [개발용 · 출시 빌드에서 제거] 업적/리더보드 확인 패널 -----------------------
+
+
+## 타이틀 우상단의 작은 DEV 버튼으로 여는 임시 확인 패널 (단축키는 두지 않는다).
+## 끄려면 dev_panel.gd 의 ENABLED 를 false 로 두거나 이 함수와 호출을 지운다.
+func _build_dev_panel() -> void:
+	if not DEV_PANEL.ENABLED:
+		return
+	_dev = DEV_PANEL.new()
+	$UI.add_child(_dev)
+	var b := Button.new()
+	b.text = "🛠 DEV"
+	b.size = Vector2(120.0, 44.0)
+	b.position = Vector2(vw - b.size.x - 24.0, 18.0)
+	UiKit.btn_card(b, UiKit.PURPLE_DEEP, 17)
+	b.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_dev.open())
+	$UI.add_child(b)
 
 
 # --- Rankings (per-mode leaderboards) -------------------------------------------
@@ -1361,37 +1382,148 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 	return row
 
 
-# --- Character select ---------------------------------------------------------
+# --- 캐릭터 페이지 (UI 문서 19~23p) ------------------------------------------------
 
 
-## 캐릭터 선택은 컨셉의 CHARACTER 카드로 여는 오버레이 안에 산다.
-## 두 가지로 쓰인다: ① 메뉴에서 여는 둘러보기(구매·꾸미기) ② PLAY 흐름의
-## 참가자 픽(마리오 파티식) — 아래쪽 슬롯 카드에 1P·2P가 자기 냥이를 앉힌다.
-func _build_character_row() -> void:
-	_chars = _make_overlay(tr("CHAR_SELECT"), func() -> void: _close_chars(),
-			Vector2(minf(vw - 60.0, 1180.0), minf(vh - 100.0, 800.0)))
-	var body: Control = _chars.get_meta("body")
-	# 아래쪽은 참가자 슬롯 몫으로 늘 비워 둔다 (둘러보기 모드에선 빈 자리).
-	var grid_h := body.size.y - PICK_FOOTER_H
-	# 패널 폭에 맞춰 줄바꿈 (가로는 한 줄, 세로 화면은 여러 줄).
-	var fit := maxi(1, int((body.size.x + TILE_GAP) / (TILE_SIZE.x + TILE_GAP)))
-	var per_row := mini(mini(fit, max_tiles_per_row), GameState.CATS.size())
-	var rows := ceili(GameState.CATS.size() / float(per_row))
-	tile_y = maxf(0.0, (grid_h - rows * TILE_SIZE.y - (rows - 1) * TILE_GAP) / 2.0)
-	for r in rows:
-		var chunk: Array = GameState.CATS.slice(r * per_row, (r + 1) * per_row)
-		var total := chunk.size() * TILE_SIZE.x + (chunk.size() - 1) * TILE_GAP
-		var x := (body.size.x - total) / 2.0
-		for cat in chunk:
-			var tile := _make_tile(cat)
-			tile.position = Vector2(x, tile_y + r * (TILE_SIZE.y + TILE_GAP))
-			body.add_child(tile)
-			_tiles[cat.id] = tile
-			x += TILE_SIZE.x + TILE_GAP
-	_build_pick_footer(body, grid_h)
+## 캐릭터 메뉴는 팝업이 아니라 전체 화면 페이지다 (UI 문서 20p):
+##   헤더(제목 · 뒤로 — 골드는 좌상단 고정 유저 HUD가 맡는다)
+##   캐릭터 스트립(디자인 냥이 → 커스텀 슬롯 → "+" 타일로 슬롯 추가)
+##   본문 3단: 능력치 카드 · 키캡 도감(커스텀 슬롯이면 커스터마이징) · 보상 열
+## 자리(1P·2P) 세팅도 여기서 겸한다 — 2인이면 헤더에 좌석 탭이 뜨고(문서 16p),
+## 타일을 누르면 그 자리에 즉시 앉는다.
+func _build_character_page() -> void:
+	_chars = Control.new()
+	_chars.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_chars.visible = false
+	$UI.add_child(_chars)
+	# 페이지라 뒤가 비쳐서는 안 된다 — 타이틀과 같은 하늘 배경을 깐다.
+	var bg := Control.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.draw.connect(func() -> void: UiKit.paint_backdrop(bg, Vector2(vw, vh), 7))
+	_chars.add_child(bg)
+	var head := Label.new()
+	head.text = tr("CHAR_SELECT")
+	head.position = Vector2(0.0, 28.0)
+	head.size = Vector2(vw, 62.0)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_font_size_override("font_size", 46)
+	head.add_theme_color_override("font_color", INK)
+	_chars.add_child(head)
+	_chars.set_meta("head", head)
+	var back := Button.new()
+	back.text = tr("SET_BACK")
+	back.size = Vector2(150.0, 62.0)
+	back.position = Vector2(vw - 150.0 - CHAR_MARGIN, 24.0)
+	UiKit.btn_ghost(back, 24)
+	back.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_close_chars())
+	_chars.add_child(back)
+	# 캐릭터 스트립 — 가로로 넘치면 스크롤된다 (커스텀 슬롯이 늘어난다).
+	var strip := Panel.new()
+	strip.position = Vector2(0.0, CHAR_HEAD_H)
+	strip.size = Vector2(vw, CHAR_STRIP_H)
+	strip.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 0, 0.0))
+	_chars.add_child(strip)
+	# 좌석 탭 — 2인 세팅일 때만 스트립 왼쪽에 선다 (문서 16p의 1P / 2P 탭).
+	_char_seat_tabs.clear()
+	for i in 2:
+		var slot := i
+		var tab := Button.new()
+		tab.text = "%dP" % (i + 1)
+		tab.size = Vector2(84.0, 56.0)
+		tab.position = Vector2(CHAR_MARGIN, CHAR_STRIP_H / 2.0 - 62.0 + i * 68.0)
+		tab.pressed.connect(func() -> void:
+			Sfx.play("click")
+			_pick_slot = slot
+			_refresh_char_page())
+		strip.add_child(tab)
+		_char_seat_tabs.append(tab)
+	_char_scroll = ScrollContainer.new()
+	_char_scroll.position = Vector2(CHAR_MARGIN,
+			(CHAR_STRIP_H - TILE_SIZE.y) / 2.0 - 6.0)
+	_char_scroll.size = Vector2(vw - CHAR_MARGIN * 2.0, TILE_SIZE.y + 16.0)
+	_char_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	strip.add_child(_char_scroll)
+	var scroll := _char_scroll
+	_char_strip = HBoxContainer.new()
+	_char_strip.add_theme_constant_override("separation", int(TILE_GAP))
+	_char_strip.alignment = BoxContainer.ALIGNMENT_CENTER
+	_char_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_char_strip)
+	_build_char_tiles()
+	# 본문 3단 — 카드는 각자 _draw()로 그리고, 버튼만 자식으로 얹는다.
+	var top := CHAR_HEAD_H + CHAR_STRIP_H + 20.0
+	var body_h := vh - top - CHAR_MARGIN
+	_char_left = Control.new()
+	_char_left.position = Vector2(CHAR_MARGIN, top)
+	_char_left.size = Vector2(CHAR_LEFT_W, body_h)
+	_char_left.draw.connect(func() -> void: _draw_char_stats(_char_left))
+	_chars.add_child(_char_left)
+	# ★ = 타이틀 화면에 앉는 대표 캐릭터 (문서 20~21p의 별, 23p 확인 팝업).
+	_char_star = Button.new()
+	_char_star.size = Vector2(56.0, 56.0)
+	_char_star.position = Vector2(CHAR_LEFT_W - 76.0, 18.0)
+	_char_star.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_open_feature_ask())
+	_char_left.add_child(_char_star)
+	_char_center = Control.new()
+	_char_center.position = Vector2(CHAR_MARGIN + CHAR_LEFT_W + CHAR_COL_GAP, top)
+	_char_center.size = Vector2(400.0, body_h)
+	_char_center.draw.connect(func() -> void: _draw_char_center(_char_center))
+	_chars.add_child(_char_center)
+	# 커스터마이징은 이 카드 안에서 바로 한다 (문서 21p) — 커스텀 슬롯 전용.
+	_customizer = CAT_CUSTOMIZER.new()
+	_char_center.add_child(_customizer)
+	_customizer.saved.connect(func() -> void:
+		_show_toast(tr("CC_SAVED"), GOLD_COL))
+	_char_right = Control.new()
+	_char_right.position = Vector2(vw - CHAR_MARGIN - CHAR_RIGHT_W, top)
+	_char_right.size = Vector2(CHAR_RIGHT_W, body_h)
+	_char_right.draw.connect(func() -> void: _draw_char_rewards(_char_right))
+	_chars.add_child(_char_right)
+	_layout_char_body()
+	_build_feature_ask()
 
 
-## 캐릭터는 타이틀에서 미리 정해 둔다 — 인원 세팅에 맞춰 1P(+2P) 자리가 뜨고,
+## 스트립 타일 다시 깔기 — 커스텀 슬롯을 새로 열면 그 자리가 늘어난다.
+func _build_char_tiles() -> void:
+	for child in _char_strip.get_children():
+		_char_strip.remove_child(child)
+		child.queue_free()
+	_tiles.clear()
+	for cat: Dictionary in GameState.all_cats():
+		var tile := _make_tile(cat)
+		_char_strip.add_child(tile)
+		_tiles[cat.id] = tile
+	if GameState.can_add_custom_slot():
+		_char_strip.add_child(_make_add_tile())
+
+
+## "+" 타일 — 나만의 캐릭터를 담을 빈 슬롯을 하나 더 연다 (문서 20p).
+func _make_add_tile() -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = TILE_SIZE
+	b.size = TILE_SIZE
+	b.text = "+"
+	UiKit.style_button(b, Color("eef2f6"), Color("c9c6d0"), Color(INK, 0.55), 54, 16)
+	b.pressed.connect(func() -> void:
+		var id := GameState.add_custom_slot()
+		if id == "":
+			Sfx.play("error")
+			_show_toast(tr("CHAR_SLOT_FULL"), UiKit.MUTED)
+			return
+		Sfx.play("buy")
+		_show_toast(tr("CHAR_SLOT_NEW").format(
+				{"n": GameState.custom_slots}), UiKit.PURPLE_DEEP)
+		_char_view = id
+		_build_char_tiles()
+		_refresh_char_page())
+	return b
+
+
+## 캐릭터는 타이틀에서 미리 정해 둔다 — 인원 세팅에 맞춰 좌석 탭이 뜨고,
 ## 고르는 즉시 GameState에 저장된다. 플레이 입장 때는 다시 묻지 않는다.
 func _open_chars() -> void:
 	_pick = true
@@ -1400,21 +1532,20 @@ func _open_chars() -> void:
 	_pick_cats[0] = _first_unlocked(GameState.selected_cat)
 	_pick_cats[1] = _first_unlocked(GameState.selected_cat2)
 	_commit_pick()
+	_char_view = _pick_cats[0]
 	_refresh_chars_head()
-	_pick_footer.visible = true
-	_layout_pick_footer()
 	_raise(_chars)
-	_refresh_tiles()
-	_refresh_pick_cards()
+	_refresh_char_page()
 	_chars.visible = true
 
 
-## 오버레이 제목에 지금 세팅한 인원을 붙인다.
+## 페이지 제목에 지금 세팅한 인원을 붙인다.
 func _refresh_chars_head() -> void:
 	var head: Label = _chars.get_meta("head")
 	head.text = tr("CHAR_SELECT")
 	if allow_2p:
-		head.text += "  ·  " + tr("MENU_PLAYERS_1" if _pick_count < 2 else "MENU_PLAYERS_2")
+		head.text += "  ·  " + tr("MENU_PLAYERS_1" if _pick_count < 2 \
+				else "MENU_PLAYERS_2")
 
 
 ## 자리별 선택을 저장한다 (고를 때마다 즉시 — 따로 확정 단계가 없다).
@@ -1431,111 +1562,56 @@ func _close_chars() -> void:
 	queue_redraw()  # 타이틀 고양이를 새 선택으로 다시 그린다
 
 
-# --- 참가자 자리 카드 (마리오 파티식 슬롯) ---------------------------------------
-
-
 ## 저장된 선택이 아직 잠겨 있으면 해금된 첫 냥이로 대체한다.
 func _first_unlocked(id: String) -> String:
 	if GameState.is_unlocked(id):
 		return id
-	for cat in GameState.CATS:
+	for cat in GameState.all_cats():
 		if GameState.is_unlocked(cat.id):
 			return str(cat.id)
 	return "cream"
 
 
-func _build_pick_footer(body: Control, top: float) -> void:
-	_pick_footer = Control.new()
-	_pick_footer.position = Vector2(0.0, top)
-	_pick_footer.size = Vector2(body.size.x, PICK_FOOTER_H)
-	_pick_footer.visible = false
-	body.add_child(_pick_footer)
-	for i in 2:
-		var slot := i  # captured
-		var card := Button.new()
-		card.size = SLOT_CARD
-		card.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		card.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_pick_slot = slot
-			_refresh_pick_cards())
-		var face := Control.new()
-		face.set_anchors_preset(Control.PRESET_FULL_RECT)
-		face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		face.draw.connect(func() -> void: _draw_slot_card(face, slot))
-		card.add_child(face)
-		var custom := Button.new()
-		custom.text = tr("CHAR_CUSTOMIZE")
-		custom.size = Vector2(150.0, 48.0)
-		custom.position = Vector2(SLOT_CARD.x - 166.0, SLOT_CARD.y - 62.0)
-		UiKit.btn_card(custom, UiKit.PURPLE_DEEP, 20)
-		custom.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_pick_slot = slot
-			_refresh_pick_cards()
-			_customizer.open(_pick_cats[slot], slot + 1))
-		card.add_child(custom)
-		_pick_footer.add_child(card)
-		_slot_cards.append([card, face, custom])
-	_pick_start = Button.new()
-	_pick_start.text = tr("CHAR_DONE")
-	_pick_start.size = Vector2(300.0, 58.0)
-	UiKit.btn_primary(_pick_start, 26)
-	_pick_start.pressed.connect(func() -> void:
-		Sfx.play("click")
-		_close_chars())
-	_pick_footer.add_child(_pick_start)
+## 커스텀 슬롯은 보상 열이 없다 — 그만큼 가운데 카드가 넓어진다 (문서 21p).
+func _layout_char_body() -> void:
+	var custom := GameState.is_custom_cat(_char_view)
+	_char_right.visible = not custom
+	var right := 0.0 if custom else CHAR_RIGHT_W + CHAR_COL_GAP
+	var cx := CHAR_MARGIN + CHAR_LEFT_W + CHAR_COL_GAP
+	_char_center.size = Vector2(vw - CHAR_MARGIN - right - cx, _char_left.size.y)
+	_customizer.visible = custom
+	if custom:
+		# 카드 제목(커스터마이징) 아래부터 카드 안쪽 여백까지.
+		_customizer.set_area(Rect2(24.0, CHAR_CUSTOM_TOP,
+				_char_center.size.x - 48.0,
+				_char_center.size.y - CHAR_CUSTOM_TOP - 22.0))
 
 
-## 인원 수에 맞춰 카드를 가운데로 모으고, 시작 버튼을 그 아래에 놓는다.
-func _layout_pick_footer() -> void:
-	var gap := 24.0
-	var total := _pick_count * SLOT_CARD.x + (_pick_count - 1) * gap
-	var x := (_pick_footer.size.x - total) / 2.0
-	for i in _slot_cards.size():
-		var card: Button = _slot_cards[i][0]
-		card.visible = i < _pick_count
-		if card.visible:
-			card.position = Vector2(x, 0.0)
-			x += SLOT_CARD.x + gap
-	_pick_start.position = Vector2((_pick_footer.size.x - _pick_start.size.x) / 2.0,
-			SLOT_CARD.y + 26.0)
-
-
-func _refresh_pick_cards() -> void:
-	if _pick_footer == null or not _pick_footer.visible:
+func _refresh_char_page() -> void:
+	if _chars == null:
 		return
-	for i in _slot_cards.size():
-		var card: Button = _slot_cards[i][0]
-		if i == _pick_slot:
-			UiKit.style_button(card, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 18)
-		else:
-			UiKit.style_button(card, UiKit.WHITE, Color("c9c6d0"), INK, 20, 18)
-		# 꾸미기는 나만의 캐릭터 슬롯에서만.
-		(_slot_cards[i][2] as Button).visible = GameState.is_custom_cat(
-				str(_pick_cats[i]) if i < _pick_cats.size() else "")
-		(_slot_cards[i][1] as Control).queue_redraw()
-
-
-func _draw_slot_card(ci: Control, slot: int) -> void:
-	var id := _pick_cats[slot]
-	var font := ThemeDB.fallback_font
-	Player.paint_cat(ci, Vector2(76.0, 92.0), 84.0, 0.0, true, false,
-			GameState.cat_skin(id, slot + 1))
-	# 자리 뱃지 (숫자 + P — 언어 무관).
-	ci.draw_string(font, Vector2(16.0, 36.0), "%dP" % (slot + 1),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 28,
-			GOLD_COL if slot == _pick_slot else UiKit.MUTED)
-	var right := Rect2(140.0, 0.0, SLOT_CARD.x - 156.0, SLOT_CARD.y)
-	var cat_name := tr(str(GameState.get_cat(id).get("name", "")))
-	var size := UiKit.fit_size(font, cat_name, right.size.x, 26)
-	ci.draw_string(font, Vector2(right.position.x, 54.0), cat_name,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, size, INK)
-	if slot == _pick_slot:
-		var turn := tr("CHAR_PICK_TURN")
-		var ts := UiKit.fit_size(font, turn, right.size.x, 19)
-		ci.draw_string(font, Vector2(right.position.x, 84.0), turn,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, ts, GOLD_COL)
+	for i in _char_seat_tabs.size():
+		var tab: Button = _char_seat_tabs[i]
+		tab.visible = _pick_count > 1
+		UiKit.btn_chip(tab, i == _pick_slot, 22)
+	var seat_w := 112.0 if _pick_count > 1 else 0.0
+	_char_scroll.position.x = CHAR_MARGIN + seat_w
+	_char_scroll.size.x = vw - CHAR_MARGIN * 2.0 - seat_w
+	_char_star.visible = GameState.is_unlocked(_char_view)
+	var featured := GameState.featured_cat() == _char_view
+	_char_star.text = "★" if featured else "☆"
+	if featured:
+		UiKit.style_button(_char_star, UiKit.GOLD, UiKit.GOLD_DEEP, INK, 30, 16)
+	else:
+		UiKit.btn_ghost(_char_star, 30)
+	_customizer_on = GameState.is_custom_cat(_char_view)
+	_layout_char_body()
+	if _customizer_on:
+		_customizer.open(_char_view, _pick_slot + 1)
+	_refresh_tiles()
+	_char_left.queue_redraw()
+	_char_center.queue_redraw()
+	_char_right.queue_redraw()
 
 
 ## 타일에서 고른 냥이를 지금 자리에 앉히고, 2인이면 다음 자리로 넘긴다.
@@ -1545,8 +1621,7 @@ func _assign_pick(cat_id: String) -> void:
 	_commit_pick()
 	if _pick_count > 1:
 		_pick_slot = (_pick_slot + 1) % _pick_count
-	_refresh_pick_cards()
-	_refresh_tiles()
+	_refresh_char_page()
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -1565,9 +1640,12 @@ func _make_tile(cat: Dictionary) -> Button:
 	return b
 
 
+## 지금 펼쳐 놓은 냥이는 빨간 테두리, 자리에 앉힌 냥이는 금색 (문서 20p).
 func _style_tile(b: Button, cat: Dictionary) -> void:
-	var selected := _is_chosen(str(cat.id))
-	if selected:
+	var id := str(cat.id)
+	if _chars != null and _chars.visible and id == _char_view:
+		UiKit.style_button(b, Color("fff1cf"), UiKit.RED_DEEP, INK, 20, 16)
+	elif _is_chosen(id):
 		UiKit.style_button(b, Color("fff1cf"), UiKit.GOLD_DEEP, INK, 20, 16)
 	else:
 		UiKit.style_button(b, UiKit.WHITE, Color("c9c6d0"), INK, 20, 16)
@@ -1629,7 +1707,7 @@ func _draw_grade_pips(ci: Control, id: String, y: float) -> void:
 
 func _draw_center_text(ci: Control, font: Font, text: String, y: float,
 		size: int, col: Color, width: float = TILE_SIZE.x) -> void:
-	# 타일/팝업 폭을 넘기면 글자를 줄여서 맞춘다 (긴 번역 대응).
+	# 타일/카드 폭을 넘기면 글자를 줄여서 맞춘다 (긴 번역 대응).
 	size = UiKit.fit_size(font, text, width - 12.0, size)
 	var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	ci.draw_string(font, Vector2((width - w) / 2.0, y), text,
@@ -1650,16 +1728,17 @@ func _draw_lock(ci: Control, at: Vector2) -> void:
 	ci.draw_arc(at + Vector2(0.0, -3.0), 5.5, PI, TAU, 10, col, 3.0)
 
 
+## 타일 누르기 = 본문에 그 냥이를 펼치고, 해금된 냥이면 지금 자리에 앉힌다.
 func _on_tile_pressed(cat: Dictionary) -> void:
-	Sfx.play("click")
-	# 픽 중에는 해금된 냥이를 곧장 자리에 앉힌다 (잠긴 냥이는 구매 팝업으로).
-	if _pick and GameState.is_unlocked(cat.id):
+	_char_view = str(cat.id)
+	if GameState.is_unlocked(cat.id):
 		_assign_pick(str(cat.id))
-		return
-	_open_popup(cat)
+	else:
+		Sfx.play("click")
+		_refresh_char_page()
 
 
-## 이 냥이가 지금 "고른" 상태인가 — 픽 중에는 참가자 슬롯, 아니면 저장된 선택.
+## 이 냥이가 지금 "고른" 상태인가 — 픽 중에는 참가자 자리, 아니면 저장된 선택.
 func _is_chosen(id: String) -> bool:
 	if not _pick:
 		return GameState.selected_cat == id
@@ -1669,190 +1748,197 @@ func _is_chosen(id: String) -> bool:
 	return false
 
 
-# --- Character info popup -----------------------------------------------------
+# --- 본문 1단: 능력치 카드 --------------------------------------------------------
+## 능력치는 캐릭터 데이터(GameState.cat_stats)를 그대로 보여 주는 표시 전용이다.
 
 
-func _build_popup() -> void:
-	_popup = Control.new()
-	_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_popup.visible = false
-	$UI.add_child(_popup)
-	# Dimmed backdrop; clicking it closes the popup.
-	var dim := Button.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var dim_sb := StyleBoxFlat.new()
-	dim_sb.bg_color = Color(0.09, 0.13, 0.18, 0.55)
-	for st in ["normal", "hover", "pressed", "focus"]:
-		dim.add_theme_stylebox_override(st, dim_sb)
-	dim.pressed.connect(_close_popup)
-	_popup.add_child(dim)
-	var panel := Control.new()
-	panel.position = (Vector2(vw, vh) - POPUP_SIZE) / 2.0
-	panel.size = POPUP_SIZE
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_popup.add_child(panel)
-	_popup_face = Control.new()
-	_popup_face.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_popup_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_popup_face.draw.connect(func() -> void: _draw_popup(_popup_face))
-	panel.add_child(_popup_face)
-	_popup_action = _make_popup_button(panel, true)
-	_popup_action.pressed.connect(_on_popup_action)
-	_popup_close = _make_popup_button(panel, false)
-	_popup_close.text = tr("SET_CLOSE")
-	_popup_close.pressed.connect(_close_popup)
-	_popup_custom = _make_popup_button(panel, false)
-	_popup_custom.text = tr("CHAR_CUSTOMIZE")
-	_popup_custom.pressed.connect(func() -> void:
-		Sfx.play("click")
-		var id: String = str(_popup_cat.get("id", "cream"))
-		var slot := (_pick_slot + 1) if _pick else 1
-		_close_popup()
-		_customizer.open(id, slot))
-	_popup_dex = _make_popup_button(panel, false)
-	_popup_dex.text = tr("CHAR_DEX_BTN")
-	_popup_dex.pressed.connect(func() -> void:
-		Sfx.play("click")
-		var id: String = str(_popup_cat.get("id", "cream"))
-		_close_popup()
-		_open_keycap_dex(id))
-
-
-func _make_popup_button(panel: Control, accent: bool) -> Button:
-	var b := Button.new()
-	if accent:
-		UiKit.btn_primary(b, 24)
-	else:
-		UiKit.btn_ghost(b, 22)
-	panel.add_child(b)
-	return b
-
-
-func _open_popup(cat: Dictionary) -> void:
-	_raise(_popup)
-	_popup_cat = cat
-	var unlocked: bool = GameState.is_unlocked(cat.id)
-	# 캐릭터는 키캡으로만 해금된다 — 잠긴 냥이에겐 고를 버튼 자체가 없다.
-	if unlocked:
-		if _pick:
-			_popup_action.visible = _pick_cats[_pick_slot] != cat.id
-		else:
-			_popup_action.visible = GameState.selected_cat != cat.id
-		_popup_action.text = tr("CHAR_SELECT_BTN")
-	else:
-		_popup_action.visible = false
-	# 꾸미기는 "나만의 캐릭터" 슬롯 전용 — 디자인 냥이 6종은 컨셉 시트 원본
-	# 그대로 두고, 커스터마이징은 해금한 파츠로 조립하는 커스텀 슬롯에서만 한다.
-	_popup_custom.visible = unlocked and GameState.is_custom_cat(str(cat.id))
-	# 나만의 캐릭터는 키캡을 모으지 않으므로 도감 버튼이 없다.
-	_popup_dex.visible = not GameState.is_custom_cat(str(cat.id))
-	# Bottom row: visible buttons side by side, centered — 다 들어가지 않으면
-	# 폭을 같은 비율로 줄인다 (긴 번역 + 버튼 4개).
-	var y := POPUP_SIZE.y - 70.0
-	var row: Array = []
-	if _popup_action.visible:
-		row.append([_popup_action, 200.0])
-	if _popup_custom.visible:
-		row.append([_popup_custom, 170.0])
-	if _popup_dex.visible:
-		row.append([_popup_dex, 170.0])
-	row.append([_popup_close, 200.0 if row.is_empty() else 140.0])
-	var total := -18.0
-	for entry: Array in row:
-		total += entry[1] + 18.0
-	var avail := POPUP_SIZE.x - 44.0
-	var shrink := minf(1.0, (avail - (row.size() - 1) * 18.0)
-			/ maxf(1.0, total - (row.size() - 1) * 18.0))
-	total = -18.0
-	for entry: Array in row:
-		entry[1] = floorf(entry[1] * shrink)
-		total += entry[1] + 18.0
-	var x := (POPUP_SIZE.x - total) / 2.0
-	for entry: Array in row:
-		var b: Button = entry[0]
-		b.size = Vector2(entry[1], 52.0)
-		b.position = Vector2(x, y)
-		x += entry[1] + 18.0
-	_popup.visible = true
-	_popup_face.queue_redraw()
-
-
-func _close_popup() -> void:
-	_popup.visible = false
-
-
-func _on_popup_action() -> void:
-	var cat := _popup_cat
-	if not GameState.is_unlocked(cat.id):
-		return
-	Sfx.play("click")
-	if _pick:
-		_assign_pick(str(cat.id))
-	else:
-		GameState.select_cat(cat.id)
-	_refresh_tiles()
-	_close_popup()
-
-
-func _draw_popup(ci: Control) -> void:
-	var cat := _popup_cat
-	if cat.is_empty():
-		return
-	var unlocked: bool = GameState.is_unlocked(cat.id)
-	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 26, 0.0),
-			Rect2(Vector2.ZERO, POPUP_SIZE))
+func _draw_char_stats(ci: Control) -> void:
+	var id := _char_view
+	var cat := GameState.get_cat(id)
+	var unlocked := GameState.is_unlocked(id)
+	var w := ci.size.x
+	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 22, 0.0),
+			Rect2(Vector2.ZERO, ci.size))
 	var font := ThemeDB.fallback_font
-	var center := Vector2(POPUP_SIZE.x / 2.0, 118.0)
+	ci.draw_string(font, Vector2(24.0, 48.0), tr("CHAR_STATS"),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, INK)
+	var center := Vector2(w / 2.0, 206.0)
+	UiKit.ellipse(ci, center + Vector2(0.0, 96.0), Vector2(78.0, 19.0),
+			Color(0.2, 0.35, 0.45, 0.14))
 	if unlocked:
-		Player.paint_cat(ci, center, 110.0, 0.0, true, false, GameState.cat_skin(cat.id))
+		# 꾸미기 중인 슬롯은 패널이 들고 있는 모습 그대로 (잠긴 파츠 미리보기 포함).
+		var skin: Dictionary = _customizer.preview_skin() if _customizer_on \
+				else GameState.cat_skin(id, _pick_slot + 1)
+		Player.paint_cat(ci, center, 176.0, 0.0, true, false, skin)
 	else:
-		var shadow := GameState.cat_shadow_skin(str(cat.id))
-		Player.paint_cat(ci, center, 110.0, 0.0, true, false, shadow)
-		_draw_lock(ci, center + Vector2(52.0, 38.0))
-	var name_col := INK if unlocked else UiKit.MUTED
-	var pop_name := tr(str(cat.name))
-	_draw_center_text(ci, font, pop_name, 226.0, 34, name_col, POPUP_SIZE.x)
-	_draw_center_text(ci, font, "「%s」" % tr(str(cat.get("trait", ""))), 262.0, 21,
-			GOLD_COL, POPUP_SIZE.x)
-	# Stat bars.
-	var stats: Dictionary = GameState.cat_stats(cat.id)
+		Player.paint_cat(ci, center, 176.0, 0.0, true, false,
+				GameState.cat_shadow_skin(id))
+		_draw_lock(ci, center + Vector2(74.0, 60.0))
+	_draw_center_text(ci, font, tr(str(cat.name)), 342.0, 32,
+			INK if unlocked else UiKit.MUTED, w)
+	_draw_center_text(ci, font, "「%s」" % tr(str(cat.get("trait", ""))), 378.0, 20,
+			GOLD_COL, w)
+	var stats: Dictionary = GameState.cat_stats(id)
+	var pip_w := (w - 176.0) / 5.0 - 6.0
 	for i in STAT_ROWS.size():
-		var row_y := 302.0 + i * 40.0
-		ci.draw_string(font, Vector2(150.0, row_y + 14.0), tr(STAT_ROWS[i][0]),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(INK, 0.85))
+		var y := 418.0 + i * 42.0
+		ci.draw_string(font, Vector2(26.0, y + 16.0), tr(STAT_ROWS[i][0]),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(INK, 0.85))
 		var pips := _stat_pips(STAT_ROWS[i][1], stats.get(STAT_ROWS[i][1], 1.0))
 		for p in 5:
-			var r := Rect2(238.0 + p * 50.0, row_y, 42.0, 16.0)
-			var col := UiKit.ORANGE if p < pips else Color(INK, 0.12)
-			ci.draw_rect(r, col)
-	# 키캡 수집 현황 — 잠긴 냥이에겐 이게 곧 해금 조건이다.
-	# 나만의 캐릭터는 모을 키캡이 없다: 대신 파츠 해금 규칙을 알려 준다.
-	if GameState.is_custom_cat(str(cat.id)):
+			var r := Rect2(146.0 + p * (pip_w + 6.0), y, pip_w, 18.0)
+			ci.draw_rect(r, UiKit.ORANGE if p < pips else Color(INK, 0.12))
+	var note := ""
+	if GameState.featured_cat() == id:
+		note = tr("CHAR_FEATURE_ON")
+	elif _is_chosen(id):
+		note = tr("CHAR_EQUIPPED")
+	if note != "":
+		_draw_center_text(ci, font, note, ci.size.y - 28.0, 20, GOLD_COL, w)
+
+
+# --- 본문 2단: 키캡 도감 / 커스터마이징 ---------------------------------------------
+
+
+func _draw_char_center(ci: Control) -> void:
+	var w := ci.size.x
+	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 22, 0.0),
+			Rect2(Vector2.ZERO, ci.size))
+	var font := ThemeDB.fallback_font
+	if GameState.is_custom_cat(_char_view):
+		# 제목 줄만 그리고, 아래는 꾸미기 패널(부위 목록 + 옵션 격자)이 채운다.
+		ci.draw_string(font, Vector2(24.0, 48.0), tr("CHAR_CUSTOM_TITLE"),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 26, INK)
 		var prog := GameState.my_parts_progress()
-		_draw_center_text(ci, font, tr("CHAR_MINE_HINT"), 522.0, 20,
-				UiKit.PURPLE_DEEP, POPUP_SIZE.x)
-		_draw_center_text(ci, font, "🎨 %d / %d" % [prog.x, prog.y], 556.0, 24,
-				GOLD_COL, POPUP_SIZE.x)
-		_draw_center_text(ci, font, tr("CHAR_MINE_HINT2"), 584.0, 17,
-				UiKit.MUTED, POPUP_SIZE.x)
-	else:
-		_draw_keycap_progress(ci, str(cat.id), 530.0)
-	if unlocked and GameState.selected_cat == cat.id:
-		_draw_center_text(ci, font, tr("CHAR_EQUIPPED"), POPUP_SIZE.y - 92.0, 19,
-				GOLD_COL, POPUP_SIZE.x)
+		var note := "🎨 %d / %d" % [prog.x, prog.y]
+		var nw := font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
+		ci.draw_string(font, Vector2(w - nw - 24.0, 48.0), note,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 22, GOLD_COL)
+		ci.draw_line(Vector2(24.0, 60.0), Vector2(w - 24.0, 60.0), Color(INK, 0.12),
+				2.0)
+		return
+	ci.draw_string(font, Vector2(24.0, 48.0), tr("KEYCAP_TITLE"),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 26, INK)
+	var plate_w := w - 56.0
+	var key := (plate_w - KEY_GAP * 9.0) / 10.0
+	var plate := Rect2(28.0, 72.0, plate_w, key * 3.0 + KEY_GAP * 2.0 + 44.0)
+	_draw_keycap_plate(ci, plate, _char_view)
+	var below := plate.position.y + plate.size.y + 46.0
+	_draw_center_text(ci, font, tr("KEYCAP_HINT"), below, 20, UiKit.MUTED, w)
+	_draw_center_text(ci, font, tr("CHAR_DEX_COLLECTED").format(
+			{"ring": GameState.keycap_ring(_char_view)}), below + 48.0, 30, INK, w)
+	_draw_keycap_progress(ci, _char_view, below + 92.0, w)
+
+
+# --- 본문 3단: 보상 열 ------------------------------------------------------------
+## 등급 하나 = 키캡 A~Z 한 바퀴. 1등급은 캐릭터 해금, 2~4등급은 파츠 단계다.
+## 칩에는 그 등급에서 받게 되는 모습(그 단계 파츠를 입은 냥이)을 그린다.
+
+
+func _draw_char_rewards(ci: Control) -> void:
+	var w := ci.size.x
+	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 22, 0.0),
+			Rect2(Vector2.ZERO, ci.size))
+	var font := ThemeDB.fallback_font
+	_draw_center_text(ci, font, tr("CHAR_REWARD"), 48.0, 26, INK, w)
+	var grade := GameState.cat_grade(_char_view)
+	var top: int = GameState.KEYCAP_GRADE_MAX
+	var step := (ci.size.y - 96.0) / top
+	var chip_h := minf(80.0, step - 66.0)
+	for i in top:
+		var lvl := i + 1
+		var done := grade >= lvl
+		var next := grade == lvl - 1
+		var rect := Rect2(30.0, 84.0 + i * step, w - 60.0, chip_h)
+		var box := UiKit.panel_box(UiKit.CYAN if done else Color("e6eaef"), 18, 0.0)
+		if next:
+			box.border_color = UiKit.GOLD_DEEP
+			box.set_border_width_all(5)
+		ci.draw_style_box(box, rect)
+		# 칩마다 그 등급에서 붙는 파츠 단계로 그린다 (잠긴 칩도 같은 단계의 실루엣).
+		var tier := mini(i, GameState.CustomCat.TIER_MAX)
+		var skin: Dictionary = GameState.cat_skin(_char_view, 1, tier) if done \
+				else GameState.cat_shadow_skin(_char_view, tier)
+		Player.paint_cat(ci, rect.get_center(), chip_h * 0.76, 0.0, true, false, skin)
+		var label := tr("CHAR_REWARD_UNLOCK") if lvl == 1 \
+				else tr("CHAR_REWARD_PARTS").format({"n": lvl - 1})
+		_draw_center_text(ci, font, label, rect.position.y + chip_h + 24.0, 18,
+				INK if done else UiKit.MUTED, w)
+		var status := tr("CHAR_REWARD_DONE") if done \
+				else (tr("CHAR_REWARD_NEXT") if next else tr("CHAR_REWARD_LOCKED"))
+		_draw_center_text(ci, font, status, rect.position.y + chip_h + 46.0, 16,
+				GOLD_COL if next else (Color(INK, 0.55) if done else UiKit.SOFT), w)
+
+
+# --- 대표 캐릭터 확인 팝업 (문서 23p) ------------------------------------------------
+
+
+func _build_feature_ask() -> void:
+	_feature_ask = _make_overlay(tr("CHAR_FEATURE_TITLE"),
+			func() -> void: _feature_ask.visible = false, Vector2(600.0, 520.0))
+	var body: Control = _feature_ask.get_meta("body")
+	var ask := Label.new()
+	ask.text = tr("CHAR_FEATURE_ASK")
+	ask.size = Vector2(body.size.x, 64.0)
+	ask.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ask.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ask.add_theme_font_size_override("font_size", 21)
+	ask.add_theme_color_override("font_color", Color(INK, 0.85))
+	body.add_child(ask)
+	_feature_face = Control.new()
+	_feature_face.position = Vector2(0.0, 80.0)
+	_feature_face.size = Vector2(body.size.x, 230.0)
+	_feature_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_feature_face.draw.connect(func() -> void:
+		Player.paint_cat(_feature_face, Vector2(_feature_face.size.x / 2.0, 104.0),
+				172.0, 0.0, true, false,
+				GameState.cat_skin(_char_view, _pick_slot + 1))
+		_draw_center_text(_feature_face, ThemeDB.fallback_font,
+				tr(str(GameState.get_cat(_char_view).name)), 216.0, 26, INK,
+				_feature_face.size.x))
+	body.add_child(_feature_face)
+	var cancel := Button.new()
+	cancel.text = tr("UI_CANCEL")
+	cancel.size = Vector2(190.0, 60.0)
+	cancel.position = Vector2(body.size.x / 2.0 - 200.0, body.size.y - 76.0)
+	UiKit.btn_ghost(cancel, 24)
+	cancel.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_feature_ask.visible = false)
+	body.add_child(cancel)
+	var ok := Button.new()
+	ok.text = tr("UI_CONFIRM")
+	ok.size = Vector2(190.0, 60.0)
+	ok.position = Vector2(body.size.x / 2.0 + 10.0, body.size.y - 76.0)
+	UiKit.btn_primary(ok, 26)
+	ok.pressed.connect(func() -> void:
+		Sfx.play("record")
+		GameState.set_feature_cat(_char_view)
+		_show_toast(tr("CHAR_FEATURE_SET").format(
+				{"name": tr(str(GameState.get_cat(_char_view).name))}), GOLD_COL)
+		_feature_ask.visible = false
+		_refresh_char_page()
+		queue_redraw())
+	body.add_child(ok)
+
+
+func _open_feature_ask() -> void:
+	_raise(_feature_ask)
+	_feature_face.queue_redraw()
+	_feature_ask.visible = true
 
 
 ## 이 냥이의 키캡 수집 현황 — 이번 바퀴 진행 바 + 등급.
 ## 잠긴 냥이에게는 이 바가 그대로 해금 게이지다 (A~Z 한 바퀴 = 합류).
-func _draw_keycap_progress(ci: Control, id: String, y: float) -> void:
+func _draw_keycap_progress(ci: Control, id: String, y: float, width: float) -> void:
 	var font := ThemeDB.fallback_font
 	var ring := GameState.keycap_ring(id)
 	var grade := GameState.cat_grade(id)
 	var top := GameState.KEYCAP_GRADE_MAX
 	var full := grade >= top
 	_draw_center_text(ci, font, tr("CHAR_KEYCAP").format(
-			{"ring": ring, "grade": grade, "max": top}), y, 20, GOLD_COL, POPUP_SIZE.x)
-	var bar := Rect2((POPUP_SIZE.x - 340.0) / 2.0, y + 14.0, 340.0, 16.0)
+			{"ring": ring, "grade": grade, "max": top}), y, 20, GOLD_COL, width)
+	var bar := Rect2((width - 340.0) / 2.0, y + 14.0, 340.0, 16.0)
 	ci.draw_rect(bar, Color(INK, 0.10))
 	var frac := 1.0 if full else ring / 26.0
 	if frac > 0.0:
@@ -1867,7 +1953,7 @@ func _draw_keycap_progress(ci: Control, id: String, y: float) -> void:
 	else:
 		note = tr("CHAR_KEYCAP_NEXT").format(
 				{"left": GameState.keycaps_to_next(id), "grade": grade + 1})
-	_draw_center_text(ci, font, note, y + 54.0, 17, UiKit.MUTED, POPUP_SIZE.x)
+	_draw_center_text(ci, font, note, y + 54.0, 17, UiKit.MUTED, width)
 
 
 func _refresh_tiles() -> void:
@@ -1925,13 +2011,13 @@ func _draw() -> void:
 	var vp := get_viewport_rect().size
 	UiKit.paint_backdrop(self, vp)
 	_draw_logo()
-	# 선택한 냥이가 로고 옆(세로 화면은 아래)에 앉아 손님을 맞는다.
+	# 대표 캐릭터가 로고 옆(세로 화면은 아래)에 앉아 손님을 맞는다.
 	var at := _cat_anchor
 	# 발밑 그림자 — 밝은 배경에서 캐릭터를 띄워 준다.
 	UiKit.ellipse(self, _cat_anchor + Vector2(0.0, _cat_size * 0.56),
 			Vector2(_cat_size * 0.42, _cat_size * 0.1), Color(0.2, 0.35, 0.45, 0.16))
 	Player.paint_cat(self, at, _cat_size, 0.0, true, false,
-			GameState.cat_skin(GameState.selected_cat))
+			GameState.cat_skin(GameState.featured_cat()))
 	_draw_stat_line()
 
 
@@ -1945,9 +2031,9 @@ func _draw_logo() -> void:
 			UiKit.WHITE, 0.0, 7)
 
 
-## 선택한 냥이의 한 줄 능력치 — 타이틀 고양이 바로 아래.
+## 대표 캐릭터의 한 줄 능력치 — 타이틀 고양이 바로 아래.
 func _draw_stat_line() -> void:
-	var cat := GameState.get_cat(GameState.selected_cat)
+	var cat := GameState.get_cat(GameState.featured_cat())
 	var stats: Dictionary = GameState.cat_stats(cat.id)
 	var font := ThemeDB.fallback_font
 	var parts: Array[String] = []

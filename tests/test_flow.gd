@@ -10,10 +10,10 @@ func _ready() -> void:
 	# --- 인원 세팅 ---
 	t._set_players(2)
 	assert(GameState.players == 2, "인원 세팅이 GameState에 안 남음")
-	# --- 캐릭터 세팅: 인원만큼 자리 카드가 뜨고, 고르는 즉시 저장된다 ---
+	# --- 캐릭터 세팅: 인원만큼 좌석 탭이 뜨고, 고르는 즉시 저장된다 ---
 	t._open_chars()
-	assert(t._chars.visible and t._pick_footer.visible, "캐릭터 세팅이 안 열림")
-	assert(t._pick_count == 2 and t._slot_cards[1][0].visible, "2P 자리 카드가 없음")
+	assert(t._chars.visible, "캐릭터 페이지가 안 열림")
+	assert(t._pick_count == 2 and t._char_seat_tabs[1].visible, "2P 좌석 탭이 없음")
 	print("chars head: ", (t._chars.get_meta("head") as Label).text)
 	var first: String = t._first_unlocked(GameState.selected_cat)
 	t._pick_slot = 0
@@ -22,9 +22,26 @@ func _ready() -> void:
 	assert(t._pick_slot == 1, "2인일 때 다음 자리로 안 넘어감")
 	t._assign_pick(first)
 	assert(GameState.selected_cat2 == first, "2P 선택이 즉시 저장 안 됨")
+	# --- "+" 타일: 커스텀 슬롯이 하나 더 열리고, 그 슬롯이 본문에 펼쳐진다 ---
+	var slots0: int = GameState.custom_slots
+	if GameState.can_add_custom_slot():
+		var tiles0: int = t._char_strip.get_child_count()
+		var add: Button = t._char_strip.get_child(tiles0 - 1)
+		add.pressed.emit()
+		await tree.process_frame
+		assert(GameState.custom_slots == slots0 + 1, "커스텀 슬롯이 안 열림")
+		assert(t._char_view == GameState.custom_slot_id(GameState.custom_slots),
+				"새 슬롯이 본문에 안 펼쳐짐")
+		assert(GameState.is_custom_cat(t._char_view), "새 슬롯이 커스텀이 아님")
+		assert(not t._char_right.visible, "커스텀 슬롯에 보상 열이 떠 있음")
+		GameState.custom_slots = slots0  # 테스트가 세이브를 늘리지 않게 되돌린다
+		GameState.save_game()
+		t._build_char_tiles()
+		t._char_view = first
+		t._refresh_char_page()
 	# 열려 있는 채로 인원을 1인으로 바꾸면 자리 카드도 바로 접힌다.
 	t._set_players(1)
-	assert(t._pick_count == 1 and not t._slot_cards[1][0].visible, "자리 수 즉시 반영 안 됨")
+	assert(t._pick_count == 1 and not t._char_seat_tabs[1].visible, "자리 수 즉시 반영 안 됨")
 	t._close_chars()
 	assert(not t._chars.visible)
 	# --- PLAY: 모드를 고르면 캐릭터를 다시 묻지 않고 바로 시작 ---

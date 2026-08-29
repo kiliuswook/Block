@@ -8,10 +8,8 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT)
 	await get_tree().process_frame
 	await _capture("res://core/scenes/title.tscn", OUT + "/title.png")
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("black")))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_buy.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cheese")))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_locked.png",
+			func(inst: Node) -> void: _view_cat(inst, "black"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes.png",
 			func(inst: Node) -> void: inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",
@@ -65,22 +63,38 @@ func _ready() -> void:
 	GameState.save_game()
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
+	# [개발용 · 출시 빌드에서 제거] 업적/리더보드 확인 패널.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_dev_achv.png",
+			func(inst: Node) -> void:
+				if inst._dev:
+					inst._dev.open())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_dev_boards.png",
+			func(inst: Node) -> void:
+				if inst._dev:
+					inst._dev.open()
+					inst._dev._tab = 1
+					inst._dev._rebuild())
 	var saved_caps: Dictionary = GameState.keycaps.duplicate()
 	GameState.keycaps = _demo_keycaps()
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
+	# 보상 열: 등급별로 그 단계 파츠를 입은 모습이 칩마다 달라야 한다.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_rewards.png",
+			func(inst: Node) -> void: _view_cat(inst, "cream"))
 	GameState.keycaps = saved_caps
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_popup_custom.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("cream")))
-	# 나만의 캐릭터 (꾸미기는 이 슬롯 전용) — 슬롯 팝업 + 잠긴 파츠가 섞인 꾸미기 화면(눈 탭).
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_popup.png",
-			func(inst: Node) -> void: inst._open_popup(GameState.get_cat("mycat")))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_custom.png",
-			func(inst: Node) -> void: inst._customizer.open("mycat"))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_cream.png",
+			func(inst: Node) -> void: _view_cat(inst, "cream"))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_feature.png",
+			func(inst: Node) -> void:
+				_view_cat(inst, "cream")
+				inst._open_feature_ask())
+	# 나만의 캐릭터 (꾸미기는 이 슬롯 전용) — 카드 안 꾸미기 패널 + 잠긴 파츠(눈 줄).
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_mycat.png",
+			func(inst: Node) -> void: _view_cat(inst, "mycat"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_eyes.png",
 			func(inst: Node) -> void:
-				inst._customizer.open("mycat")
-				inst._customizer._cur = 5  # 눈 칩 — 모양+색을 한 패널에서 확인
+				_view_cat(inst, "mycat")
+				inst._customizer._cur = 5  # 눈 줄 — 모양+색을 한 패널에서 확인
 				inst._customizer._refresh()
 				# 잠긴 파츠 미리보기 — 눈 3번(잠금)을 입혀 본 상태
 				inst._customizer._pick("eyes", 3))
@@ -193,7 +207,7 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
 	GameState.keycaps = saved_caps
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
-			func(inst: Node) -> void: inst._customizer.open("mycat"))
+			func(inst: Node) -> void: _view_cat(inst, "mycat"))
 	GameState.mode = GameState.MODE_STORY
 	GameState.story_stage = 0
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",
@@ -213,6 +227,13 @@ func _ready() -> void:
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_picnic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	get_tree().quit()
+
+
+## 캐릭터 페이지를 열고 그 냥이를 본문에 펼친다.
+func _view_cat(inst: Node, id: String) -> void:
+	inst._open_chars()
+	inst._char_view = id
+	inst._refresh_char_page()
 
 
 func _capture(scene_path: String, out: String, setup: Callable = Callable()) -> void:

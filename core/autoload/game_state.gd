@@ -119,6 +119,11 @@ const KEYCAP_FRESH_CHANCE := 0.7
 const KEYCAP_PICK_SIZE := 5
 const KEYCAP_PICK_MARKUP := 1.5
 
+## 나만의 캐릭터(커스텀 슬롯). 슬롯 1은 CATS의 "mycat", 2번부터는 "mycat2"…
+## 캐릭터 페이지의 "+" 타일이 슬롯을 하나씩 연다 (UI 문서 20~21p).
+const MYCAT_ID := "mycat"
+const MYCAT_SLOT_MAX := 3
+
 var mode: int = MODE_CLASSIC
 var split: bool = false  # 2-player split screen (escape race/endless only), not saved
 var best_height: int = 0
@@ -152,6 +157,10 @@ var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개�
 var gacha_pick: Array = []
 # 캐릭터별 커스터마이징: 저장 키(custom_key) -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
+## 지금까지 연 커스텀 슬롯 수 (1 ~ MYCAT_SLOT_MAX).
+var custom_slots: int = 1
+## 타이틀 화면에 앉는 대표 캐릭터 ("" = 지금 고른 냥이를 따라간다).
+var feature_cat: String = ""
 var last_daily: String = ""  # date the daily first-run double-gold was claimed
 var locale: String = ""  # chosen UI language ("" = follow the system locale)
 # Volume settings (linear 0..1) — applied to the audio buses by the Sfx autoload.
@@ -254,6 +263,8 @@ func reset_all() -> void:
 	skipped_stages = []
 	keycaps = {}
 	cat_custom = {}
+	custom_slots = 1
+	feature_cat = ""
 	last_daily = ""
 	save_game()
 
@@ -652,12 +663,96 @@ func get_cat(id: String) -> Dictionary:
 	for cat in CATS:
 		if cat.id == id:
 			return cat
+	var n := custom_slot_no(id)
+	if n > 1 and n <= custom_slots:
+		return custom_cat_def(n)
 	return CATS[0]
 
 
 ## 나만의 캐릭터(백지 슬롯)인가 — 키캡·해금 진행이 없는 자리.
 func is_custom_cat(id: String) -> bool:
 	return bool(get_cat(id).get("custom", false))
+
+
+# --- 커스텀 슬롯 (나만의 캐릭터 여러 자리) -------------------------------------------
+## 슬롯 1은 CATS 안의 "mycat" 정의를 그대로 쓰고, 2번부터는 그 정의를 복사해
+## id·이름만 바꿔 만든다 (세이브에는 열어 둔 슬롯 수 하나만 남는다).
+
+
+func custom_slot_id(n: int) -> String:
+	return MYCAT_ID if n <= 1 else "%s%d" % [MYCAT_ID, n]
+
+
+## 이 id가 몇 번 커스텀 슬롯인가 (0 = 커스텀 슬롯이 아님).
+func custom_slot_no(id: String) -> int:
+	if id == MYCAT_ID:
+		return 1
+	if id.begins_with(MYCAT_ID):
+		var tail := id.substr(MYCAT_ID.length())
+		if tail.is_valid_int():
+			return maxi(int(tail), 0)
+	return 0
+
+
+func custom_slot_ids() -> Array[String]:
+	var out: Array[String] = []
+	for n in range(1, custom_slots + 1):
+		out.append(custom_slot_id(n))
+	return out
+
+
+## 슬롯 n의 캐릭터 정의. 이름에는 슬롯 번호가 붙는다 — 여기서 이미 번역해
+## 실어 보내므로 호출부의 tr()은 그대로 통과한다 (언어를 바꾸면 씬이 다시 뜬다).
+func custom_cat_def(n: int) -> Dictionary:
+	var base: Dictionary = CATS[CATS.size() - 1]
+	for cat in CATS:
+		if cat.get("custom", false):
+			base = cat
+	var def := base.duplicate(true)
+	def["id"] = custom_slot_id(n)
+	if n > 1:
+		def["name"] = tr("CAT_MINE_N").format({"n": n})
+	return def
+
+
+## 디자인 냥이 + 열어 둔 커스텀 슬롯 — 캐릭터 화면이 늘어놓는 전체 목록.
+func all_cats() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for cat in CATS:
+		out.append(cat)
+	for n in range(2, custom_slots + 1):
+		out.append(custom_cat_def(n))
+	return out
+
+
+func can_add_custom_slot() -> bool:
+	return custom_slots < MYCAT_SLOT_MAX
+
+
+## 새 커스텀 슬롯을 연다 — 새 슬롯 id를 돌려준다 ("" = 더 열 수 없음).
+func add_custom_slot() -> String:
+	if not can_add_custom_slot():
+		return ""
+	custom_slots += 1
+	save_game()
+	return custom_slot_id(custom_slots)
+
+
+# --- 대표 캐릭터 (타이틀 화면에 앉는 냥이) ------------------------------------------
+
+
+## 타이틀에 그릴 냥이 — 따로 정하지 않았으면 지금 고른 냥이를 따라간다.
+func featured_cat() -> String:
+	if feature_cat != "" and is_unlocked(feature_cat):
+		return feature_cat
+	return selected_cat
+
+
+func set_feature_cat(id: String) -> void:
+	if not is_unlocked(id):
+		return
+	feature_cat = id
+	save_game()
 
 
 ## 키캡을 모으는 냥이들 (가챠 풀·도감 탭 — 나만의 캐릭터는 빠진다).
@@ -738,10 +833,11 @@ func cat_stats(id: String) -> Dictionary:
 
 ## Skin dictionary consumed by Player.paint_cat. The selected cat also
 ## carries its equipped accessory defs under "acc".
-func cat_skin(id: String, player := 1) -> Dictionary:
+## tier_override >= 0 이면 그 파츠 단계로 그린다 (보상 열의 "이 등급에서 받는 모습").
+func cat_skin(id: String, player := 1, tier_override := -1) -> Dictionary:
 	var cat := get_cat(id)
 	var char_id := str(cat.get("char", "char01"))
-	var tier := cat_tier(id)
+	var tier := cat_tier(id) if tier_override < 0 			else clampi(tier_override, 0, CustomCat.TIER_MAX)
 	var sel := custom_sel(id, player)
 	var skin := CustomCat.build_skin(char_id, tier, sel)
 	# 컨셉 시트 그림으로 그릴 수 있으면 그쪽을 쓴다. 색만 바꾼 경우엔
@@ -759,8 +855,9 @@ func cat_skin(id: String, player := 1) -> Dictionary:
 
 
 ## 잠긴 냥이용 실루엣 — 실루엣(모양)은 유지하고 색·소품만 지운다.
-func cat_shadow_skin(id: String) -> Dictionary:
-	var full := cat_skin(id)
+## tier_override >= 0 이면 그 파츠 단계의 실루엣 (보상 열의 잠긴 칩).
+func cat_shadow_skin(id: String, tier_override := -1) -> Dictionary:
+	var full := cat_skin(id, 1, tier_override)
 	if full.has("sprite"):
 		return {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "gray": true,
 				"sprite": full["sprite"], "tier": full["tier"],
@@ -837,6 +934,8 @@ func save_game() -> void:
 		"keycaps": keycaps,
 		"gacha_pick": gacha_pick,
 		"cat_custom": cat_custom,
+		"custom_slots": custom_slots,
+		"feature_cat": feature_cat,
 		"last_daily": last_daily,
 		"locale": locale,
 		"vol_master": vol_master,
@@ -949,6 +1048,8 @@ func load_game() -> void:
 					sel[str(k)] = idx
 				if not sel.is_empty():
 					cat_custom[str(cid)] = sel
+		custom_slots = clampi(int(data.get("custom_slots", 1)), 1, MYCAT_SLOT_MAX)
+		feature_cat = str(data.get("feature_cat", ""))
 		last_daily = str(data.get("last_daily", ""))
 		locale = str(data.get("locale", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)
