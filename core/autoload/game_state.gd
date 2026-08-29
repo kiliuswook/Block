@@ -144,6 +144,9 @@ var selected_cat: String = "cream"
 ## 2P(화면 분할) 몫으로 고른 냥이 — 1P와 같은 냥이여도 커스터마이징은 따로 간다.
 var selected_cat2: String = "cream"
 var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
+## 사용자가 랭킹 화면에서 직접 정한 이름인가. 거짓이면 플랫폼 계정 이름
+## (스팀 페르소나)이 생길 때 그쪽으로 갈아탄다 — adopt_platform_name() 참고.
+var nick_custom: bool = false
 var player_id: String = ""  # stable random id identifying this save on boards
 var weekly: Dictionary = {}  # this week's bests: {"week": id, "story": n, ...}
 var weekly_claimed: int = 0  # last finished week whose prize was checked
@@ -200,6 +203,36 @@ func _ready() -> void:
 
 func set_nickname(n: String) -> void:
 	n = n.strip_edges().left(12)
+	if n == "":
+		return
+	# 값이 같아도 "사용자가 정한 이름" 표시는 남긴다 — 그래야 다음 부팅에서
+	# 스팀 페르소나가 이 이름을 덮어쓰지 않는다.
+	nick_custom = true
+	if n == nickname:
+		save_game()
+		return
+	nickname = n
+	save_game()
+	Ranks.rename_and_resubmit()
+
+
+## 화면·랭킹에 쓰는 내 이름. 플랫폼 계정 이름(스팀 페르소나)이 있으면
+## adopt_platform_name()이 이미 nickname에 심어 두므로 여기서는 그걸 쓰고,
+## 아직 안 심겼거나(초기화 순서) 비어 있으면 계정 이름으로 폴백한다.
+func display_name() -> String:
+	if nickname.strip_edges() != "":
+		return nickname
+	var n := Platform.user_name().strip_edges()
+	return n if n != "" else ""
+
+
+## 플랫폼 계정 이름을 내 이름으로 삼는다 — Platform이 setup() 직후 부른다
+## (autoload 순서상 GameState._ready 시점에는 아직 스팀이 안 떠 있다).
+## 사용자가 직접 이름을 바꾼 적이 있으면(nick_custom) 건드리지 않는다.
+func adopt_platform_name() -> void:
+	if nick_custom:
+		return
+	var n := Platform.user_name().strip_edges().left(12)
 	if n == "" or n == nickname:
 		return
 	nickname = n
@@ -923,6 +956,7 @@ func save_game() -> void:
 		"selected_cat": selected_cat,
 		"selected_cat2": selected_cat2,
 		"nickname": nickname,
+		"nick_custom": nick_custom,
 		"player_id": player_id,
 		"weekly": weekly,
 		"weekly_claimed": weekly_claimed,
@@ -978,6 +1012,7 @@ func load_game() -> void:
 		selected_cat = str(data.get("selected_cat", "cream"))
 		selected_cat2 = str(data.get("selected_cat2", "cream"))
 		nickname = str(data.get("nickname", ""))
+		nick_custom = bool(data.get("nick_custom", false))
 		player_id = str(data.get("player_id", ""))
 		var wkly: Variant = data.get("weekly", {})
 		if wkly is Dictionary:

@@ -127,6 +127,9 @@ var _rank_status: Label
 var _rank_sub: Label
 var _dev: Control  # [개발용] 업적·리더보드 확인 패널 (DEV_PANEL.ENABLED)
 var _nick_edit: LineEdit
+## 스팀 계정 이름을 쓰는 중이라 이름 편집이 잠겼을 때 뜨는 안내.
+var _nick_hint: Label
+var _nick_save: Button
 var _replay_viewer: Control
 
 
@@ -1203,11 +1206,18 @@ func _build_ranks() -> void:
 	nick_save.pressed.connect(func() -> void:
 		Sfx.play("click")
 		GameState.set_nickname(_nick_edit.text)
-		_nick_edit.text = GameState.nickname
-		_show_toast(tr("RANK_RENAMED").format({"name": GameState.nickname}), CREAM)
+		_nick_edit.text = GameState.display_name()
+		_show_toast(tr("RANK_RENAMED").format({"name": GameState.display_name()}), CREAM)
 		_refresh_currency()  # HUD 이름도 같이
 		_refresh_rank_list())
 	nick_row.add_child(nick_save)
+	_nick_save = nick_save
+	# 스팀 계정 이름을 그대로 쓰는 중이면 편집 대신 안내만 보여 준다.
+	_nick_hint = Label.new()
+	_nick_hint.add_theme_font_size_override("font_size", 16)
+	_nick_hint.add_theme_color_override("font_color", UiKit.MUTED)
+	_nick_hint.visible = false
+	nick_row.add_child(_nick_hint)
 	# Scope toggle: weekly (resets Monday 00:00 KST, top 3 win prizes) / all-time.
 	var scopes := HBoxContainer.new()
 	scopes.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1269,10 +1279,21 @@ func _build_ranks() -> void:
 
 func _open_ranks() -> void:
 	_raise(_ranks)
-	_nick_edit.text = GameState.nickname
+	_sync_nick_row()
 	_ranks.visible = true
 	_refresh_rank_list()
 	Ranks.view(_rank_mode, _rank_weekly)  # board_loaded will re-render
+
+
+## 이름 줄 갱신 — 스팀 페르소나가 있으면 그 이름을 잠근 채 보여 준다
+## (스팀 리더보드에 올라가는 이름도 계정 이름이라 여기서 바꿀 수 없다).
+func _sync_nick_row() -> void:
+	var account := Platform.user_name().strip_edges()
+	_nick_edit.text = GameState.display_name()
+	_nick_edit.editable = account == ""
+	_nick_save.visible = account == ""
+	_nick_hint.visible = account != ""
+	_nick_hint.text = tr("RANK_NAME_ACCOUNT")
 
 
 func _on_rank_tab(mode_key: String) -> void:

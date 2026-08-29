@@ -52,10 +52,10 @@ func rect() -> Rect2:
 			else Rect2(_card.position, _card.size)
 
 
-## 화면에 보이는 내 이름 — 스팀 페르소나가 있으면 그걸 쓴다.
+## 화면에 보이는 내 이름 — 이름의 출처는 GameState 하나로 모았다
+## (스팀 페르소나가 있으면 그게 nickname에 심겨 있다).
 static func display_name() -> String:
-	var n := Platform.user_name()
-	return n if n.strip_edges() != "" else GameState.nickname
+	return GameState.display_name()
 
 
 func _draw_card() -> void:

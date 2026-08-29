@@ -20,6 +20,9 @@ func _ready() -> void:
 			else PlatformBase.new()
 	impl.setup()
 	print("[Platform] ", impl.platform_name())
+	# 스팀 페르소나 같은 계정 이름이 있으면 그걸 내 이름으로 삼는다
+	# (autoload 순서상 GameState._ready 때는 아직 스팀이 안 떠 있다).
+	GameState.adopt_platform_name()
 
 
 func _notification(what: int) -> void:

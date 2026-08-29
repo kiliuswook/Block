@@ -216,6 +216,7 @@ RANK_TITLE,🏆  Ranking,🏆  랭킹,[🏆  Řàńķïńğ ——————�
 RANK_MY_NAME,My Name,내 이름,[Ṁÿ Ńàɱé —————]
 RANK_RENAME,Change,변경,[Çĥàńğé ————]
 RANK_RENAMED,Your name is now '{name}'!,이름이 '{name}' (으)로 바뀌었어요!,[Ÿôüř ńàɱé ïş ńôŵ '{name}'! ————————————————————]
+RANK_NAME_ACCOUNT,Using your Steam account name,스팀 계정 이름을 사용해요,[Üşïńğ ÿôüř Şţéàɱ àççôüńţ ńàɱé ———————————————————————]
 RANK_WEEKLY,Weekly,주간 랭킹,[Ŵééķłÿ ————]
 RANK_ALLTIME,All-time,누적 랭킹,[Åłł-ţïɱé ——————]
 RANK_RESET_IN,Resets in {time}   ·   Top 3 prizes  500G / 300G / 200G,초기화까지 {time}   ·   1~3위 보상  500G / 300G / 200G,[Řéşéţş ïń {time}   ·   Ţôþ 3 þřïżéş  500Ğ / 300Ğ / 200Ğ ————————————————————————————————————————————]

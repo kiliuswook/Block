@@ -208,7 +208,7 @@ func _merge_mine(data: Dictionary, key: String, value: int, with_replay: bool) -
 	var entries: Array = data.get(key, [])
 	entries = entries.filter(func(e: Variant) -> bool:
 		return e is Dictionary and str(e.get("id")) != GameState.player_id)
-	var mine := {"id": GameState.player_id, "name": GameState.nickname,
+	var mine := {"id": GameState.player_id, "name": GameState.display_name(),
 			"v": value, "cat": GameState.selected_cat}
 	if with_replay:
 		var rep := Replays.encode(Replays.load_replay(key))
@@ -331,7 +331,7 @@ func entries(mode_key: String, weekly := false) -> Array:
 	else:
 		list = _mock_entries(mode_key, weekly)
 		if my_v > 0:
-			list.append({"id": GameState.player_id, "name": GameState.nickname,
+			list.append({"id": GameState.player_id, "name": GameState.display_name(),
 					"v": my_v, "cat": GameState.selected_cat})
 	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return int(a.get("v", 0)) > int(b.get("v", 0)))
