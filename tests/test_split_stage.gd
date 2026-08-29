@@ -11,7 +11,8 @@ func _ready() -> void:
 	add_child(m)
 	await tree.process_frame
 	assert(m.boards.size() == 2, "분할 보드가 둘이 아님")
-	assert(m.goal_meter == null, "분할 화면에 아케이드 LINES 랙이 만들어짐")
+	assert(m.goal_meter == null, "분할 화면에 1인용 아케이드 HUD가 만들어짐")
+	assert(m.seat_hud.size() == 2, "좌석별 계기판이 없음")
 	var b1: EscapeBoard = m.boards[0]
 	var b2: EscapeBoard = m.boards[1]
 	assert(b1.playing and b2.playing, "양쪽 보드가 시작 안 됨")
@@ -27,8 +28,13 @@ func _ready() -> void:
 	assert(not b1.playing and b2.playing, "죽은 좌석이 남은 좌석까지 멈춤")
 	assert(m.round_active, "한쪽 사망으로 판이 끝나 버림")
 	assert(GameState.score == 0, "분할인데 공용 점수가 쌓임")
+	assert(m.versus_tally == null, "스테이지 분할에 라운드 집계가 남아 있음")
 	print("labels: ", (m.split_labels[0] as Label).text, " | ",
-			(m.split_labels[1] as Label).text, " | ", (m.versus_tally as Label).text)
+			(m.split_labels[1] as Label).text)
+	print("seat HUD: ", (m.seat_hud[0]["score"] as Label).text, " / ",
+			(m.seat_hud[1]["score"] as Label).text, "   LV ",
+			(m.seat_hud[1]["level"] as Label).text, "   ",
+			(m.seat_hud[1]["lines"] as Label).text)
 	# --- 둘 다 끝나면 승자의 기록이 남는다 ---
 	b2._kill_player()
 	await tree.process_frame
