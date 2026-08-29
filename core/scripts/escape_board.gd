@@ -16,6 +16,7 @@ enum PieceState { TRACKING, FALLING, LANDED }
 enum Mode { STORY, ENDLESS, VERSUS, CLASSIC, PICNIC }
 
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
+const UiKit := preload("res://core/scripts/ui_kit.gd")
 
 const COLS := 10
 const ROWS := 14  # story stage data coordinate base — prefills/door_row are
@@ -100,6 +101,10 @@ var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
 var mode := Mode.STORY
 var rows := PIT_ROWS  # pit height in cells
+## 무한의 계단 카메라 배율과, 그 배율에서 화면을 덮는 "카메라 아래로 더 그리는
+## 거리". 스테이지 모드와 같은 크기의 우물을 쓰려고 start_game에서 정해진다.
+var view_zoom := 1.0
+var view_below := VIEW_BELOW
 var best_height := 0
 ## 이 보드가 이번 판에 번 점수. 분할 화면은 보드마다 따로 세고(지갑 하나 원칙에
 ## 걸리는 GameState.score와 달리 좌석별 기록이 필요하다), 1인 플레이에서는
@@ -179,8 +184,11 @@ func start_game() -> void:
 	door_row = DOOR_ROW_TOP if mode == Mode.CLASSIC else DOOR_ROW_TOP + (PIT_ROWS - ROWS)
 	goal_done = true
 	GameState.reset()
+	view_zoom = _fit_zoom() if mode == Mode.ENDLESS else 1.0
+	view_below = VIEW_BELOW / view_zoom
 	if cam:
 		cam.enabled = mode == Mode.ENDLESS
+		cam.zoom = Vector2(view_zoom, view_zoom)
 		cam.position = Vector2(COLS * CELL / 2.0, rows * CELL / 2.0)
 		cam.reset_smoothing()
 	if _story():
@@ -323,6 +331,19 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
+## 무한의 계단도 스테이지 모드와 같은 크기의 우물에서 논다. 고정 우물 모드는
+## 보드 노드를 화면에 맞춰 줄이지만(main.gd `_fit_board()` / `_build_split()`),
+## 무한은 카메라가 그리므로 같은 배율을 카메라 줌으로 준다.
+func _fit_zoom() -> float:
+	var vp := get_viewport_rect().size
+	if split:
+		return (vp.y - 80.0) / (PIT_ROWS * CELL)
+	var portrait := vp.y > vp.x
+	var top := 200.0 if portrait else 40.0
+	var bottom := 1410.0 if portrait else vp.y - 56.0
+	return minf(1.0, (bottom - top) / (PIT_ROWS * CELL))
+
+
 func _update_endless(delta: float) -> void:
 	if not playing or cam == null:
 		return
@@ -333,11 +354,12 @@ func _update_endless(delta: float) -> void:
 	# rides higher there instead of hiding under the buttons.
 	var vp := get_viewport_rect().size
 	var usable := vp.y - 490.0 if vp.y > vp.x else vp.y
-	var cam_offset := usable / 1.5 - vp.y / 2.0  # cat screen y = usable * 2/3
+	# 화면 픽셀 거리를 카메라 줌으로 나눠 월드 거리로 바꾼다 — 줌이 1이 아니다.
+	var cam_offset := (usable / 1.5 - vp.y / 2.0) / view_zoom  # cat screen y = usable * 2/3
 	# Camera floor: at run start the pit bottom sits just above the screen
 	# bottom (landscape) / the touch zone (portrait), never behind them.
 	var bottom_sy := vp.y - 60.0 if vp.x > vp.y else vp.y - 540.0
-	var cam_floor := rows * CELL - (bottom_sy - vp.y / 2.0)
+	var cam_floor := rows * CELL - (bottom_sy - vp.y / 2.0) / view_zoom
 	cam.position.y = minf(player.position.y - cam_offset, cam_floor)
 	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
@@ -1499,7 +1521,7 @@ func _draw() -> void:
 	var h := rows * CELL
 	var top := 0.0
 	if mode == Mode.ENDLESS and cam:
-		top = minf(0.0, cam.position.y - VIEW_BELOW)
+		top = minf(0.0, cam.position.y - view_below)
 	_draw_pit_background(w, h, top)
 	for x in range(1, COLS):
 		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
@@ -1522,24 +1544,28 @@ func _draw() -> void:
 	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
-	var border := Color(1, 1, 1, 0.35)
+	# 우물 테두리는 UI 키트와 같은 두꺼운 잉크 선 — 하늘 배경에 "뚫린 구덩이"로 보이게.
+	var border := UiKit.INK
+	var bw := 7.0
 	if mode == Mode.PICNIC or mode == Mode.CLASSIC:
 		# Sealed pit: unbroken walls all around, no exits to draw.
-		draw_rect(Rect2(-2.0, -2.0, w + 4.0, h + 4.0), border, false, 2.0)
+		draw_rect(Rect2(-bw / 2.0, -bw / 2.0, w + bw, h + bw), border, false, bw)
 	elif mode != Mode.ENDLESS:
 		# Side walls open at the exit rows: draw them with a gap at the doors.
 		var door_top := door_row * CELL
 		var door_bottom := (door_row + 2) * CELL
-		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, 2.0)
+		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, bw)
 		for wx in [-2.0, w + 2.0]:
 			if door_top > 0.0:
-				draw_line(Vector2(wx, -2), Vector2(wx, door_top), border, 2.0)
-			draw_line(Vector2(wx, door_bottom), Vector2(wx, h + 2), border, 2.0)
-		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
+				draw_line(Vector2(wx, -2), Vector2(wx, door_top), border, bw)
+			draw_line(Vector2(wx, door_bottom), Vector2(wx, h + 2), border, bw)
+		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
 	else:
-		draw_line(Vector2(-2, top), Vector2(-2, h + 2), border, 2.0)
-		draw_line(Vector2(w + 2, top), Vector2(w + 2, h + 2), border, 2.0)
-		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, 2.0)
+		# 벽은 바닥 아래 어둠까지 이어진다 (배경을 그만큼 더 깔았다).
+		var wall_bottom := h + view_below * 2.0
+		draw_line(Vector2(-2, top), Vector2(-2, wall_bottom), border, bw)
+		draw_line(Vector2(w + 2, top), Vector2(w + 2, wall_bottom), border, bw)
+		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
 		_draw_lava(w)
 	if shutter_row > 0:
 		_draw_shutter(w)
@@ -1589,8 +1615,11 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
 		bot_col = bot_col.lerp(Color("2a3040"), t)
+	# 무한의 계단은 우물 바닥 아래(용암이 차오르는 어둠)까지 카메라에 들어온다 —
+	# 하늘 배경이 비쳐 우물이 떠 보이지 않게 바닥색으로 더 아래까지 깐다.
+	var floor_y := h + (view_below * 2.0 if mode == Mode.ENDLESS else 0.0)
 	draw_polygon(PackedVector2Array([
-		Vector2(0, top), Vector2(w, top), Vector2(w, h), Vector2(0, h),
+		Vector2(0, top), Vector2(w, top), Vector2(w, floor_y), Vector2(0, floor_y),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
 	if mode == Mode.PICNIC:
 		# A single soft sunbeam straight down the middle of the picnic pit.

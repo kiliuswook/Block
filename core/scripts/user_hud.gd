@@ -130,7 +130,8 @@ func _draw_avatar(ci: CanvasItem, badge: Rect2) -> void:
 	sb.set_border_width_all(3)
 	sb.border_color = UiKit.INK
 	ci.draw_style_box(sb, badge)
-	var cat_id := GameState.cat_for(1)
+	# 아바타는 대표 캐릭터(★)다 — 타이틀 무대는 자리 냥이가 맡는다.
+	var cat_id := GameState.featured_cat()
 	var char_id := str(GameState.get_cat(cat_id).get("char", ""))
 	var tex: Texture2D = CatSprite.face_texture(char_id) if char_id != "" else null
 	if tex != null:

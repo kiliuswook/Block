@@ -3,10 +3,10 @@ extends Control
 ## pip per line the level needs, filling with the exit's warm light as the cat
 ## clears them. Code-drawn like the rest of the pit — no textures.
 
-const FILL := Color("fff3d0")  # exit light: the brightest thing on screen
-const FILL_EDGE := Color("f7d354")
-const EMPTY := Color("232733")
-const EMPTY_EDGE := Color(1, 1, 1, 0.12)
+const UiKit := preload("res://core/scripts/ui_kit.gd")
+
+const FILL := UiKit.GOLD  # 지운 줄: 계기판에서 가장 따뜻한 색
+const EMPTY := Color(UiKit.INK, 0.10)  # 흰 카드에 파 놓은 빈 홈
 const POP_TIME := 0.35  # a freshly lit pip flares, then settles
 const MAX_CELL := 48.0  # tiles never grow past this, however few there are
 
@@ -51,20 +51,17 @@ func _draw() -> void:
 			(size.y - gap * (lines_n - 1)) / lines_n), MAX_CELL)
 	var span := cols * cell + (cols - 1) * gap
 	var left := (size.x - span) / 2.0 if centered else 0.0
-	# Backing panel so the rack reads as an instrument, not stray blocks.
-	var used := Rect2(left, 0.0, span,
-			lines_n * cell + (lines_n - 1) * gap).grow(7.0)
-	draw_rect(used, Color(0, 0, 0, 0.35))
-	draw_rect(used, Color(1, 1, 1, 0.09), false, 2.0)
 	for i in range(quota):
 		var r := Rect2(left + (i % cols) * (cell + gap),
 				(i / cols) * (cell + gap), cell, cell)
 		var on := i < cleared
 		if on and i == cleared - 1 and _pop > 0.0:
 			r = r.grow(5.0 * (_pop / POP_TIME))
-		draw_rect(r, FILL if on else EMPTY)
 		if on:
-			# Light from above: only the top face of a filled tile highlights.
-			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.34)),
-					Color(1, 1, 1, 0.45))
-		draw_rect(r, FILL_EDGE if on else EMPTY_EDGE, false, 2.0)
+			# 켜진 칸은 타이틀 로고와 같은 블록(둥근 모서리 · 잉크 외곽선 · 윗면 빛).
+			UiKit.block(self, r, FILL, maxf(2.0, cell * 0.09))
+		else:
+			var slot := StyleBoxFlat.new()
+			slot.bg_color = EMPTY
+			slot.set_corner_radius_all(int(minf(r.size.x, r.size.y) * 0.22))
+			draw_style_box(slot, r)

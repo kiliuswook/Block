@@ -28,6 +28,8 @@ const CHAR_LEFT_W := 380.0
 const CHAR_RIGHT_W := 250.0
 ## 가운데 카드에서 꾸미기 패널이 시작하는 y (카드 제목 아래).
 const CHAR_CUSTOM_TOP := 74.0
+## 타이틀 무대의 좌석 버튼 (캐릭터 변경 / 2인 참가) 높이.
+const SEAT_BTN_H := 56.0
 ## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단과
 ## 스테이지 모드가 지원한다 (분할에서는 LINES 랙 대신 좌석 라벨로 진행을 읽는다).
 const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2, GameState.MODE_CLASSIC: 2}
@@ -90,17 +92,17 @@ var _pull_anim := false
 var _spin_t := 0.0  # 기계 손잡이/캡슐 상시 애니메이션
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
-var _players_chips: Array[Button] = []  # 타이틀 메뉴에 상주하는 1인 / 2인 토글
+var _seat_btns: Array[Button] = []  # 무대 좌석 아래 버튼 (캐릭터 변경 / 2인 참가)
+var _seat_leave: Button  # 2P 자리를 비우고 1인으로 돌아가는 버튼
 var _mode_rows: Array = []  # 모드 행 [{mode, btn, desc, tag, face, deep, size}]
-var _pick := false  # 캐릭터 선택이 "게임 시작 전 픽" 모드인가
-var _pick_mode := GameState.MODE_CLASSIC  # 픽이 끝나면 시작할 모드
+## 캐릭터 페이지를 어떤 자리가 열었나 — 0이면 메뉴에서 연 "둘러보기"라
+## 타일을 눌러도 자리 배정을 하지 않는다 (1·2면 그 자리에 앉힐 냥이를 고른다).
+var _pick_seat := 0
 var _pick_count := 1  # 이번 판 인원 (1 또는 2)
-var _pick_slot := 0  # 지금 고르는 자리 (0 = 1P, 1 = 2P)
-var _pick_cats: Array[String] = ["cream", "cream"]  # 자리별 고른 냥이
+var _pick_slot := 0  # 꾸미기/미리보기 대상 자리 (0 = 1P, 1 = 2P)
 var _char_view := "cream"  # 본문 3단에 펼쳐 놓은 냥이
 var _char_strip: HBoxContainer  # 캐릭터 타일이 늘어서는 스트립
 var _char_scroll: ScrollContainer  # 스트립을 담는 가로 스크롤
-var _char_seat_tabs: Array[Button] = []  # 2인 세팅에서 뜨는 1P / 2P 좌석 탭
 var _char_left: Control  # 능력치 카드
 var _char_center: Control  # 키캡 도감 / 커스터마이징 카드
 var _char_right: Control  # 보상 열
@@ -108,7 +110,8 @@ var _char_star: Button  # 대표 캐릭터 지정 (★)
 var _customizer_on := false  # 가운데 카드가 꾸미기 패널을 띄우고 있는가
 var _feature_ask: Control  # 대표 캐릭터 확인 팝업
 var _feature_face: Control
-var _cat_anchor := Vector2(1420.0, 660.0)  # 타이틀 큐브 고양이 자리
+var _stage := Rect2()  # 타이틀 무대 — 참가 좌석(1P · 2P)이 늘어서는 자리
+var _cat_anchor := Vector2(1420.0, 660.0)  # 무대 가운데 (좌석 크기 기준)
 var _cat_size := 300.0
 var _logo_top := 90.0
 var _logo_cell := 46.0
@@ -152,12 +155,14 @@ func _ready() -> void:
 	endless_btn.pressed.connect(func() -> void: _on_mode_picked(GameState.MODE_ENDLESS))
 	_refresh_classic_desc()
 	_compute_layout()
+	_fix_seat_cats()
 	_build_user_hud()
 	_build_character_page()
 	_build_toast()
 	_build_settings()
 	_build_mode_select()
 	_build_menu()
+	_build_seat_stage()
 	_build_gacha()
 	_build_ranks()
 	_build_keycap_dex()
@@ -209,12 +214,19 @@ func _compute_layout() -> void:
 		_logo_top = vh * 0.09
 		_cat_anchor = Vector2(vw / 2.0, vh * 0.36)
 		_cat_size = vw * 0.32
+		# 세로 화면은 메뉴가 아래(0.52~)에 있으니 그 위를 무대로 쓴다.
+		_stage = Rect2(0.0, vh * 0.18, vw, vh * 0.32)
 	else:
 		# 상단 유저 HUD 카드(좌상단, ~112px)와 겹치지 않게 로고를 그 아래로 민다.
 		_logo_cell = minf(44.0, (vw - 200.0) / 32.0)
 		_logo_top = maxf(vh * 0.11, USER_HUD.MARGIN.y + USER_HUD.CARD.y + 22.0)
 		_cat_anchor = Vector2(vw * 0.74, vh * 0.62)
 		_cat_size = minf(vh * 0.28, 320.0)
+		# 무대는 메뉴 오른쪽 남은 폭 전부 — 좌석 둘이 나란히 서야 한다.
+		var menu := _menu_rect()
+		var left := menu.position.x + menu.size.x + 30.0
+		# 로고·태그라인 아래에서 시작한다 (무대가 그 글자를 밟으면 안 된다).
+		_stage = Rect2(left, vh * 0.40, maxf(240.0, vw - 40.0 - left), vh * 0.54)
 
 
 ## 메뉴 블록의 좌상단과 폭 — PLAY / 카드 4장 / 키캡 줄이 여기에 쌓인다.
@@ -231,8 +243,7 @@ func _build_menu() -> void:
 	var gap := 16.0
 	var card_w := (area.size.x - gap) / 2.0
 	var play_h := area.size.y * 0.22
-	var seat_h := area.size.y * 0.125 if allow_2p else 0.0
-	var card_h := area.size.y * 0.195
+	var card_h := area.size.y * 0.22
 	var play := Button.new()
 	play.text = "▶   PLAY"
 	play.position = area.position
@@ -242,22 +253,8 @@ func _build_menu() -> void:
 		Sfx.play("click")
 		_open_modes())
 	$UI.add_child(play)
-	# 인원은 여기서 미리 정해 둔다 — 모드를 고를 때마다 다시 묻지 않는다.
+	# 인원은 오른쪽 무대의 좌석으로 정한다 (2P 자리를 채우면 2인).
 	var seat_y := play_h + gap
-	if allow_2p:
-		_players_chips.clear()
-		for i in 2:
-			var count := i + 1
-			var chip := Button.new()
-			chip.text = "%s  %s" % ["👤" if count == 1 else "👥",
-					tr("MENU_PLAYERS_1" if count == 1 else "MENU_PLAYERS_2")]
-			chip.position = area.position + Vector2(i * (card_w + gap), seat_y)
-			chip.size = Vector2(card_w, seat_h)
-			chip.pressed.connect(func() -> void: _set_players(count))
-			$UI.add_child(chip)
-			_players_chips.append(chip)
-		_refresh_players_chips()
-		seat_y += seat_h + gap
 	var cards := [
 		[tr("MENU_CHARACTER"), UiKit.GOLD_DEEP, func() -> void: _open_chars()],
 		[tr("MENU_GACHA"), UiKit.CYAN_DEEP, func() -> void: _open_gacha()],
@@ -407,7 +404,6 @@ func _on_mode_picked(mode: int) -> void:
 		Sfx.play("error")
 		_show_toast(tr("MENU_MODE_SOLO_ONLY"), UiKit.RED_DEEP)
 		return
-	_pick_mode = mode
 	if _modes:
 		_modes.visible = false
 	# 캐릭터는 타이틀에서 이미 정해 뒀다 — 모드를 고르면 곧장 시작.
@@ -418,29 +414,109 @@ func _on_mode_picked(mode: int) -> void:
 
 
 ## 1인 / 2인을 타이틀에서 미리 정해 둔다 (save.json에 남아 다음 실행에도 유지).
+## 부르는 곳은 무대 좌석뿐 — 2P 자리를 채우면 2인, 비우면 1인이다.
 func _set_players(count: int) -> void:
-	if GameState.players == count:
+	if not allow_2p or GameState.players == count:
 		return
 	Sfx.play("click")
 	GameState.players = count
 	GameState.save_game()
 	_pick_count = _seats()
-	_refresh_players_chips()
+	_refresh_seats()
 	# 모드 선택이 떠 있는 채로 바꿨다면 잠금 상태도 곧바로 다시 계산한다.
 	if _modes and _modes.visible:
 		_open_modes()
-	# 캐릭터 세팅이 열려 있으면 자리 수를 바로 맞춘다.
+	# 캐릭터 페이지가 그 자리 몫으로 열려 있었다면 남은 자리로 되돌린다.
 	if _chars and _chars.visible:
-		_pick_slot = mini(_pick_slot, _pick_count - 1)
-		_commit_pick()
+		if _pick_seat > _seats():
+			_pick_seat = _seats()
+		_pick_slot = maxi(0, _pick_seat - 1)
 		_refresh_chars_head()
 		_refresh_char_page()
 
 
-func _refresh_players_chips() -> void:
-	for i in _players_chips.size():
-		var chip: Button = _players_chips[i]
-		UiKit.btn_chip(chip, _seats() == i + 1, int(chip.size.y * 0.42))
+# --- 타이틀 무대 = 참가 좌석 (1P · 2P) ---------------------------------------------
+## 인원을 따로 묻지 않는다 — 무대에 좌석 둘이 늘 서 있고, 오른쪽 빈 자리를
+## 채우면 2인, "✕"로 비우면 1인이다. 좌석마다 그 자리 냥이가 앉고, 바로 아래
+## "캐릭터 변경" 버튼이 그 자리 몫으로 캐릭터 페이지를 연다.
+
+
+## 무대에 세우는 좌석 수 (2인이 없는 플랫폼은 자리 하나).
+func _seat_slots() -> int:
+	return 2 if allow_2p else 1
+
+
+## 좌석 i가 쓰는 무대 구획.
+func _seat_plate(i: int) -> Rect2:
+	var w := _stage.size.x / float(_seat_slots())
+	return Rect2(_stage.position.x + i * w, _stage.position.y, w, _stage.size.y)
+
+
+## 구획에 들어가는 냥이 크기 — 좌석이 둘이면 그만큼 작아진다.
+func _seat_cat_size(plate: Rect2) -> float:
+	return minf(_cat_size, minf(plate.size.x * 0.62, plate.size.y * 0.46))
+
+
+func _build_seat_stage() -> void:
+	_seat_btns.clear()
+	for i in _seat_slots():
+		var slot := i
+		var plate := _seat_plate(i)
+		var b := Button.new()
+		b.pressed.connect(func() -> void: _on_seat_btn(slot))
+		$UI.add_child(b)
+		_seat_btns.append(b)
+	if allow_2p:
+		var plate2 := _seat_plate(1)
+		_seat_leave = Button.new()
+		_seat_leave.text = tr("MENU_SEAT_LEAVE")
+		_seat_leave.size = Vector2(140.0, 46.0)
+		_seat_leave.position = Vector2(plate2.position.x + plate2.size.x - 160.0,
+				plate2.position.y + 6.0)
+		UiKit.btn_ghost(_seat_leave, 20)
+		_seat_leave.pressed.connect(func() -> void: _set_players(1))
+		$UI.add_child(_seat_leave)
+	_refresh_seats()
+
+
+## 좌석 버튼 하나 = 그 자리가 찼으면 캐릭터 변경, 비었으면 그 자리에 참가.
+func _on_seat_btn(i: int) -> void:
+	Sfx.play("click")
+	if i < _seats():
+		_open_chars(i + 1)
+	else:
+		_set_players(i + 1)
+
+
+## 찬 자리는 냥이 아래 작은 "캐릭터 변경", 빈 자리는 냥이 그림 없이
+## 그 자리를 통째로 채우는 큰 "2인 플레이 참가" 버튼이다.
+func _refresh_seats() -> void:
+	for i in _seat_btns.size():
+		var b: Button = _seat_btns[i]
+		var plate := _seat_plate(i)
+		if i < _seats():
+			b.text = tr("MENU_SEAT_CHANGE")
+			b.size = Vector2(minf(plate.size.x - 60.0, 300.0), SEAT_BTN_H)
+			b.position = Vector2(plate.position.x + (plate.size.x - b.size.x) / 2.0,
+					plate.position.y + plate.size.y * 0.82)
+			UiKit.btn_card(b, UiKit.CYAN_DEEP, 24)
+		else:
+			b.text = tr("MENU_SEAT_JOIN")
+			b.size = Vector2(minf(plate.size.x - 70.0, 360.0),
+					minf(plate.size.y * 0.34, 200.0))
+			b.position = Vector2(plate.position.x + (plate.size.x - b.size.x) / 2.0,
+					plate.position.y + (plate.size.y - b.size.y) / 2.0)
+			UiKit.btn_card(b, UiKit.ORANGE_DEEP, 34)
+	if _seat_leave:
+		_seat_leave.visible = _seats() > 1
+	queue_redraw()
+
+
+## 저장된 자리 냥이가 잠겨 있으면 해금된 냥이로 바꿔 둔다 — 무대가 곧 자리라
+## 잠긴 냥이가 앉아 있으면 안 된다.
+func _fix_seat_cats() -> void:
+	GameState.select_cat(_first_unlocked(GameState.selected_cat), 1)
+	GameState.select_cat(_first_unlocked(GameState.selected_cat2), 2)
 
 
 ## 어두운 배경 + 흰 패널 + 제목 + 닫기 버튼을 갖춘 공용 오버레이 껍데기.
@@ -1410,8 +1486,9 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 ##   헤더(제목 · 뒤로 — 골드는 좌상단 고정 유저 HUD가 맡는다)
 ##   캐릭터 스트립(디자인 냥이 → 커스텀 슬롯 → "+" 타일로 슬롯 추가)
 ##   본문 3단: 능력치 카드 · 키캡 도감(커스텀 슬롯이면 커스터마이징) · 보상 열
-## 자리(1P·2P) 세팅도 여기서 겸한다 — 2인이면 헤더에 좌석 탭이 뜨고(문서 16p),
-## 타일을 누르면 그 자리에 즉시 앉는다.
+## 자리 배정은 여기서 하지 않는다 — 메뉴에서 열면 도감·성장·꾸미기를 보는
+## 둘러보기고, 타이틀 무대의 "캐릭터 변경"으로 열었을 때만(_pick_seat > 0)
+## 타일을 눌러 그 자리 냥이를 바꾼다.
 func _build_character_page() -> void:
 	_chars = Control.new()
 	_chars.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1446,20 +1523,6 @@ func _build_character_page() -> void:
 	strip.size = Vector2(vw, CHAR_STRIP_H)
 	strip.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 0, 0.0))
 	_chars.add_child(strip)
-	# 좌석 탭 — 2인 세팅일 때만 스트립 왼쪽에 선다 (문서 16p의 1P / 2P 탭).
-	_char_seat_tabs.clear()
-	for i in 2:
-		var slot := i
-		var tab := Button.new()
-		tab.text = "%dP" % (i + 1)
-		tab.size = Vector2(84.0, 56.0)
-		tab.position = Vector2(CHAR_MARGIN, CHAR_STRIP_H / 2.0 - 62.0 + i * 68.0)
-		tab.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_pick_slot = slot
-			_refresh_char_page())
-		strip.add_child(tab)
-		_char_seat_tabs.append(tab)
 	_char_scroll = ScrollContainer.new()
 	_char_scroll.position = Vector2(CHAR_MARGIN,
 			(CHAR_STRIP_H - TILE_SIZE.y) / 2.0 - 6.0)
@@ -1544,43 +1607,33 @@ func _make_add_tile() -> Button:
 	return b
 
 
-## 캐릭터는 타이틀에서 미리 정해 둔다 — 인원 세팅에 맞춰 좌석 탭이 뜨고,
-## 고르는 즉시 GameState에 저장된다. 플레이 입장 때는 다시 묻지 않는다.
-func _open_chars() -> void:
-	_pick = true
+## 캐릭터 페이지는 두 가지로 열린다:
+##   seat 0 — 메뉴 카드에서 연 둘러보기 (도감·성장·꾸미기. 자리는 안 건드린다)
+##   seat 1·2 — 무대 좌석의 "캐릭터 변경" (그 자리에 앉힐 냥이를 고른다)
+func _open_chars(seat := 0) -> void:
+	_pick_seat = clampi(seat, 0, _seats())
 	_pick_count = _seats()
-	_pick_slot = 0
-	_pick_cats[0] = _first_unlocked(GameState.selected_cat)
-	_pick_cats[1] = _first_unlocked(GameState.selected_cat2)
-	_commit_pick()
-	_char_view = _pick_cats[0]
+	_pick_slot = maxi(0, _pick_seat - 1)
+	_char_view = _first_unlocked(GameState.cat_for(_pick_slot + 1))
 	_refresh_chars_head()
 	_raise(_chars)
 	_refresh_char_page()
 	_chars.visible = true
 
 
-## 페이지 제목에 지금 세팅한 인원을 붙인다.
+## 자리 몫으로 열렸으면 제목이 그 자리를 밝힌다 (2인일 때만 자리를 붙인다).
 func _refresh_chars_head() -> void:
 	var head: Label = _chars.get_meta("head")
-	head.text = tr("CHAR_SELECT")
-	if allow_2p:
-		head.text += "  ·  " + tr("MENU_PLAYERS_1" if _pick_count < 2 \
-				else "MENU_PLAYERS_2")
-
-
-## 자리별 선택을 저장한다 (고를 때마다 즉시 — 따로 확정 단계가 없다).
-func _commit_pick() -> void:
-	GameState.select_cat(_pick_cats[0], 1)
-	if _pick_count > 1:
-		GameState.select_cat(_pick_cats[1], 2)
-	_refresh_currency()  # HUD 아바타가 1P 냥이를 따라간다
+	if _pick_seat > 0 and _seats() > 1:
+		head.text = tr("CHAR_SEAT_PICK").format({"n": _pick_seat})
+	else:
+		head.text = tr("CHAR_SELECT")
 
 
 func _close_chars() -> void:
 	_chars.visible = false
-	_pick = false
-	queue_redraw()  # 타이틀 고양이를 새 선택으로 다시 그린다
+	_pick_seat = 0
+	_refresh_seats()  # 무대 좌석을 새 선택으로 다시 그린다
 
 
 ## 저장된 선택이 아직 잠겨 있으면 해금된 첫 냥이로 대체한다.
@@ -1611,13 +1664,6 @@ func _layout_char_body() -> void:
 func _refresh_char_page() -> void:
 	if _chars == null:
 		return
-	for i in _char_seat_tabs.size():
-		var tab: Button = _char_seat_tabs[i]
-		tab.visible = _pick_count > 1
-		UiKit.btn_chip(tab, i == _pick_slot, 22)
-	var seat_w := 112.0 if _pick_count > 1 else 0.0
-	_char_scroll.position.x = CHAR_MARGIN + seat_w
-	_char_scroll.size.x = vw - CHAR_MARGIN * 2.0 - seat_w
 	_char_star.visible = GameState.is_unlocked(_char_view)
 	var featured := GameState.featured_cat() == _char_view
 	_char_star.text = "★" if featured else "☆"
@@ -1635,14 +1681,13 @@ func _refresh_char_page() -> void:
 	_char_right.queue_redraw()
 
 
-## 타일에서 고른 냥이를 지금 자리에 앉히고, 2인이면 다음 자리로 넘긴다.
+## 타일에서 고른 냥이를 이 페이지를 연 자리에 앉힌다 (즉시 저장).
 func _assign_pick(cat_id: String) -> void:
 	Sfx.play("buy")
-	_pick_cats[_pick_slot] = cat_id
-	_commit_pick()
-	if _pick_count > 1:
-		_pick_slot = (_pick_slot + 1) % _pick_count
+	GameState.select_cat(cat_id, maxi(1, _pick_seat))
+	_refresh_currency()  # HUD 아바타
 	_refresh_char_page()
+	_refresh_seats()
 
 
 func _make_tile(cat: Dictionary) -> Button:
@@ -1683,17 +1728,16 @@ func _draw_tile(ci: Control, cat: Dictionary) -> void:
 		Player.paint_cat(ci, center, 68.0, 0.0, true, false, shadow)
 		_draw_lock(ci, center + Vector2(34.0, 24.0))
 	var font := ThemeDB.fallback_font
-	# 픽 중에는 어느 자리가 이 냥이를 골랐는지 우상단 뱃지로 보여준다.
-	if _pick:
-		var by := 6.0
-		for i in _pick_count:
-			if _pick_cats[i] != cat.id:
-				continue
-			var chip := Rect2(TILE_SIZE.x - 44.0, by, 38.0, 26.0)
-			ci.draw_rect(chip, GOLD_COL)
-			ci.draw_string(font, chip.position + Vector2(5.0, 20.0),
-					"%dP" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, UiKit.WHITE)
-			by += 30.0
+	# 어느 자리가 이 냥이를 데려갔는지 우상단 뱃지로 보여준다.
+	var by := 6.0
+	for i in _seats():
+		if GameState.cat_for(i + 1) != cat.id:
+			continue
+		var chip := Rect2(TILE_SIZE.x - 44.0, by, 38.0, 26.0)
+		ci.draw_rect(chip, GOLD_COL)
+		ci.draw_string(font, chip.position + Vector2(5.0, 20.0),
+				"%dP" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 19, UiKit.WHITE)
+		by += 30.0
 	var name_col := INK if unlocked else UiKit.MUTED
 	var tile_name := tr(str(cat.name))
 	_draw_center_text(ci, font, tile_name, 112.0, 22, name_col)
@@ -1749,22 +1793,21 @@ func _draw_lock(ci: Control, at: Vector2) -> void:
 	ci.draw_arc(at + Vector2(0.0, -3.0), 5.5, PI, TAU, 10, col, 3.0)
 
 
-## 타일 누르기 = 본문에 그 냥이를 펼치고, 해금된 냥이면 지금 자리에 앉힌다.
+## 타일 누르기 = 본문에 그 냥이를 펼친다. 자리 몫으로 연 페이지에서만
+## 해금된 냥이를 그 자리에 앉힌다 (메뉴에서 연 둘러보기는 자리를 안 건드린다).
 func _on_tile_pressed(cat: Dictionary) -> void:
 	_char_view = str(cat.id)
-	if GameState.is_unlocked(cat.id):
+	if _pick_seat > 0 and GameState.is_unlocked(cat.id):
 		_assign_pick(str(cat.id))
 	else:
 		Sfx.play("click")
 		_refresh_char_page()
 
 
-## 이 냥이가 지금 "고른" 상태인가 — 픽 중에는 참가자 자리, 아니면 저장된 선택.
+## 이 냥이가 지금 어느 자리에 앉아 있는가 (금색 테두리 조건).
 func _is_chosen(id: String) -> bool:
-	if not _pick:
-		return GameState.selected_cat == id
-	for i in _pick_count:
-		if _pick_cats[i] == id:
+	for i in _seats():
+		if GameState.cat_for(i + 1) == id:
 			return true
 	return false
 
@@ -2032,14 +2075,8 @@ func _draw() -> void:
 	var vp := get_viewport_rect().size
 	UiKit.paint_backdrop(self, vp)
 	_draw_logo()
-	# 대표 캐릭터가 로고 옆(세로 화면은 아래)에 앉아 손님을 맞는다.
-	var at := _cat_anchor
-	# 발밑 그림자 — 밝은 배경에서 캐릭터를 띄워 준다.
-	UiKit.ellipse(self, _cat_anchor + Vector2(0.0, _cat_size * 0.56),
-			Vector2(_cat_size * 0.42, _cat_size * 0.1), Color(0.2, 0.35, 0.45, 0.16))
-	Player.paint_cat(self, at, _cat_size, 0.0, true, false,
-			GameState.cat_skin(GameState.featured_cat()))
-	_draw_stat_line()
+	# 무대에는 이번 판에 나갈 좌석이 선다 (2인이면 좌우로 나란히).
+	_draw_seats()
 
 
 ## 블록 글자 로고 "CAT-TRIS" — 컨셉의 통통한 블록 타이포.
@@ -2052,25 +2089,41 @@ func _draw_logo() -> void:
 			UiKit.WHITE, 0.0, 7)
 
 
-## 대표 캐릭터의 한 줄 능력치 — 타이틀 고양이 바로 아래.
-func _draw_stat_line() -> void:
-	var cat := GameState.get_cat(GameState.featured_cat())
-	var stats: Dictionary = GameState.cat_stats(cat.id)
-	var font := ThemeDB.fallback_font
-	var parts: Array[String] = []
-	for entry in STAT_ROWS:
-		var pips := _stat_pips(entry[1], stats.get(entry[1], 1.0))
-		parts.append("%s %s%s" % [tr(entry[0]), "●".repeat(pips), "○".repeat(5 - pips)])
-	var y := _cat_anchor.y + _cat_size * 0.72
-	UiKit.center_text_outlined(self, "%s · %s" % [tr(str(cat.name)),
-			tr(str(cat.get("trait", "")))],
-			y, _cat_size * 2.4, 28, UiKit.CREAM, _cat_anchor.x - _cat_size * 1.2, 7)
-	var text := "   ".join(parts)
-	# 자리에 넘치면 폰트를 줄여서 한 줄에 맞춘다 (세로 화면 대응).
-	var size := 19
-	var room := minf(_cat_size * 2.6, vw - 40.0)
-	while font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > room \
-			and size > 11:
-		size -= 1
-	UiKit.center_text_outlined(self, text, y + 34.0, room, size, UiKit.WHITE,
-			_cat_anchor.x - room / 2.0, maxi(3, size / 4))
+## 무대 좌석 — 왼쪽이 1P, 오른쪽이 2P. 빈 자리는 실루엣 + "참가" 안내다.
+func _draw_seats() -> void:
+	var n := _seat_slots()
+	for i in n:
+		var plate := _seat_plate(i)
+		var active := i < _seats()
+		var size := _seat_cat_size(plate)
+		var at := Vector2(plate.position.x + plate.size.x / 2.0,
+				plate.position.y + plate.size.y * 0.44)
+		var id := GameState.cat_for(i + 1)
+		# 자리 이름표 (1P / 2P) — 자리가 하나뿐인 플랫폼에는 붙이지 않는다.
+		if n > 1:
+			var pill := Rect2(at.x - 48.0, plate.position.y + 6.0, 96.0, 46.0)
+			draw_style_box(UiKit.panel_box(
+					UiKit.WHITE if active else Color(1.0, 1.0, 1.0, 0.45), 14, 0.0), pill)
+			UiKit.center_text(self, "%dP" % (i + 1), pill.position.y + 33.0,
+					pill.size.x, 26, INK if active else UiKit.MUTED, pill.position.x)
+		var label_y := plate.position.y + plate.size.y * 0.755
+		if active:
+			# 발밑 그림자 — 밝은 배경에서 캐릭터를 띄워 준다.
+			UiKit.ellipse(self, at + Vector2(0.0, size * 0.56),
+					Vector2(size * 0.42, size * 0.1), Color(0.2, 0.35, 0.45, 0.16))
+			Player.paint_cat(self, at, size, 0.0, true, false,
+					GameState.cat_skin(id, i + 1))
+			var cat := GameState.get_cat(id)
+			UiKit.center_text_outlined(self, "%s · %s" % [tr(str(cat.name)),
+					tr(str(cat.get("trait", "")))], label_y, plate.size.x, 28,
+					UiKit.CREAM, plate.position.x, 7)
+		else:
+			# 빈 자리에는 냥이를 그리지 않는다 — 참가 버튼이 자리를 통째로 쓴다.
+			var pad := minf(plate.size.x * 0.08, 40.0)
+			draw_style_box(UiKit.panel_box(Color(1.0, 1.0, 1.0, 0.32), 26, 0.0),
+					Rect2(plate.position.x + pad, plate.position.y + 60.0,
+					plate.size.x - pad * 2.0, plate.size.y * 0.66))
+			# 빈 자리 안내는 판 위쪽 — 아래는 참가 버튼 몫이다.
+			UiKit.center_text_outlined(self, tr("MENU_SEAT_EMPTY"),
+					plate.position.y + 112.0, plate.size.x, 26, UiKit.WHITE,
+					plate.position.x, 7)

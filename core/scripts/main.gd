@@ -6,6 +6,7 @@ const CREAM := Color(0.956863, 0.890196, 0.784314)
 const GOLD := Color(1.0, 0.85, 0.35)
 const VERSUS_TARGET := 3  # first to this many round wins takes the match
 
+const UiKit := preload("res://core/scripts/ui_kit.gd")
 const BOARD_SCENE := preload("res://core/scenes/board.tscn")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const GOAL_METER := preload("res://core/scripts/goal_meter.gd")
@@ -14,7 +15,12 @@ const HALF_W := 960.0  # split screen: width of each player's viewport
 const NEXT_PREVIEW := preload("res://core/scripts/next_preview.gd")
 ## 분할 스테이지 모드의 좌석별 계기판: 화면 바깥쪽 여백에 세우는 열의 자리와 폭.
 const SEAT_HUD_W := 200.0
-const SEAT_HUD_MARGIN := 20.0
+const SEAT_HUD_MARGIN := 40.0
+## 좌석 계기판이 설 자리를 벌기 위해 우물을 분할선 쪽으로 밀어 넣는 폭.
+const SEAT_PIT_SHIFT := 56.0
+## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
+const HUD_COL_W := 300.0
+const HUD_CARD_PAD := Vector2(22.0, 18.0)
 
 @onready var board: EscapeBoard = $Board
 @onready var score_title: Label = $UI/ScoreTitle
@@ -67,9 +73,13 @@ var seat_hud: Array = []
 var round_active := true
 var settings_panel: Control  # doubles as the pause menu (volume sliders)
 var user_hud: CanvasLayer  # 타이틀과 같은 자리·같은 카드의 유저 정보 HUD
+## 계기판 뒤에 깔리는 흰 카드(들)를 그리는 레이어와, 카드가 감쌀 노드 묶음.
+var hud_cards: Control
+var hud_groups: Array = []
 
 
 func _ready() -> void:
+	_build_backdrop()
 	EventBus.score_changed.connect(func(v: int) -> void: score_label.text = str(v))
 	EventBus.level_changed.connect(func(v: int) -> void: level_label.text = str(v))
 	EventBus.lines_changed.connect(func(v: int) -> void: lines_label.text = str(v))
@@ -120,7 +130,8 @@ func _ready() -> void:
 			score_label.position = Vector2(1360.0, 488.0)
 		goal_label.text = tr("TUT_PICNIC")
 	if endless:
-		goal_label.text = tr("TUT_ENDLESS")
+		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
+		goal_label.visible = false
 	elif versus:
 		goal_label.text = tr("TUT_VERSUS").format({"target": VERSUS_TARGET})
 		help_label.text = tr("TUT_KEYS_VERSUS")
@@ -150,6 +161,10 @@ func _ready() -> void:
 		board.start_game()
 		if not endless:  # endless is camera-driven; fixed pits get scaled to fit
 			_fit_board()
+	# 톤앤매너는 마지막에 한 번에 입힌다 — 모드·분할별 배치가 다 끝난 뒤라야
+	# 계기판을 감싸는 카드의 자리를 알 수 있다.
+	_tone_hud()
+	_build_hud_cards()
 
 
 func _on_game_started() -> void:
@@ -210,10 +225,13 @@ func _spawn_floor_popup(delta_floors: int) -> void:
 	var pop := Label.new()
 	pop.text = "+%d" % delta_floors
 	pop.add_theme_font_size_override("font_size", 44)
-	pop.add_theme_color_override("font_color", CREAM)
-	pop.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-	pop.add_theme_constant_override("outline_size", 8)
-	pop.position = height_label.position + Vector2(height_label.size.x + 20.0, 20.0)
+	# 흰 계기판 카드 위로 떠오르는 숫자 — 외곽선 없이 따뜻한 강조색으로.
+	pop.add_theme_color_override("font_color", UiKit.ORANGE)
+	# 큰 숫자 바로 옆에 붙인다 — 라벨 상자는 넉넉해서, 상자 끝에 붙이면 카드 밖으로 나간다.
+	var num_w := ThemeDB.fallback_font.get_string_size(height_label.text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1,
+			height_label.get_theme_font_size("font_size")).x
+	pop.position = height_label.position + Vector2(num_w + 14.0, 22.0)
 	height_label.get_parent().add_child(pop)
 	var tw := create_tween()
 	tw.set_parallel(true)
@@ -260,7 +278,7 @@ func _screen_flash(strength: float) -> void:
 func _show_new_record() -> void:
 	Sfx.play("record")
 	record_label.visible = true
-	best_label.modulate = GOLD
+	best_label.modulate = Color(1.2, 1.1, 0.9)  # 이미 금색 글자다 — 살짝 밝히기만
 	record_label.scale = Vector2(1.8, 1.8)
 	record_label.pivot_offset = record_label.size / 2.0
 	var intro := create_tween()
@@ -339,6 +357,130 @@ func _build_user_hud() -> void:
 		return
 	user_hud = USER_HUD.new()
 	add_child(user_hud)
+
+
+# --- 톤앤매너 (타이틀과 같은 UI 키트) -----------------------------------------
+
+
+## 우물 바깥은 "구덩이 밖의 낮" — 타이틀과 같은 하늘색 배경 + 발바닥 무늬를 깐다.
+## 우물 안(어두운 구덩이)은 escape_board가 계속 자기 배경을 그리므로 그대로다.
+## 분할 화면의 SubViewport는 transparent_bg라 이 배경이 그대로 비친다.
+func _build_backdrop() -> void:
+	var sky := CanvasLayer.new()
+	sky.layer = -1  # 보드(기본 캔버스)보다 뒤
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.size = get_viewport_rect().size
+	c.draw.connect(func() -> void: UiKit.paint_backdrop(c, c.size, 41))
+	sky.add_child(c)
+	add_child(sky)
+
+
+## 계기판 글자를 타이틀 톤으로 — 흰 카드 위 잉크 글자다. 어두운 우물 위에 뜨는
+## 배너(마일스톤/탈출/일시정지)만 잉크 외곽선을 두른 크림색으로 남긴다.
+func _tone_hud() -> void:
+	for l: Label in [$UI/NextTitle, score_title, level_title, lines_title,
+			height_title, best_title]:
+		l.add_theme_color_override("font_color", UiKit.MUTED)
+		l.add_theme_font_size_override("font_size", 21)
+	for l: Label in [score_label, level_label, lines_label]:
+		_ink_label(l, UiKit.INK)
+	# 큰 숫자 슬롯(무한=층, 스테이지=LEVEL)은 따뜻한 강조색.
+	_ink_label(height_label, UiKit.ORANGE_DEEP)
+	_ink_label(best_label, UiKit.GOLD_DEEP)
+	_ink_label(record_label, UiKit.GOLD_DEEP)
+	_ink_label(goal_label, UiKit.MUTED)
+	_ink_label(help_label, Color(UiKit.INK, 0.72))
+	help_label.add_theme_font_size_override("font_size", 19)
+	# 화면 한가운데 배너는 우물(어두움) 위에도 뜨므로 잉크 외곽선을 유지한다.
+	for l: Label in [milestone_label, escape_label, pause_label]:
+		l.add_theme_color_override("font_outline_color", UiKit.INK)
+	milestone_label.add_theme_color_override("font_color", UiKit.CREAM)
+	pause_label.add_theme_color_override("font_color", UiKit.CREAM)
+	flash_rect.color = Color(UiKit.CREAM, flash_rect.color.a)
+
+
+## 흰 카드 위에 얹는 글자: 어두운 배경용 외곽선을 걷고 잉크 계열 색으로.
+func _ink_label(l: Label, col: Color) -> void:
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_constant_override("outline_size", 0)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0))
+
+
+## 계기판 묶음마다 흰 카드를 한 장씩 깐다 (타이틀의 카드와 같은 스타일박스).
+## 세로 화면(모바일)은 계기판이 화면 곳곳에 흩어져 있어 카드를 두지 않는다 —
+## 레이아웃을 다시 잡을 때 함께 정한다 (PC 우선 기간).
+func _build_hud_cards() -> void:
+	var vp := get_viewport_rect().size
+	if vp.y > vp.x:
+		return
+	hud_groups = []
+	if GameState.split:
+		for i in seat_hud.size():
+			var hud: Dictionary = seat_hud[i]
+			var nodes: Array = [split_labels[i], hud["next"], hud["level"],
+					hud["score"], hud["best"], hud["lines"], hud["meter"]]
+			nodes.append_array(hud["titles"] as Array)
+			hud_groups.append({"nodes": nodes, "w": SEAT_HUD_W})
+	else:
+		var col: Array = [$UI/NextTitle, $UI/NextPreview, score_title, score_label,
+				level_title, level_label, lines_title, lines_label, height_title,
+				height_label, best_title, best_label, goal_label, goal_meter]
+		# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
+		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
+	if help_label.visible and help_label.text != "":
+		hud_groups.append({"nodes": [help_label], "w": 0.0, "pill": true})
+	hud_cards = Control.new()
+	hud_cards.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_cards.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hud_cards.draw.connect(_draw_hud_cards)
+	$UI.add_child(hud_cards)
+	$UI.move_child(hud_cards, 0)  # 계기판 뒤로
+
+
+func _draw_hud_cards() -> void:
+	var box := UiKit.panel_box(UiKit.WHITE, 26, 0.0)
+	for g: Dictionary in hud_groups:
+		var r := _group_rect(g)
+		if r.size.x > 0.0:
+			hud_cards.draw_style_box(box, r)
+
+
+## 묶음이 차지하는 자리 + 여백. 열은 폭을 고정해(`w`) 짧은 숫자 하나 때문에
+## 카드가 홀쭉해지거나, 넓은 라벨 하나 때문에 늘어나지 않게 한다.
+func _group_rect(g: Dictionary) -> Rect2:
+	var left := INF
+	var top := INF
+	var right := -INF
+	var bottom := -INF
+	var always: Array = g.get("always", [])
+	for n: Control in (g["nodes"] as Array) + always:
+		if n == null or not is_instance_valid(n):
+			continue
+		if not n.visible and not always.has(n):
+			continue
+		left = minf(left, n.position.x)
+		top = minf(top, n.position.y)
+		right = maxf(right, n.position.x + n.size.x)
+		bottom = maxf(bottom, n.position.y + n.size.y)
+	if left == INF:
+		return Rect2()
+	var w: float = g.get("w", 0.0)
+	if w > 0.0:
+		right = left + w
+	var pad: Vector2 = HUD_CARD_PAD
+	if g.get("pill", false):
+		# 한 줄 안내는 글자 폭만큼만 감싼다 — 라벨 상자(화면 폭)를 다 덮지 않게.
+		var l: Label = g["nodes"][0]
+		var tw := ThemeDB.fallback_font.get_string_size(tr(l.text),
+				HORIZONTAL_ALIGNMENT_LEFT, -1,
+				l.get_theme_font_size("font_size")).x
+		var cx := left + (right - left) / 2.0
+		left = cx - tw / 2.0
+		right = cx + tw / 2.0
+		pad = Vector2(26.0, 8.0)
+	return Rect2(left - pad.x, top - pad.y,
+			right - left + pad.x * 2.0, bottom - top + pad.y * 2.0)
 
 
 ## Pays out gold for the whole run so far (minus what this run already paid).
@@ -420,8 +562,13 @@ func _build_split() -> void:
 			# viewport. Endless is camera-driven and keeps its own framing.
 			var bs := (1080.0 - 80.0) / (EscapeBoard.PIT_ROWS * EscapeBoard.CELL)
 			b.scale = Vector2(bs, bs)
+			# 스테이지 모드는 바깥 여백에 좌석 계기판이 서므로 우물을 안쪽으로 민다.
+			var shift := 0.0
+			if GameState.mode == GameState.MODE_CLASSIC:
+				shift = SEAT_PIT_SHIFT if i == 0 else -SEAT_PIT_SHIFT
 			b.position = Vector2(
-					(HALF_W - EscapeBoard.COLS * EscapeBoard.CELL * bs) / 2.0, 40.0)
+					(HALF_W - EscapeBoard.COLS * EscapeBoard.CELL * bs) / 2.0 + shift,
+					40.0)
 		else:
 			b.position = Vector2((HALF_W - EscapeBoard.COLS * EscapeBoard.CELL) / 2.0, 92.0)
 		sv.add_child(b)
@@ -447,7 +594,7 @@ func _build_split() -> void:
 	var divider := ColorRect.new()
 	divider.position = Vector2(HALF_W - 2.0, 0.0)
 	divider.size = Vector2(4.0, 1080.0)
-	divider.color = Color(CREAM, 0.35)
+	divider.color = Color(UiKit.INK, 0.30)  # 하늘 배경 위 경계선
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$UI.add_child(divider)
 	if GameState.mode != GameState.MODE_CLASSIC:
@@ -461,9 +608,12 @@ func _build_split() -> void:
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if i == 0 \
 				else HORIZONTAL_ALIGNMENT_RIGHT
 		l.add_theme_font_size_override("font_size", 38)
-		l.add_theme_color_override("font_color", CREAM)
-		l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-		l.add_theme_constant_override("outline_size", 8)
+		# 이름표는 하늘 배경과 어두운 우물 양쪽에 걸친다 — 잉크 글자에 흰 테두리를
+		# 둘러 두 바탕 어디에서도 읽히게 한다. (스테이지 분할은 카드 안으로 들어가
+		# 흰 배경 글자가 되고, 그건 _build_seat_huds가 다시 칠한다.)
+		l.add_theme_color_override("font_color", UiKit.INK)
+		l.add_theme_color_override("font_outline_color", UiKit.WHITE)
+		l.add_theme_constant_override("outline_size", 10)
 		$UI.add_child(l)
 		split_labels.append(l)
 	if GameState.mode == GameState.MODE_CLASSIC:
@@ -479,23 +629,25 @@ func _build_seat_huds() -> void:
 		var x := SEAT_HUD_MARGIN if i == 0 else 1920.0 - SEAT_HUD_MARGIN - SEAT_HUD_W
 		# 좌석 이름표는 그 열의 머리로 올라간다.
 		var name_label: Label = split_labels[i]
-		name_label.position = Vector2(x, 24.0)
+		name_label.position = Vector2(x, 34.0)
 		name_label.size = Vector2(SEAT_HUD_W, 52.0)
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var hud := {}
-		_seat_title(x, 96.0, "NEXT")
+		# 이름표도 카드 안(열 머리)에 앉으므로 흰 배경용 글자로 바꾼다.
+		_ink_label(name_label, UiKit.INK)
+		var hud := {"titles": []}
+		hud["titles"].append(_seat_title(x, 104.0, "NEXT"))
 		var nx: Control = NEXT_PREVIEW.new()
-		nx.position = Vector2(x, 126.0)
+		nx.position = Vector2(x, 134.0)
 		nx.size = Vector2(SEAT_HUD_W, 116.0)
 		$UI.add_child(nx)
 		hud["next"] = nx
 		# 1인 계기판과 같은 순서·같은 표기: NEXT → LEVEL → SCORE → TOP → LINES 랙.
-		hud["level"] = _seat_stat(x, 268.0, "LEVEL", 52)
-		hud["score"] = _seat_stat(x, 380.0, "SCORE")
-		hud["best"] = _seat_stat(x, 470.0, "TOP")
-		hud["lines"] = _seat_stat(x, 560.0, "LINES")
+		hud["level"] = _seat_stat(hud, x, 276.0, "LEVEL", 52)
+		hud["score"] = _seat_stat(hud, x, 388.0, "SCORE")
+		hud["best"] = _seat_stat(hud, x, 478.0, "TOP")
+		hud["lines"] = _seat_stat(hud, x, 568.0, "LINES")
 		var meter: Control = GOAL_METER.new()
-		meter.position = Vector2(x, 646.0)
+		meter.position = Vector2(x, 654.0)
 		meter.size = Vector2(SEAT_HUD_W, 110.0)
 		meter.per_row = 5
 		meter.centered = true
@@ -505,27 +657,27 @@ func _build_seat_huds() -> void:
 
 
 ## Small dim caption above a seat stat (matches the solo HUD's title style).
-func _seat_title(x: float, y: float, text: String) -> void:
+func _seat_title(x: float, y: float, text: String) -> Label:
 	var l := Label.new()
 	l.text = text
 	l.position = Vector2(x, y)
 	l.size = Vector2(SEAT_HUD_W, 28.0)
-	l.add_theme_font_size_override("font_size", 22)
-	l.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
+	l.add_theme_font_size_override("font_size", 21)
+	l.add_theme_color_override("font_color", UiKit.MUTED)
 	$UI.add_child(l)
+	return l
 
 
 ## Caption + value pair; returns the value label the HUD keeps updating.
-func _seat_stat(x: float, y: float, title: String, font_size := 38) -> Label:
-	_seat_title(x, y, title)
+func _seat_stat(hud: Dictionary, x: float, y: float, title: String,
+		font_size := 38) -> Label:
+	hud["titles"].append(_seat_title(x, y, title))
 	var l := Label.new()
 	l.text = "0"
 	l.position = Vector2(x, y + 26.0)
 	l.size = Vector2(SEAT_HUD_W, float(font_size) + 12.0)
 	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", CREAM)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	l.add_theme_constant_override("outline_size", 6)
+	_ink_label(l, UiKit.GOLD_DEEP if title == "TOP" else UiKit.INK)
 	$UI.add_child(l)
 	return l
 
@@ -661,9 +813,9 @@ func _build_versus_tally() -> void:
 	versus_tally.size = Vector2(1920.0, 60.0)
 	versus_tally.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	versus_tally.add_theme_font_size_override("font_size", 40)
-	versus_tally.add_theme_color_override("font_color", CREAM)
-	versus_tally.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	versus_tally.add_theme_constant_override("outline_size", 8)
+	versus_tally.add_theme_color_override("font_color", UiKit.INK)
+	versus_tally.add_theme_color_override("font_outline_color", UiKit.WHITE)
+	versus_tally.add_theme_constant_override("outline_size", 10)
 	$UI.add_child(versus_tally)
 	_update_versus_tally()
 
@@ -726,7 +878,7 @@ func _on_story_reward(reward_gold: int) -> void:
 	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pop.add_theme_font_size_override("font_size", 34)
 	pop.add_theme_color_override("font_color", GOLD)
-	pop.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	pop.add_theme_color_override("font_outline_color", UiKit.INK)
 	pop.add_theme_constant_override("outline_size", 8)
 	$UI.add_child(pop)
 	Sfx.play("gold")
@@ -816,15 +968,15 @@ func _build_skip_level_button() -> void:
 	btn.text = tr("HUD_NEXT_LEVEL_TEST")
 	btn.tooltip_text = tr("HUD_NEXT_LEVEL_TEST_TIP")
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.add_theme_font_size_override("font_size", 20)
-	btn.add_theme_color_override("font_color", Color(CREAM, 0.75))
-	btn.modulate.a = 0.7
+	UiKit.btn_ghost(btn, 20)
+	btn.modulate.a = 0.85
 	if vp.x > vp.y:
-		btn.position = Vector2(40.0, 40.0)
+		# 좌상단은 유저 HUD 카드 자리 — 그 아래로 내려 앉힌다.
+		btn.position = Vector2(40.0, 132.0)
 		btn.size = Vector2(240.0, 48.0)
 	else:
 		# Portrait: down the left margin, clear of the NEXT panel and the well.
-		btn.add_theme_font_size_override("font_size", 24)
+		UiKit.btn_ghost(btn, 24)
 		btn.position = Vector2(24.0, 400.0)
 		btn.size = Vector2(186.0, 64.0)
 	btn.pressed.connect(func() -> void:

@@ -18,14 +18,19 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst._set_players(2)
 				inst._open_modes())
+	# 타이틀 무대 = 좌석. 1인이면 오른쪽이 빈 자리, 2인이면 냥이 둘이 선다.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_seats_1p.png",
+			func(inst: Node) -> void: inst._set_players(1))
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_seats_2p.png",
+			func(inst: Node) -> void: inst._set_players(2))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_1p.png",
 			func(inst: Node) -> void:
 				inst._set_players(1)
-				inst._open_chars())
+				inst._open_chars(1))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_2p.png",
 			func(inst: Node) -> void:
 				inst._set_players(2)
-				inst._open_chars())
+				inst._open_chars(2))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_pad.png",

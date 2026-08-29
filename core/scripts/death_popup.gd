@@ -6,10 +6,11 @@ extends Control
 signal restart_pressed
 signal title_pressed
 
-const CREAM := Color("f4e3c8")
-const GOLD := Color(1.0, 0.85, 0.35)
-const INK := Color("2a2230")
-const XP_COL := Color(0.55, 0.85, 1.0)  # 계정 경험치 (골드와 구분되는 하늘색)
+const UiKit := preload("res://core/scripts/ui_kit.gd")
+
+const GOLD := UiKit.GOLD_DEEP
+const INK := UiKit.INK
+const XP_COL := UiKit.CYAN_DEEP  # 계정 경험치 (골드와 구분되는 하늘색)
 
 var _panel: PanelContainer
 var _title: Label
@@ -25,7 +26,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.6)
+	dim.color = Color(0.09, 0.13, 0.18, 0.55)  # 타이틀 오버레이와 같은 딤
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
@@ -34,11 +35,8 @@ func _ready() -> void:
 	add_child(center)
 
 	_panel = PanelContainer.new()
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.10, 0.09, 0.13, 0.97)
-	box.set_corner_radius_all(20)
-	box.set_border_width_all(2)
-	box.border_color = Color(CREAM, 0.35)
+	# 타이틀 카드와 같은 흰 패널 (두꺼운 잉크 외곽선 + 둥근 모서리).
+	var box := UiKit.panel_box(UiKit.WHITE, 28, 0.0)
 	box.content_margin_left = 64.0
 	box.content_margin_right = 64.0
 	box.content_margin_top = 36.0
@@ -64,9 +62,7 @@ func _ready() -> void:
 	_title.text = tr("POP_DEAD_TITLE")
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title.add_theme_font_size_override("font_size", 52)
-	_title.add_theme_color_override("font_color", Color(1.0, 0.42, 0.4))
-	_title.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_title.add_theme_constant_override("outline_size", 10)
+	_title.add_theme_color_override("font_color", UiKit.RED_DEEP)
 	v.add_child(_title)
 
 	_record_label = Label.new()
@@ -80,7 +76,7 @@ func _ready() -> void:
 	_stats_label = Label.new()
 	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stats_label.add_theme_font_size_override("font_size", 26)
-	_stats_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.8))
+	_stats_label.add_theme_color_override("font_color", UiKit.MUTED)
 	v.add_child(_stats_label)
 
 	_reward_label = Label.new()
@@ -115,7 +111,7 @@ func open(stats: String, new_record: bool, earned := "", title_text := "",
 		xp_line := "") -> void:
 	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
 	_title.add_theme_color_override("font_color",
-			GOLD if title_text != "" else Color(1.0, 0.42, 0.4))
+			GOLD if title_text != "" else UiKit.RED_DEEP)
 	_stats_label.text = stats
 	_record_label.visible = new_record
 	_reward_label.text = earned
@@ -150,27 +146,8 @@ func _make_button(label: String, primary: bool) -> Button:
 	b.pressed.connect(func() -> void: Sfx.play("click"))
 	b.custom_minimum_size = Vector2(420.0, 68.0)
 	b.add_theme_font_size_override("font_size", 30)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(14)
 	if primary:
-		# The warmest thing on screen — like the cat itself.
-		sb.bg_color = CREAM
-		b.add_theme_color_override("font_color", INK)
-		b.add_theme_color_override("font_hover_color", INK)
-		b.add_theme_color_override("font_pressed_color", INK)
+		UiKit.btn_primary(b, 30)
 	else:
-		sb.bg_color = Color(1, 1, 1, 0.07)
-		sb.set_border_width_all(2)
-		sb.border_color = Color(1, 1, 1, 0.25)
-		b.add_theme_color_override("font_color", Color(1, 1, 1, 0.88))
-		b.add_theme_color_override("font_hover_color", Color.WHITE)
-		b.add_theme_color_override("font_pressed_color", Color(1, 1, 1, 0.7))
-	b.add_theme_stylebox_override("normal", sb)
-	var hover: StyleBoxFlat = sb.duplicate()
-	hover.bg_color = sb.bg_color.lightened(0.12) if primary else Color(1, 1, 1, 0.14)
-	b.add_theme_stylebox_override("hover", hover)
-	var pressed: StyleBoxFlat = sb.duplicate()
-	pressed.bg_color = sb.bg_color.darkened(0.15) if primary else Color(1, 1, 1, 0.04)
-	b.add_theme_stylebox_override("pressed", pressed)
+		UiKit.btn_ghost(b, 30)
 	return b

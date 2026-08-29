@@ -1,7 +1,9 @@
 extends Control
-## HUD panel showing the next tetromino, in the board's mini cell style.
+## HUD panel showing the next tetromino, in the title screen's UI tone:
+## a sky-tinted groove with a thick ink outline, blocks drawn by the UI kit.
 
-const MINI := 28.0
+const UiKit := preload("res://core/scripts/ui_kit.gd")
+const MINI := 30.0
 
 var next_type := ""
 
@@ -13,8 +15,13 @@ func _ready() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color("2a3040", 0.6))
-	draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.35), false, 2.0)
+	# 홈(groove): 흰 계기판 카드 위에 얹히는 하늘색 우묵한 자리.
+	var groove := StyleBoxFlat.new()
+	groove.bg_color = Color(UiKit.SKY, 0.55)
+	groove.set_corner_radius_all(14)
+	groove.set_border_width_all(3)
+	groove.border_color = UiKit.INK
+	draw_style_box(groove, Rect2(Vector2.ZERO, size))
 	if next_type == "":
 		return
 	var cells: Array = Board.SHAPES[next_type][0]
@@ -28,11 +35,6 @@ func _draw() -> void:
 	var color: Color = Board.COLORS[next_type]
 	for c in cells:
 		var p: Vector2 = origin + Vector2(c) * MINI
-		draw_rect(Rect2(p + Vector2.ONE, Vector2.ONE * (MINI - 2.0)), color)
-		# Light always comes from above: bright top face, shaded bottom.
-		draw_rect(Rect2(p + Vector2(3.0, 2.0), Vector2(MINI - 6.0, 3.0)),
-				Color(1.0, 0.96, 0.84, 0.4))
-		draw_rect(Rect2(p + Vector2(1.0, MINI - 4.0), Vector2(MINI - 2.0, 3.0)),
-				Color(0.0, 0.0, 0.0, 0.28))
-		draw_rect(Rect2(p + Vector2.ONE, Vector2.ONE * (MINI - 2.0)),
-				color.darkened(0.4), false, 1.5)
+		# 타이틀 로고와 같은 블록: 둥근 모서리 + 잉크 외곽선 + 윗면 하이라이트.
+		UiKit.block(self, Rect2(p + Vector2.ONE, Vector2.ONE * (MINI - 2.0)),
+				color, 3.0)

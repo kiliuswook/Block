@@ -1,27 +1,46 @@
 extends Node
-## 타이틀 흐름 회귀 테스트 — 인원·캐릭터는 타이틀에서 미리 세팅, PLAY는 모드 고르면 바로 시작.
+## 타이틀 흐름 회귀 테스트 — 인원·캐릭터는 타이틀 무대의 좌석에서 세팅하고,
+## PLAY는 모드만 고르면 바로 시작한다. 캐릭터 메뉴는 자리를 건드리지 않는다.
 
 func _ready() -> void:
 	var tree := get_tree()
 	var t: Node2D = load("res://core/scenes/title.tscn").instantiate()
 	add_child(t)
 	await tree.process_frame
-	assert(t._players_chips.size() == 2, "타이틀 인원 토글이 없음")
-	# --- 인원 세팅 ---
-	t._set_players(2)
-	assert(GameState.players == 2, "인원 세팅이 GameState에 안 남음")
-	# --- 캐릭터 세팅: 인원만큼 좌석 탭이 뜨고, 고르는 즉시 저장된다 ---
-	t._open_chars()
-	assert(t._chars.visible, "캐릭터 페이지가 안 열림")
-	assert(t._pick_count == 2 and t._char_seat_tabs[1].visible, "2P 좌석 탭이 없음")
-	print("chars head: ", (t._chars.get_meta("head") as Label).text)
+	assert(t._seat_btns.size() == 2, "타이틀 무대에 좌석 둘이 안 섰음")
+	# --- 인원 세팅: 빈 2P 자리를 채우면 2인, 비우면 1인 ---
+	assert(GameState.players == 1 or GameState.players == 2)
+	t._set_players(1)
+	assert(not t._seat_leave.visible, "1인인데 자리 비우기 버튼이 떠 있음")
+	t._on_seat_btn(1)  # 빈 자리 = "2인 플레이 참가"
+	assert(GameState.players == 2, "빈 자리로 2인 참가가 안 됨")
+	assert(t._seat_leave.visible, "2인인데 자리 비우기 버튼이 없음")
+	# --- 좌석의 "캐릭터 변경"이 그 자리 몫으로 캐릭터 페이지를 연다 ---
 	var first: String = t._first_unlocked(GameState.selected_cat)
-	t._pick_slot = 0
-	t._assign_pick(first)
-	assert(GameState.selected_cat == first, "1P 선택이 즉시 저장 안 됨")
-	assert(t._pick_slot == 1, "2인일 때 다음 자리로 안 넘어감")
+	t._on_seat_btn(1)
+	assert(t._chars.visible and t._pick_seat == 2, "2P 자리로 캐릭터 페이지가 안 열림")
+	print("chars head: ", (t._chars.get_meta("head") as Label).text)
 	t._assign_pick(first)
 	assert(GameState.selected_cat2 == first, "2P 선택이 즉시 저장 안 됨")
+	assert(t._pick_seat == 2, "자리가 멋대로 넘어감")
+	t._close_chars()
+	t._on_seat_btn(0)
+	assert(t._pick_seat == 1, "1P 자리로 캐릭터 페이지가 안 열림")
+	t._assign_pick(first)
+	assert(GameState.selected_cat == first, "1P 선택이 즉시 저장 안 됨")
+	# --- 메뉴에서 연 캐릭터 페이지는 둘러보기 — 자리를 건드리지 않는다 ---
+	t._close_chars()
+	t._open_chars()
+	assert(t._pick_seat == 0, "메뉴에서 연 페이지가 자리 배정 모드임")
+	var other := ""
+	for cat in GameState.all_cats():
+		if cat.id != first and GameState.is_unlocked(cat.id):
+			other = str(cat.id)
+			break
+	if other != "":
+		t._on_tile_pressed(GameState.get_cat(other))
+		assert(t._char_view == other, "둘러보기에서 냥이가 안 펼쳐짐")
+		assert(GameState.selected_cat == first, "둘러보기가 자리 냥이를 바꿈")
 	# --- "+" 타일: 커스텀 슬롯이 하나 더 열리고, 그 슬롯이 본문에 펼쳐진다 ---
 	var slots0: int = GameState.custom_slots
 	if GameState.can_add_custom_slot():
@@ -39,9 +58,6 @@ func _ready() -> void:
 		t._build_char_tiles()
 		t._char_view = first
 		t._refresh_char_page()
-	# 열려 있는 채로 인원을 1인으로 바꾸면 자리 카드도 바로 접힌다.
-	t._set_players(1)
-	assert(t._pick_count == 1 and not t._char_seat_tabs[1].visible, "자리 수 즉시 반영 안 됨")
 	t._close_chars()
 	assert(not t._chars.visible)
 	# --- PLAY: 모드를 고르면 캐릭터를 다시 묻지 않고 바로 시작 ---
