@@ -166,6 +166,8 @@ R 새 대결  ·  ESC 타이틀","[{who} ŵïńş ţĥé ɱàţçĥ! ———�
 []
 [Ř Ńéŵ ɱàţçĥ  ·  ÉŞÇ Ţïţłé ————————————————————]"
 SPLIT_SCORE,P{n}   {floors} F,P{n}   {floors}층,[Þ{n}   {floors} Ƒ —————————————]
+SPLIT_STAGE_OVER,P{n}   GAME OVER,P{n}   게임 오버,[Þ{n}   ĞÅṀÉ ÔṼÉŘ ————————————]
+SPLIT_STAGE_WIN,P{n} WINS!   {score},P{n} 승리!   {score}점,[Þ{n} ŴÏŃŞ!   {score} ————————————————]
 MENU_TAGLINE,A cube cat's great escape from the pit,구덩이에 빠진 큐브 고양이의 탈출극,[Å çüƀé çàţ'ş ğřéàţ éşçàþé ƒřôɱ ţĥé þïţ ——————————————————————————————]
 MENU_MODE_SELECT,Select Mode,모드 선택,[Şéłéçţ Ṁôðé ————————]
 MENU_MODE_SOLO_ONLY,Solo only,1인 전용,[Şôłô ôńłÿ ———————]

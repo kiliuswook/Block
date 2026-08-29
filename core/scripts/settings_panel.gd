@@ -42,8 +42,6 @@ var _pages: Array[Control] = []
 
 var _title_label: Label
 var _back_btn: Button
-var _wallet: Panel
-var _wallet_label: Label
 var _msg: Label
 
 var _sliders := {}  # kind -> HSlider
@@ -140,19 +138,8 @@ func _build_header() -> void:
 	UiKit.style_button(_back_btn, UiKit.CYAN, UiKit.CYAN_DEEP, UiKit.WHITE, 26, 16)
 	_back_btn.pressed.connect(_on_back)
 	add_child(_back_btn)
-	# 지갑 — 기획서는 좌상단. 인게임 일시정지에서는 숨긴다.
-	_wallet = Panel.new()
-	_wallet.size = Vector2(260.0, 60.0)
-	_wallet.position = Vector2(40.0, 40.0)
-	_wallet.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 30, 0.0))
-	add_child(_wallet)
-	_wallet_label = Label.new()
-	_wallet_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_wallet_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_wallet_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_wallet_label.add_theme_font_size_override("font_size", 26)
-	_wallet_label.add_theme_color_override("font_color", UiKit.GOLD_DEEP)
-	_wallet.add_child(_wallet_label)
+	# 지갑·레벨은 좌상단 유저 HUD(user_hud.gd)가 이 페이지 위에 그대로 떠 있다 —
+	# 여기서 또 그리면 같은 자리에 두 겹이 된다.
 
 
 # --- 기본 페이지 ---------------------------------------------------------------
@@ -551,7 +538,6 @@ func _step_vib(dir: int) -> void:
 
 
 func _refresh() -> void:
-	_wallet_label.text = "%d G" % GameState.gold
 	if not _res_opts.is_empty():
 		var r := _res_opts[_res_idx]
 		_res_label.text = "%d X %d" % [r.x, r.y]
@@ -717,7 +703,6 @@ func open(on_title := true) -> void:
 	_res_row.visible = on_title and _desktop()
 	_lang_row.visible = on_title
 	_apply_btn.visible = on_title
-	_wallet.visible = on_title
 	_layout_main()
 	_reset_armed = false
 	_reset_btn.disabled = false

@@ -9,6 +9,7 @@ const GOLD_COL := UiKit.GOLD_DEEP  # 흰 패널 위에서도 읽히는 진한 �
 const INK := UiKit.INK
 
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
+const USER_HUD := preload("res://core/scripts/user_hud.gd")
 const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
@@ -20,9 +21,9 @@ const KEY_GAP := 8.0
 ## 캐릭터 선택 아래에 깔리는 참가자 슬롯 영역 (마리오 파티식 픽 화면).
 const SLOT_CARD := Vector2(340.0, 168.0)
 const PICK_FOOTER_H := 258.0
-## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단만
-## 지원한다 (스테이지 모드는 LINES 목표 UI가 분할 화면에 들어가지 않는다).
-const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2}
+## 모드별 최대 인원 — 여기 없는 모드는 1인 전용. 화면 분할은 무한의 계단과
+## 스테이지 모드가 지원한다 (분할에서는 LINES 랙 대신 좌석 라벨로 진행을 읽는다).
+const MODE_PLAYERS := {GameState.MODE_ENDLESS: 2, GameState.MODE_CLASSIC: 2}
 ## 뽑기 화면 — 왼쪽 캡슐 기계와 아래 당첨 트레이 크기.
 const GACHA_MACHINE_W := 300.0
 const GACHA_MACHINE_H := 430.0
@@ -62,8 +63,7 @@ var main_scene := "res://core/scenes/main.tscn"  # 플랫폼 타이틀이 교체
 var allow_2p := true  # 모바일 타이틀은 false (키보드 한 대가 필요한 2인 모드 없음)
 
 var _tiles := {}  # cat id -> Button
-var _currency_label: Label
-var _level_pill: Control  # 지갑 아래 계정 레벨 알약 (Lv · 칭호 · 경험치 바)
+var _user_hud: CanvasLayer  # 좌상단 고정 유저 HUD (이름 · 레벨 · 경험치 · 골드)
 var _toast: Label
 var _toast_tween: Tween
 var _popup: Control
@@ -76,7 +76,6 @@ var _popup_cat: Dictionary = {}
 var _customizer: Control
 var _settings: Control
 var _gacha: Control  # 뽑기 오버레이 (캡슐 가챠)
-var _gacha_wallet: Label
 var _gacha_machine: Control  # 캡슐 뽑기 기계 연출
 var _gacha_tray: Control  # 뽑은 캡슐이 굴러 나오는 당첨 트레이
 var _gacha_btns: Array[Button] = []  # [1개, 10개]
@@ -143,8 +142,7 @@ func _ready() -> void:
 	endless_btn.pressed.connect(func() -> void: _on_mode_picked(GameState.MODE_ENDLESS))
 	_refresh_classic_desc()
 	_compute_layout()
-	_build_currency_display()
-	_build_level_pill()
+	_build_user_hud()
 	_build_character_row()
 	_build_popup()
 	_build_toast()
@@ -162,6 +160,7 @@ func _ready() -> void:
 	_replay_viewer.theme = null
 	_customizer.changed.connect(func() -> void:
 		_refresh_tiles()
+		_refresh_currency()  # HUD 아바타
 		_refresh_pick_cards()
 		if _popup and _popup.visible:
 			_popup_face.queue_redraw())
@@ -205,8 +204,9 @@ func _compute_layout() -> void:
 		_cat_anchor = Vector2(vw / 2.0, vh * 0.36)
 		_cat_size = vw * 0.32
 	else:
-		_logo_cell = minf(48.0, (vw - 200.0) / 32.0)
-		_logo_top = vh * 0.09
+		# 상단 유저 HUD 카드(좌상단, ~112px)와 겹치지 않게 로고를 그 아래로 민다.
+		_logo_cell = minf(44.0, (vw - 200.0) / 32.0)
+		_logo_top = maxf(vh * 0.11, USER_HUD.MARGIN.y + USER_HUD.CARD.y + 22.0)
 		_cat_anchor = Vector2(vw * 0.74, vh * 0.62)
 		_cat_size = minf(vh * 0.28, 320.0)
 
@@ -569,12 +569,7 @@ func _build_gacha() -> void:
 	var body: Control = _gacha.get_meta("body")
 	var bw := body.size.x
 	var bh := body.size.y
-	_gacha_wallet = Label.new()
-	_gacha_wallet.size = Vector2(bw, 30.0)
-	_gacha_wallet.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gacha_wallet.add_theme_font_size_override("font_size", 24)
-	_gacha_wallet.add_theme_color_override("font_color", GOLD_COL)
-	body.add_child(_gacha_wallet)
+	# 지갑은 상단 유저 HUD 하나뿐 — 여기 또 그리지 않는다.
 	var top_y := 40.0
 	var tray_y := bh - GACHA_TRAY_H
 	# 왼쪽 — 캡슐 뽑기 기계 (연출 전담, 클릭은 받지 않는다).
@@ -940,7 +935,6 @@ func _process(delta: float) -> void:
 
 
 func _refresh_gacha() -> void:
-	_gacha_wallet.text = tr("SHOP_WALLET").format({"gold": GameState.gold})
 	for i in _gacha_mode_btns.size():
 		UiKit.btn_chip(_gacha_mode_btns[i], _gacha_pick_mode == (i == 1), 22)
 	var picked: int = GameState.gacha_pick.size()
@@ -1190,6 +1184,7 @@ func _build_ranks() -> void:
 		GameState.set_nickname(_nick_edit.text)
 		_nick_edit.text = GameState.nickname
 		_show_toast(tr("RANK_RENAMED").format({"name": GameState.nickname}), CREAM)
+		_refresh_currency()  # HUD 이름도 같이
 		_refresh_rank_list())
 	nick_row.add_child(nick_save)
 	# Scope toggle: weekly (resets Monday 00:00 KST, top 3 win prizes) / all-time.
@@ -1427,6 +1422,7 @@ func _commit_pick() -> void:
 	GameState.select_cat(_pick_cats[0], 1)
 	if _pick_count > 1:
 		GameState.select_cat(_pick_cats[1], 2)
+	_refresh_currency()  # HUD 아바타가 1P 냥이를 따라간다
 
 
 func _close_chars() -> void:
@@ -1884,84 +1880,17 @@ func _refresh_tiles() -> void:
 # --- Currency + toast ---------------------------------------------------------
 
 
-## 우상단 지갑 — 흰 알약 위에 골드/보석.
-func _build_currency_display() -> void:
-	var pill := Panel.new()
-	pill.size = Vector2(320.0, 56.0)
-	pill.position = Vector2(vw - 350.0, 20.0)
-	pill.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 31, 0.0))
-	$UI.add_child(pill)
-	_currency_label = Label.new()
-	_currency_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_currency_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_currency_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_currency_label.add_theme_font_size_override("font_size", 26)
-	pill.add_child(_currency_label)
-	_refresh_currency()
+## 상단 고정 유저 HUD — 이름·레벨·경험치·골드는 늘 이 카드 하나에만 산다.
+## (같은 스크립트를 인게임 main.gd도 쓴다 — 화면이 바뀌어도 자리가 같다)
+func _build_user_hud() -> void:
+	_user_hud = USER_HUD.new()
+	add_child(_user_hud)
 
 
+## 지갑/레벨 표시 갱신 — 이름이 바뀌었을 때도 같이 부른다.
 func _refresh_currency() -> void:
-	_currency_label.text = "%d G" % GameState.gold
-	_currency_label.add_theme_color_override("font_color", GOLD_COL)
-	if _level_pill:
-		_level_pill.queue_redraw()
-
-
-## 지갑 바로 아래 계정 레벨 알약. 골드가 "쓰는 축"이라면 이쪽은 **쌓이기만 하는
-## 축** — 판을 마칠 때마다 차오르는 경험치 바를 여기 하나로 보여 준다.
-func _build_level_pill() -> void:
-	var pill := Panel.new()
-	pill.size = Vector2(320.0, 74.0)
-	pill.position = Vector2(vw - 350.0, 86.0)
-	pill.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 24, 0.0))
-	$UI.add_child(pill)
-	_level_pill = Control.new()
-	_level_pill.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_level_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_level_pill.draw.connect(func() -> void: _draw_level_pill(_level_pill))
-	pill.add_child(_level_pill)
-
-
-func _draw_level_pill(ci: Control) -> void:
-	var font := ThemeDB.fallback_font
-	var w: float = ci.size.x
-	var pad := 18.0
-	# 윗줄: Lv.N + 칭호 (왼쪽) / 다음 레벨까지 (오른쪽, 보조색)
-	var need := Account.xp_to_next()
-	var count := tr("MENU_LEVEL_MAX")
-	if need > 0:
-		count = tr("MENU_LEVEL_XP").format(
-				{"xp": Account.xp_in_level(), "need": need})
-	var count_size := UiKit.fit_size(font, count, w * 0.42, 17)
-	var count_w := font.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			count_size).x
-	ci.draw_string(font, Vector2(w - pad - count_w, 32.0), count,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, count_size, UiKit.MUTED)
-	var lv_text := tr("MENU_LEVEL").format({"level": Account.level()})
-	var lv_size := UiKit.fit_size(font, lv_text, w * 0.3, 26)
-	var lv_w := font.get_string_size(lv_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			lv_size).x
-	ci.draw_string(font, Vector2(pad, 32.0), lv_text, HORIZONTAL_ALIGNMENT_LEFT,
-			-1, lv_size, INK)
-	# 칭호는 남는 폭에만 그린다 — 긴 번역이 오면 줄어들고, 자리가 없으면 생략.
-	var tier_x := pad + lv_w + 10.0
-	var tier_w := w - pad - count_w - 12.0 - tier_x
-	if tier_w > 30.0:
-		var tier := tr(Account.tier_key())
-		ci.draw_string(font, Vector2(tier_x, 32.0), tier,
-				HORIZONTAL_ALIGNMENT_LEFT, -1,
-				UiKit.fit_size(font, tier, tier_w, 18), UiKit.MUTED)
-	# 아랫줄: 경험치 바.
-	var bar := Rect2(pad, 44.0, w - pad * 2.0, 16.0)
-	_round_box(ci, bar, Color(UiKit.INK, 0.10), 8)
-	# 채움은 홈 안쪽에 그린다 — 외곽선은 홈에만 있어야 두 겹으로 안 보인다.
-	var groove := bar.grow(-3.0)
-	var fill := groove
-	fill.size.x = maxf(6.0, groove.size.x * Account.progress())
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UiKit.CYAN
-	sb.set_corner_radius_all(5)
-	ci.draw_style_box(sb, fill)
+	if _user_hud:
+		_user_hud.refresh()
 
 
 func _build_toast() -> void:

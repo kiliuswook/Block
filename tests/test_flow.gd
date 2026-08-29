@@ -35,9 +35,10 @@ func _ready() -> void:
 		var ok: bool = t._max_players(int(row["mode"])) >= 2
 		assert((row["btn"] as Button).disabled == not ok, "잠금 상태 불일치")
 	GameState.mode = -1
-	t._on_mode_picked(GameState.MODE_CLASSIC)  # 1인 전용 → 거절
+	t._on_mode_picked(GameState.MODE_STORY)  # 1인 전용 → 거절
 	assert(GameState.mode == -1 and t._modes.visible, "1인 전용 모드가 2인에서 통과됨")
 	# 씬 전환은 deferred라 이 프레임에는 아직 일어나지 않는다 — 세팅만 확인한다.
+	assert(t._max_players(GameState.MODE_CLASSIC) == 2, "스테이지 모드가 2인을 못 받음")
 	t._on_mode_picked(GameState.MODE_ENDLESS)
 	assert(not t._chars.visible, "플레이 입장에서 캐릭터를 또 물어봄")
 	assert(GameState.mode == GameState.MODE_ENDLESS and GameState.split,

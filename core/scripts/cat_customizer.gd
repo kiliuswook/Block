@@ -12,6 +12,8 @@ signal changed  # 선택이 바뀔 때마다 — 타이틀이 타일/팝업을 �
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const CREAM := Color("f4e3c8")
+## 좌상단 유저 HUD 카드 아래에서 시작하는 헤더 y (겹침 방지).
+const HEAD_TOP := 164.0
 const SCAN_TIME := 1.4  # 열릴 때 유전자 스캔 연출 길이(초)
 const TAB_W := 96.0  # 부위 칩 크기
 const TAB_H := 118.0
@@ -387,17 +389,18 @@ func _draw_preview() -> void:
 		var scan_txt := tr("CC_SCANNING") + ".".repeat(1 + int(_open_t * 6.0) % 3)
 		ci.draw_string(font, Vector2(pcx - 70.0, cat_y - cat_s * 0.85), scan_txt,
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.4, 0.95, 1.0, 0.9))
-	# 타이틀 + 짝퉁 에디션 표기.
-	ci.draw_string(font, Vector2(32.0, 60.0), tr("CC_TITLE"),
+	# 타이틀 + 짝퉁 에디션 표기. 좌상단은 유저 HUD 카드가 늘 떠 있는 자리라
+	# 그 아래에서 시작한다 (HEAD_TOP).
+	ci.draw_string(font, Vector2(32.0, HEAD_TOP), tr("CC_TITLE"),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 42, CREAM)
-	ci.draw_string(font, Vector2(34.0, 88.0),
+	ci.draw_string(font, Vector2(34.0, HEAD_TOP + 28.0),
 			tr("CC_SUBTITLE"),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.45))
 	# 지금 꾸미는 캐릭터 이름.
 	var who := tr(str(GameState.get_cat(_cat_id).get("name", "")))
 	if _player > 1:
 		who = "2P  ·  " + who
-	ci.draw_string(font, Vector2(34.0, 118.0), who,
+	ci.draw_string(font, Vector2(34.0, HEAD_TOP + 58.0), who,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.85, 0.35))
 	# 잠긴 파츠를 입혀 보는 중이면 무대에 명시한다 — 저장되는 모습이 아니다.
 	if not _preview_sel.is_empty():

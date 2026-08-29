@@ -101,6 +101,10 @@ var break_fx: Array = []  # [cell: Vector2i, age: float]
 var mode := Mode.STORY
 var rows := PIT_ROWS  # pit height in cells
 var best_height := 0
+## 이 보드가 이번 판에 번 점수. 분할 화면은 보드마다 따로 세고(지갑 하나 원칙에
+## 걸리는 GameState.score와 달리 좌석별 기록이 필요하다), 1인 플레이에서는
+## GameState.score와 같은 값을 따라간다.
+var run_score := 0
 var drop_tap_time := -1e9
 var lava_y := 0.0
 var lava_phase := 0.0
@@ -158,6 +162,7 @@ func start_game() -> void:
 	shutter_bonus = 0
 	shutter_pop = 0.0
 	best_height = 0
+	run_score = 0
 	versus_pieces = 0
 	p2_das_timer = 0.0
 	lava_y = rows * CELL + LAVA_START_OFFSET
@@ -212,6 +217,15 @@ func start_game() -> void:
 		if mode == Mode.CLASSIC:
 			_classic_announce_level()
 	queue_redraw()
+
+
+## 점수 한 곳: 보드 자기 몫(run_score)에 쌓고, 1인 플레이에서는 그대로 HUD·지갑이
+## 읽는 GameState.score에도 반영한다. 분할 화면은 좌석마다 점수가 따로라 공용
+## 값을 건드리지 않는다 — 최종 승자의 점수만 main.gd가 기록으로 올린다.
+func _add_score(n: int) -> void:
+	run_score += n
+	if not split:
+		GameState.score += n
 
 
 ## Story stage logic runs only in single-player story mode; the split-screen
@@ -336,7 +350,7 @@ func _update_endless(delta: float) -> void:
 		return
 	var h := int(round((rows * CELL - feet) / CELL))
 	if h > best_height:
-		GameState.score += (h - best_height) * HEIGHT_SCORE
+		_add_score((h - best_height) * HEIGHT_SCORE)
 		best_height = h
 		if not split:
 			EventBus.height_changed.emit(best_height)
@@ -812,13 +826,13 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 	if not _free_player_from_grid():
 		return false
 	Sfx.play("lock")
-	GameState.score += 10 * level
+	_add_score(10 * level)
 	var cleared := _clear_lines()
 	if cleared > 0:
 		total_lines += cleared
 		# Classic pays the arcade table (40/100/300/1200 × stage, pre-level-up).
 		var table: Array = Board.CLASSIC_SCORES if mode == Mode.CLASSIC else LINE_SCORES
-		GameState.score += table[cleared] * level
+		_add_score(table[cleared] * level)
 		Sfx.play("clear", 1.0 + 0.07 * (cleared - 1))
 		if mode == Mode.ENDLESS:
 			_endless_line_reward(cleared)
@@ -869,6 +883,8 @@ func _classic_setup_level(n: int) -> void:
 
 ## Tells the HUD which board is up (start of run and every new level).
 func _classic_announce_level() -> void:
+	if split:
+		return  # 분할 화면에는 아케이드 HUD가 없다 — 좌석 라벨이 대신한다
 	EventBus.classic_level_started.emit(level, Board.classic_quota(level), level_garbage)
 	EventBus.classic_level_progress.emit(level_lines, Board.classic_quota(level))
 	EventBus.level_changed.emit(level)
@@ -899,7 +915,8 @@ func _fill_garbage(count: int) -> void:
 func _classic_line_progress(cleared: int) -> void:
 	level_lines += cleared
 	var quota := Board.classic_quota(level)
-	EventBus.classic_level_progress.emit(mini(level_lines, quota), quota)
+	if not split:
+		EventBus.classic_level_progress.emit(mini(level_lines, quota), quota)
 	if level_lines >= quota:
 		_classic_start_shutter()
 
@@ -916,7 +933,8 @@ func classic_skip_level() -> bool:
 	if mode != Mode.CLASSIC or not playing or is_paused or _shutter_on():
 		return false
 	level_lines = Board.classic_quota(level)
-	EventBus.classic_level_progress.emit(level_lines, level_lines)
+	if not split:
+		EventBus.classic_level_progress.emit(level_lines, level_lines)
 	_classic_start_shutter()
 	return true
 
@@ -986,7 +1004,7 @@ func _shutter_pay_row(y: int) -> bool:
 			return false
 	var pay := Board.CLASSIC_EMPTY_ROW_BONUS * level
 	shutter_bonus += pay
-	GameState.score += pay
+	_add_score(pay)
 	shutter_pop = 1.0
 	Sfx.play("gold", 1.0 + 0.04 * y)
 	return true
@@ -999,7 +1017,8 @@ func _classic_shutter_landed() -> void:
 		break_fx.append([c, 0.0])
 	if not grid.is_empty():
 		Sfx.play("break", 0.75)
-	EventBus.classic_level_cleared.emit(level, shutter_bonus)
+	if not split:
+		EventBus.classic_level_cleared.emit(level, shutter_bonus)
 	_classic_deal_next_level()
 	shutter_phase = Shutter.HOLD
 	shutter_timer = SHUTTER_HOLD
@@ -1043,7 +1062,7 @@ func _rec_tick(delta: float) -> void:
 	rec_frames.append_array(PackedInt32Array([
 		int(player.position.x), int(player.position.y),
 		pt, piece_rot, piece_pos.x, piece_pos.y, int(piece_state),
-		int(lava_y) if mode == Mode.ENDLESS else GameState.score,
+		int(lava_y) if mode == Mode.ENDLESS else run_score,
 	]))
 	if rec_frames.size() >= REC_MAX_FRAMES * REC_STRIDE:
 		_rec_on = false  # marathon runs: stop recording, keep what we have
@@ -1188,7 +1207,7 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		cracked.erase(best)
 		grid.erase(best)
 		break_fx.append([best, 0.0])
-		GameState.score += BREAK_SCORE
+		_add_score(BREAK_SCORE)
 		_story_add_progress("breaks", 1)
 		Sfx.play("break")
 	else:
@@ -1303,7 +1322,7 @@ func _escape() -> void:
 		if level > GameState.story_stage:
 			Replays.save_replay("story", rec_export())
 		GameState.story_clear(level)
-		GameState.score += ESCAPE_SCORE * level
+		_add_score(ESCAPE_SCORE * level)
 		if level >= StoryStages.TOTAL:
 			# Final stage cleared — the story run ends here.
 			playing = false
@@ -1319,7 +1338,7 @@ func _escape() -> void:
 		EventBus.player_escaped.emit(level)
 		return
 	level += 1
-	GameState.score += ESCAPE_SCORE * (level - 1)
+	_add_score(ESCAPE_SCORE * (level - 1))
 	grid.clear()
 	cracked.clear()
 	player.respawn(_spawn_point())
