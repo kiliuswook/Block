@@ -12,6 +12,13 @@ const USER_HUD := preload("res://core/scripts/user_hud.gd")
 ## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
 const HUD_COL_W := 300.0
 const HUD_CARD_PAD := Vector2(22.0, 18.0)
+## 오른쪽 계기판 열의 자리. 모드마다 켜지는 줄이 달라서 씬에 박힌 y를 그대로 쓰면
+## 서로 겹친다 — 가로 화면 계기판의 y는 `_layout_stat_column()` 한 곳에서만 정한다.
+const HUD_COL_X := 1360.0
+const HUD_COL_TOP := 44.0
+const HUD_ROW_GAP := 26.0  # 줄과 줄 사이
+const HUD_CAPTION_GAP := 4.0  # 제목 ↔ 숫자
+const HUD_CAPTION_H := 26.0
 
 @onready var board: EscapeBoard = $Board
 @onready var score_title: Label = $UI/ScoreTitle
@@ -99,11 +106,6 @@ func _ready() -> void:
 		# Casual mode: the big number slot becomes the countdown timer.
 		height_title.text = tr("HUD_TIME_LEFT")
 		best_title.text = tr("HUD_BEST_SCORE")
-		if get_viewport_rect().size.x > get_viewport_rect().size.y:
-			# Landscape: score shares the timer's slot — slide it below BEST.
-			# (Portrait already spreads them: timer top-center, score right column.)
-			score_title.position = Vector2(1360.0, 460.0)
-			score_label.position = Vector2(1360.0, 488.0)
 		goal_label.text = tr("TUT_PICNIC")
 	if endless:
 		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
@@ -129,8 +131,9 @@ func _ready() -> void:
 	board.start_game()
 	if not endless:  # endless is camera-driven; fixed pits get scaled to fit
 		_fit_board()
-	# 톤앤매너는 마지막에 한 번에 입힌다 — 모드별 배치가 다 끝난 뒤라야
-	# 계기판을 감싸는 카드의 자리를 알 수 있다.
+	# 자리 → 톤앤매너 → 카드 순서. 모드별로 켜진 줄이 다 정해진 뒤라야 열을 쌓을 수
+	# 있고, 열을 쌓은 뒤라야 계기판을 감싸는 카드의 자리를 알 수 있다.
+	_layout_stat_column()
 	_tone_hud()
 	_build_hud_cards()
 
@@ -295,10 +298,22 @@ func _on_game_over() -> void:
 			Ranks.submit("picnic", GameState.picnic_best)
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
-	var earned := _award_run_rewards()
-	var xp_line := _award_run_xp(was_record)
-	if user_hud:  # 방금 받은 골드·경험치를 상단 HUD에 반영
-		user_hud.refresh()
+	# 보상은 지금 바로 세이브에 들어가지만, HUD 표시는 결과창의 연출이 맡는다 —
+	# 골드가 날아가고 경험치 게이지가 찬 뒤에야 상단 카드가 새 값을 보여 준다.
+	var gold_before := GameState.gold
+	var xp_before := GameState.xp
+	var got_gold := _award_run_rewards()
+	var got_xp := _award_run_xp(was_record)
+	var earned: String = got_gold.get("line", "")
+	var xp_line: String = got_xp.get("line", "")
+	# 골드 단계가 세는 것은 **이 판이 번 골드**뿐이다 — 레벨업 보상 골드는
+	# 경험치 단계에서 그 레벨에 닿는 순간 따로 얹힌다 (두 번 세지 않게).
+	var reward := {
+		"gold": int(got_gold.get("gold", 0)), "gold_from": gold_before,
+		"xp": int(got_xp.get("xp", 0)), "xp_from": xp_before,
+	}
+	if user_hud:
+		user_hud.hold(gold_before, xp_before)
 	# 업적: 무한 첫 완주는 판이 끝난 그 순간에만 알 수 있고, 나머지(기록·골드)는
 	# 위에서 갱신된 세이브 값으로 판정된다.
 	if endless:
@@ -311,7 +326,7 @@ func _on_game_over() -> void:
 	tw.tween_callback(func() -> void:
 		if not board.playing:
 			death_popup.open(stats, was_record, earned,
-					tr("POP_PICNIC_END") if picnic else "", xp_line))
+					tr("POP_PICNIC_END") if picnic else "", xp_line, reward))
 
 
 ## 유저 정보 HUD — 타이틀과 같은 스크립트·같은 자리(좌상단).
@@ -323,6 +338,7 @@ func _build_user_hud() -> void:
 		return
 	user_hud = USER_HUD.new()
 	add_child(user_hud)
+	death_popup.hud = user_hud  # 결과 화면의 보상 연출이 이 카드로 골드를 날린다
 
 
 # --- 톤앤매너 (타이틀과 같은 UI 키트) -----------------------------------------
@@ -370,6 +386,58 @@ func _ink_label(l: Label, col: Color) -> void:
 	l.add_theme_color_override("font_color", col)
 	l.add_theme_constant_override("outline_size", 0)
 	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0))
+
+
+## 오른쪽 계기판 열: 보이는 줄만 위에서부터 차곡차곡 쌓는다. 모드마다 켜지는 줄이
+## 다른데(무한=층 · 스테이지=LEVEL · 피크닉=남은 시간) 씬의 y를 그대로 쓰면 서로
+## 겹치므로, 순서·글자 크기·간격을 여기서 한 번에 정해 두 모드를 같은 모양으로 만든다.
+## 순서: NEXT → 큰 숫자 슬롯 → BEST/TOP → SCORE → (LEVEL) → LINES(+타일 랙) → 기록.
+## 세로 화면(모바일)은 계기판이 화면 곳곳에 흩어져 있어 건드리지 않는다 (PC 우선 기간).
+func _layout_stat_column() -> void:
+	var vp := get_viewport_rect().size
+	if vp.y > vp.x:
+		return
+	var y := HUD_COL_TOP
+	# NEXT는 제목 + 미리보기 판이라 따로 쌓는다.
+	var next_title: Label = $UI/NextTitle
+	var next_prev: Control = $UI/NextPreview
+	next_title.position = Vector2(HUD_COL_X, y)
+	next_title.size = Vector2(HUD_COL_W, HUD_CAPTION_H)
+	y += HUD_CAPTION_H + HUD_CAPTION_GAP
+	next_prev.position = Vector2(HUD_COL_X, y)
+	y += next_prev.size.y + HUD_ROW_GAP
+	for row: Array in [[height_title, height_label, 72],
+			[best_title, best_label, 44],
+			[score_title, score_label, 40],
+			[level_title, level_label, 40],
+			[lines_title, lines_label, 36]]:
+		var cap: Label = row[0]
+		var val: Label = row[1]
+		if not val.visible:
+			continue
+		var fs: int = row[2]
+		val.add_theme_font_size_override("font_size", fs)
+		cap.position = Vector2(HUD_COL_X, y)
+		cap.size = Vector2(HUD_COL_W, HUD_CAPTION_H)
+		y += HUD_CAPTION_H + HUD_CAPTION_GAP
+		val.position = Vector2(HUD_COL_X, y)
+		val.size = Vector2(HUD_COL_W, ceilf(fs * 1.25))
+		val.pivot_offset = val.size / 2.0
+		y += val.size.y + HUD_ROW_GAP
+		if val == lines_label and goal_meter != null:
+			# 타일 랙은 LINES 숫자에 딸린 줄이라 바로 아래 붙인다.
+			goal_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 10.0)
+			goal_meter.size = Vector2(HUD_COL_W - 40.0, 106.0)
+			goal_meter.per_row = 5
+			y = goal_meter.position.y + goal_meter.size.y + HUD_ROW_GAP
+	# 기록 갱신 줄은 판 도중에 켜진다 — 자리는 지금 잡아 둔다(카드가 자라지 않게).
+	record_label.position = Vector2(HUD_COL_X, y)
+	record_label.size = Vector2(HUD_COL_W, 36.0)
+	y += 36.0 + HUD_ROW_GAP
+	if goal_label.visible:
+		goal_label.position = Vector2(HUD_COL_X, y)
+		goal_label.size = Vector2(HUD_COL_W, 150.0)
+		goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
 ## 계기판 묶음마다 흰 카드를 한 장씩 깐다 (타이틀의 카드와 같은 스타일박스).
@@ -441,8 +509,8 @@ func _group_rect(g: Dictionary) -> Rect2:
 
 
 ## Pays out gold for the whole run so far (minus what this run already paid).
-## Returns a display line.
-func _award_run_rewards() -> String:
+## 돌려주는 것: {"gold": 이번에 준 골드, "daily": 오늘 첫 판 2배였나, "line": 표시 줄}
+func _award_run_rewards() -> Dictionary:
 	var run_gold := 0
 	if GameState.mode == GameState.MODE_ENDLESS:
 		run_gold = height * 3
@@ -455,7 +523,7 @@ func _award_run_rewards() -> String:
 	var earn_gold := maxi(run_gold - gold_awarded, 0)
 	gold_awarded = maxi(run_gold, gold_awarded)
 	if earn_gold <= 0:
-		return ""
+		return {"gold": 0, "daily": false, "line": ""}
 	# First rewarded run of the day pays double gold.
 	var daily := GameState.claim_daily_bonus()
 	if daily:
@@ -464,26 +532,27 @@ func _award_run_rewards() -> String:
 	var line := tr("HUD_EARNED").format({"gold": earn_gold})
 	if daily:
 		line = tr("HUD_DAILY_DOUBLE") + line
-	return line
+	return {"gold": earn_gold, "daily": daily, "line": line}
 
 
 ## 이 판의 계정 경험치를 지급한다 — 골드와 달리 소비할 수 없는 축이라
 ## 성적이 나빠도 참가비만큼은 들어온다. 오른 레벨이 있으면 그 줄까지 붙여 준다.
-func _award_run_xp(record: bool) -> String:
+## 돌려주는 것: {"xp": 이번에 준 경험치, "levels": [오른 레벨...], "line": 표시 줄}
+func _award_run_xp(record: bool) -> Dictionary:
 	var run_xp := Account.run_xp(GameState.mode, GameState.score, height,
 			board.level if is_instance_valid(board) else 0, record)
 	var earn_xp := maxi(run_xp - xp_awarded, 0)
 	xp_awarded = maxi(run_xp, xp_awarded)
 	if earn_xp <= 0:
-		return ""
+		return {"xp": 0, "levels": [], "line": ""}
 	var got := Account.add_xp(earn_xp)
 	var line := tr("HUD_XP_EARNED").format({"xp": earn_xp})
 	var levels: Array = got.get("levels", [])
 	if not levels.is_empty():
-		Sfx.play("record")
+		# 축하 효과음은 결과창의 게이지가 그 레벨에 닿는 순간에 울린다.
 		line += "\n" + tr("HUD_LEVEL_UP").format(
 				{"level": int(levels[-1]), "gold": int(got.get("gold", 0))})
-	return line
+	return {"xp": earn_xp, "levels": levels, "line": line}
 
 
 func _process(_delta: float) -> void:
@@ -550,27 +619,14 @@ func _fit_board() -> void:
 # --- Classic level (arcade B-type) ----------------------------------------------
 
 
-## LINES goal as a rack of tiles: it sits under the LINES readout, and the
-## column geometry differs per orientation (portrait's stat column is narrow).
+## LINES goal as a rack of tiles. 가로 화면의 자리·크기는 `_layout_stat_column()`이
+## LINES 숫자 바로 아래로 잡고, 세로 화면만 여기서 따로 배치한다(좁은 오른쪽 열
+## 대신 상단 가운데 한 줄).
 func _build_goal_meter() -> void:
 	var vp := get_viewport_rect().size
 	goal_meter = GOAL_METER.new()
 	$UI.add_child(goal_meter)
-	if vp.x > vp.y:
-		# Landscape: LEVEL takes the endless big-number slot, so the stat column
-		# slides down past it and the meter gets a wide 5x2 rack.
-		for pair: Array in [[score_title, score_label, 340.0],
-				[best_title, best_label, 440.0],
-				[lines_title, lines_label, 540.0]]:
-			pair[0].position = Vector2(1360.0, pair[2])
-			pair[1].position = Vector2(1360.0, pair[2] + 28.0)
-		# The endless big-number font is sized for "23층"; "LEVEL 12" over a
-		# full stat column needs to be a touch smaller to clear the SCORE row.
-		height_label.add_theme_font_size_override("font_size", 60)
-		goal_meter.position = Vector2(1360.0, 628.0)
-		goal_meter.size = Vector2(260.0, 106.0)
-		goal_meter.per_row = 5
-	else:
+	if vp.y > vp.x:
 		# Portrait: LEVEL rides top-center with the rack in one wide row beneath
 		# it — the right column is too narrow to read ten tiles.
 		lines_title.position = Vector2(912.0, 440.0)
@@ -737,8 +793,8 @@ func _on_story_doors_opened() -> void:
 
 func _on_story_completed() -> void:
 	Sfx.play("record")
-	var earned := _award_run_rewards()
-	var xp_line := _award_run_xp(true)
+	var earned: String = _award_run_rewards().get("line", "")
+	var xp_line: String = _award_run_xp(true).get("line", "")
 	intro_mode = "complete"
 	intro_clear.text = tr("STORY_ALL_CLEAR")
 	intro_stage.text = tr("STORY_COMPLETE")

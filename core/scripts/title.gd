@@ -670,20 +670,23 @@ func _draw_gacha_panel(ci: Control, pick: bool) -> void:
 			box.size.x, 18, INK, box.position.x)
 	var slots: int = GameState.KEYCAP_PICK_SIZE
 	var sw := minf(74.0, (box.size.x - 24.0 - 10.0 * (slots - 1)) / slots)
+	# 머리 소품(베개·모자)이 붙은 냥이도 들어가도록 칸은 폭보다 세로로 길게 잡는다.
+	var sh := minf(sw * 1.5, box.size.y - 116.0)  # 아래 "N종 선택" 버튼 자리는 비워 둔다
 	var sx := box.position.x + (box.size.x - (sw * slots + 10.0 * (slots - 1))) / 2.0
 	var sy := box.position.y + 46.0
 	for i in slots:
-		var r := Rect2(sx + i * (sw + 10.0), sy, sw, sw)
+		var r := Rect2(sx + i * (sw + 10.0), sy, sw, sh)
 		var id: String = str(GameState.gacha_pick[i]) \
 				if i < GameState.gacha_pick.size() else ""
 		_round_box(ci, r, UiKit.WHITE if id != "" else Color("eaf3ec"), 12)
 		if id == "":
-			UiKit.center_text(ci, "?", r.position.y + sw * 0.68, sw, 26,
+			UiKit.center_text(ci, "?", r.position.y + sh * 0.62, sw, 26,
 					Color(INK, 0.3), r.position.x)
 			continue
 		# 뽑기는 아직 못 만난 냥이를 겨냥하는 곳이라 잠겨 있어도 제 색으로 보인다.
-		Player.paint_cat(ci, r.get_center() + Vector2(0.0, sw * 0.04),
-				sw * 0.82, 0.0, true, false, GameState.cat_skin(id))
+		var fit := _fit_cat(r.grow(-6.0))
+		Player.paint_cat(ci, fit[1], fit[0], 0.0, true, false,
+				GameState.cat_skin(id))
 
 
 ## 뽑기 버튼 얼굴 — "뽑기" + 값 알약 (골드가 모자라면 붉게).
@@ -752,7 +755,7 @@ func _build_gacha_pick_ui() -> void:
 	scroll.add_child(grid)
 	var cats := GameState.keycap_cats()
 	var per_row := maxi(1, int((bw - 12.0) / 134.0))
-	var chip := Vector2((bw - 12.0 * (per_row - 1) - 14.0) / per_row, 126.0)
+	var chip := Vector2((bw - 12.0 * (per_row - 1) - 14.0) / per_row, 146.0)
 	var rows := int(ceilf(cats.size() / float(per_row)))
 	grid.custom_minimum_size = Vector2(bw - 14.0, rows * (chip.y + 10.0) - 10.0)
 	for i in cats.size():
@@ -796,9 +799,10 @@ func _close_gacha_pick() -> void:
 func _draw_gacha_chip(ci: Control, cat: Dictionary) -> void:
 	var id := str(cat.id)
 	var unlocked: bool = GameState.is_unlocked(id)
-	var center := Vector2(ci.size.x / 2.0, ci.size.y * 0.36)
 	# 잠긴 냥이도 실루엣이 아니라 제 색으로 — 뽑기는 그 냥이를 겨냥하는 곳이다.
-	Player.paint_cat(ci, center, ci.size.y * 0.46, 0.0, true, false,
+	# 칩은 스크롤 안이라 넘친 만큼 잘린다 — 이름 줄 위 자리에 통째로 맞춰 그린다.
+	var fit := _fit_cat(Rect2(4.0, 4.0, ci.size.x - 8.0, ci.size.y - 48.0))
+	Player.paint_cat(ci, fit[1], fit[0], 0.0, true, false,
 			GameState.cat_skin(id))
 	var font := ThemeDB.fallback_font
 	_draw_center_text(ci, font, tr(str(cat.name)), ci.size.y - 30.0, 17,
@@ -943,6 +947,23 @@ func _gacha_pool_colors(pick: bool) -> Array:
 	if out.is_empty():
 		out = [UiKit.GOLD, UiKit.PINK, UiKit.CYAN, UiKit.PURPLE]
 	return out
+
+
+## 스프라이트 냥이는 몸통 폭 s를 기준으로 중심에서 위로 CAT_UP·아래로 CAT_DOWN,
+## 좌우로 CAT_SIDE만큼 그려진다 — 머리 소품(베개·모자)이 시트 캔버스 위쪽을 다 쓴다.
+## 좁은 칸에 그릴 때 중심을 칸 한가운데로 두면 위가 잘리므로 _fit_cat()으로 자리를 잡을 것.
+const CAT_UP := 0.95
+const CAT_DOWN := 0.57
+const CAT_SIDE := 0.8
+
+
+## rect 안에 냥이가 통째로 들어가는 [몸통 폭, 중심].
+func _fit_cat(rect: Rect2) -> Array:
+	var s := minf(rect.size.y / (CAT_UP + CAT_DOWN), rect.size.x / (CAT_SIDE * 2.0))
+	var at := Vector2(rect.position.x + rect.size.x / 2.0,
+			rect.position.y + (rect.size.y - s * (CAT_UP + CAT_DOWN)) / 2.0
+			+ s * CAT_UP)
+	return [s, at]
 
 
 ## 잉크 외곽선을 두른 둥근 상자 (기계 부품용).

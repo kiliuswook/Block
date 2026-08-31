@@ -26,6 +26,17 @@ var align_right := false
 
 var _card: Control
 
+## --- 연출용 표시값 (결과 화면의 보상 연출이 쓴다) ---------------------------
+## 보상은 판이 끝난 그 순간 이미 세이브에 들어가 있다. 그런데 카드가 곧바로
+## 새 값을 보여 주면 "골드가 날아와 더해졌다"는 연출이 성립하지 않으므로,
+## 연출이 끝날 때까지 **표시값만** 옛 값에 붙들어 둔다 (-1 = 실제 값 그대로).
+var _gold_shown := -1
+var _xp_shown := -1
+var _gain_text := ""  # 골드 위에 잠깐 뜨는 "+49 G"
+var _gain_a := 0.0
+var _gain_rise := 0.0
+var _gold_rect := Rect2()  # 마지막으로 골드를 그린 자리 (코인이 날아올 과녁)
+
 
 func _ready() -> void:
 	layer = LAYER
@@ -44,6 +55,93 @@ func _ready() -> void:
 func refresh() -> void:
 	if is_instance_valid(_card):
 		_card.queue_redraw()
+
+
+## 연출이 끝날 때까지 표시값을 붙들어 둔다. -1을 넣으면 실제 값으로 돌아간다.
+func hold(gold: int, total_xp: int) -> void:
+	_gold_shown = gold
+	_xp_shown = total_xp
+	refresh()
+
+
+func set_gold_shown(v: int) -> void:
+	_gold_shown = v
+	refresh()
+
+
+func set_xp_shown(v: int) -> void:
+	_xp_shown = v
+	refresh()
+
+
+## 붙들어 둔 표시값을 놓고 실제 세이브 값으로 돌아간다.
+func release() -> void:
+	_gold_shown = -1
+	_xp_shown = -1
+	refresh()
+
+
+## 골드가 몇으로 보이고 있는가 (연출 중이면 표시값).
+func gold_shown() -> int:
+	return GameState.gold if _gold_shown < 0 else _gold_shown
+
+
+## 골드 글자 위로 "+49 G"가 잠깐 떠올랐다 사라진다.
+func pop_gain(amount: int) -> void:
+	if amount <= 0:
+		return
+	_gain_text = "+%s G" % _commas(amount)
+	_gain_a = 1.0
+	_gain_rise = 0.0
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void:
+		_gain_rise = t
+		_gain_a = 1.0 if t < 0.55 else (1.0 - t) / 0.45
+		refresh(), 0.0, 1.0, 1.1)
+
+
+## 골드 글자의 화면 좌표 — 결과 화면에서 코인이 날아올 과녁.
+func gold_target() -> Vector2:
+	if not is_instance_valid(_card):
+		return Vector2.ZERO
+	return _card.position + _gold_rect.get_center()
+
+
+## 코인 한 닢을 `from`(화면 좌표)에서 골드 자리로 날린다.
+## HUD와 같은 캔버스에 그리므로 결과창 위로 지나간다. 도착하면 `on_land` 호출.
+func fly_coin(from: Vector2, delay: float, dur: float, on_land: Callable) -> void:
+	var to := gold_target()
+	var coin := Control.new()
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	coin.position = from
+	coin.modulate.a = 0.0
+	coin.draw.connect(func() -> void: _draw_coin(coin))
+	add_child(coin)
+	# 위로 한 번 솟았다가 빨려 들어가는 호 — 직선으로 가면 밋밋하다.
+	var lift := minf(from.distance_to(to) * 0.35, 220.0)
+	var mid := (from + to) * 0.5 - Vector2(0.0, lift)
+	var tw := create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(coin, "modulate:a", 1.0, 0.08)
+	tw.parallel().tween_method(func(t: float) -> void:
+		var a := from.lerp(mid, t)
+		var b := mid.lerp(to, t)
+		coin.position = a.lerp(b, t), 0.0, 1.0, dur) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.parallel().tween_property(coin, "scale", Vector2(0.6, 0.6), dur) \
+			.set_delay(dur * 0.6)
+	tw.tween_callback(func() -> void:
+		if on_land.is_valid():
+			on_land.call())
+	tw.tween_callback(coin.queue_free)
+
+
+func _draw_coin(coin: Control) -> void:
+	var r := 17.0
+	coin.draw_circle(Vector2.ZERO, r, UiKit.INK)
+	coin.draw_circle(Vector2.ZERO, r - 3.5, UiKit.GOLD)
+	coin.draw_circle(Vector2(-r * 0.25, -r * 0.28), r * 0.28,
+			Color(1.0, 1.0, 1.0, 0.65))  # 빛은 늘 위에서
 
 
 ## 이 카드가 차지하는 자리 — 다른 UI가 겹치지 않게 피할 때 쓴다.
@@ -70,29 +168,37 @@ func _draw_card() -> void:
 	var x0 := badge.end.x + 14.0
 	var right := w - 18.0
 	# 윗줄 오른쪽: 골드. 지갑은 이 HUD 하나뿐이라 다른 화면은 이걸 다시 그리지 않는다.
-	var gold_text := "%s G" % _commas(GameState.gold)
+	var gold_text := "%s G" % _commas(gold_shown())
 	var gold_size := UiKit.fit_size(font, gold_text, (right - x0) * 0.45, 25)
 	var gold_w := font.get_string_size(gold_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			gold_size).x
 	ci.draw_string(font, Vector2(right - gold_w, 37.0), gold_text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, gold_size, UiKit.GOLD_DEEP)
+	_gold_rect = Rect2(right - gold_w, 37.0 - gold_size, gold_w, gold_size)
+	if _gain_a > 0.0 and _gain_text != "":
+		var gw := font.get_string_size(_gain_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				22).x
+		ci.draw_string(font, Vector2(right - gw, 20.0 - _gain_rise * 14.0),
+				_gain_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22,
+				Color(UiKit.GOLD_DEEP, clampf(_gain_a, 0.0, 1.0)))
 	# 윗줄 왼쪽: 이름.
 	var name_room := right - gold_w - 14.0 - x0
 	var who := display_name()
 	ci.draw_string(font, Vector2(x0, 37.0), who, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			UiKit.fit_size(font, who, name_room, 25), UiKit.INK)
 	# 아랫줄: Lv.N · 칭호 (왼쪽) / 이번 레벨 진행 (오른쪽).
+	var xp_total := GameState.xp if _xp_shown < 0 else _xp_shown
 	var count := tr("MENU_LEVEL_MAX")
-	var need := Account.xp_to_next()
+	var need := Account.xp_to_next_at(xp_total)
 	if need > 0:
 		count = tr("MENU_LEVEL_XP").format(
-				{"xp": Account.xp_in_level(), "need": need})
+				{"xp": Account.xp_in_level_at(xp_total), "need": need})
 	var count_size := UiKit.fit_size(font, count, (right - x0) * 0.45, 17)
 	var count_w := font.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			count_size).x
 	ci.draw_string(font, Vector2(right - count_w, 63.0), count,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, count_size, UiKit.MUTED)
-	var lv := tr("MENU_LEVEL").format({"level": Account.level()})
+	var lv := tr("MENU_LEVEL").format({"level": Account.level_at(xp_total)})
 	var lv_size := UiKit.fit_size(font, lv, (right - x0) * 0.3, 21)
 	var lv_w := font.get_string_size(lv, HORIZONTAL_ALIGNMENT_LEFT, -1, lv_size).x
 	ci.draw_string(font, Vector2(x0, 63.0), lv, HORIZONTAL_ALIGNMENT_LEFT, -1,
@@ -101,21 +207,22 @@ func _draw_card() -> void:
 	var tier_x := x0 + lv_w + 10.0
 	var tier_room := right - count_w - 12.0 - tier_x
 	if tier_room > 30.0:
-		var tier := tr(Account.tier_key())
+		var tier := tr(Account.tier_key(Account.level_at(xp_total)))
 		ci.draw_string(font, Vector2(tier_x, 63.0), tier, HORIZONTAL_ALIGNMENT_LEFT,
 				-1, UiKit.fit_size(font, tier, tier_room, 18), UiKit.MUTED)
-	_draw_xp_bar(ci, Rect2(x0, h - 26.0, right - x0, 14.0))
+	_draw_xp_bar(ci, Rect2(x0, h - 26.0, right - x0, 14.0),
+			Account.progress_at(xp_total))
 
 
 ## 경험치 바 — 홈을 파고 그 안쪽만 채운다 (외곽선이 두 겹으로 보이지 않게).
-func _draw_xp_bar(ci: CanvasItem, bar: Rect2) -> void:
+func _draw_xp_bar(ci: CanvasItem, bar: Rect2, progress: float) -> void:
 	var groove := StyleBoxFlat.new()
 	groove.bg_color = Color(UiKit.INK, 0.10)
 	groove.set_corner_radius_all(int(bar.size.y / 2.0))
 	ci.draw_style_box(groove, bar)
 	var inner := bar.grow(-3.0)
 	var fill := inner
-	fill.size.x = maxf(5.0, inner.size.x * Account.progress())
+	fill.size.x = maxf(5.0, inner.size.x * progress)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = UiKit.CYAN
 	sb.set_corner_radius_all(int(inner.size.y / 2.0))

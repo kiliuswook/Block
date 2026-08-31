@@ -61,8 +61,24 @@ func xp_need(lv: int) -> int:
 
 ## 이번 레벨에서 모은 경험치 (만렙이면 0).
 func xp_in_level() -> int:
+	return xp_in_level_at(GameState.xp)
+
+
+## 다음 레벨까지 필요한 경험치 (만렙이면 0).
+func xp_to_next() -> int:
+	return xp_to_next_at(GameState.xp)
+
+
+## 이번 레벨 진행도 0~1 — 타이틀 경험치 바가 쓴다. 만렙은 꽉 찬 상태.
+func progress() -> float:
+	return progress_at(GameState.xp)
+
+
+## 아래 `*_at()`은 "지금 세이브"가 아니라 **임의의 누적 경험치**를 두고 계산한다 —
+## 결과 화면의 경험치 게이지가 판 전 값에서 판 후 값으로 차오르는 연출에 쓴다.
+func xp_in_level_at(total_xp: int) -> int:
 	var lv := 1
-	var left := maxi(GameState.xp, 0)
+	var left := maxi(total_xp, 0)
 	while lv < LEVEL_MAX:
 		var need := xp_need(lv)
 		if left < need:
@@ -72,15 +88,15 @@ func xp_in_level() -> int:
 	return 0
 
 
-## 다음 레벨까지 필요한 경험치 (만렙이면 0).
-func xp_to_next() -> int:
-	return 0 if level() >= LEVEL_MAX else xp_need(level())
+func xp_to_next_at(total_xp: int) -> int:
+	var lv := level_at(total_xp)
+	return 0 if lv >= LEVEL_MAX else xp_need(lv)
 
 
-## 이번 레벨 진행도 0~1 — 타이틀 경험치 바가 쓴다. 만렙은 꽉 찬 상태.
-func progress() -> float:
-	var need := xp_to_next()
-	return 1.0 if need <= 0 else clampf(float(xp_in_level()) / float(need), 0.0, 1.0)
+func progress_at(total_xp: int) -> float:
+	var need := xp_to_next_at(total_xp)
+	return 1.0 if need <= 0 else clampf(
+			float(xp_in_level_at(total_xp)) / float(need), 0.0, 1.0)
 
 
 func is_max() -> bool:
