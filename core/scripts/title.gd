@@ -102,6 +102,12 @@ var _last_pull: Array = []  # draw_keycaps()가 돌려준 마지막 결과
 var _pull_t := 0.0  # 캡슐 연출 경과 시간
 var _pull_anim := false
 var _spin_t := 0.0  # 기계 손잡이/캡슐 상시 애니메이션
+var _unlock_pop: Control  # 키캡 한 바퀴로 열린 것을 알리는 팝업
+## 이번 뽑기에서 등급이 오른 냥이들 [{cat, grade}] — 캡슐 연출이 끝나면 하나씩 띄운다.
+var _unlock_queue: Array[Dictionary] = []
+var _unlock_at := 0  # 지금 보여 주고 있는 순번
+var _unlock_face: Control  # 팝업 본문 (해금된 모습을 그린다)
+var _unlock_btn: Button  # 확인 / 다음
 var _modes: Control  # PLAY로 여는 모드 선택 오버레이
 var _chars: Control  # CHARACTER로 여는 캐릭터 선택 오버레이
 var _seat_btn: Button  # 무대 좌석 아래 "캐릭터 변경" 버튼
@@ -458,6 +464,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				and event.physical_keycode == KEY_ESCAPE:
 			_settings.close()
 		return
+	if _unlock_pop and _unlock_pop.visible:
+		if event is InputEventKey and event.pressed \
+				and event.physical_keycode == KEY_ESCAPE:
+			_next_unlock()
+		return
 	if _gacha_result and _gacha_result.visible:
 		if event is InputEventKey and event.pressed \
 				and event.physical_keycode == KEY_ESCAPE:
@@ -574,6 +585,7 @@ func _build_gacha() -> void:
 				Vector2(col_w, col_h))
 	_build_gacha_pick_ui()
 	_build_gacha_result()
+	_build_unlock_pop()
 	_refresh_gacha()  # 다 모은 상태로 시작하면 처음부터 잠긴 모습으로 선다
 
 
@@ -917,19 +929,25 @@ func _on_gacha(idx: int) -> void:
 	_pull_anim = true
 	_open_gacha_result()
 	# 등급업(=해금 포함)이 있으면 그쪽을 알리고, 아니면 마지막 한 장을 알린다.
+	# 등급업은 토스트로 끝내지 않는다 — 캡슐이 다 열리면 "무엇이 열렸는지"를
+	# 해금 팝업이 하나씩 안내한다 (_flush_unlocks).
+	_unlock_queue.clear()
+	_unlock_at = 0
 	var announced := false
 	for hit: Dictionary in pull:
 		if not hit.grade_up:
 			continue
 		var id := str(hit.cat)
-		var cat_name := tr(str(GameState.get_cat(id).name))
 		var grade := GameState.cat_grade(id)
+		_unlock_queue.append({"cat": id, "grade": grade})
+		if announced:
+			continue
+		var cat_name := tr(str(GameState.get_cat(id).name))
 		Sfx.play("record")
 		_show_toast(tr("CHAR_RECRUITED").format({"name": cat_name}) if grade == 1
 				else tr("KEYCAP_GRADE_UP").format({"name": cat_name, "grade": grade}),
 				CREAM)
 		announced = true
-		break
 	if not announced:
 		var last: Dictionary = pull[-1]
 		var cat_name := tr(str(GameState.get_cat(str(last.cat)).name))
@@ -1089,6 +1107,7 @@ func _open_gacha_result() -> void:
 func _close_gacha_result() -> void:
 	_gacha_result.visible = false
 	_pull_anim = false
+	_flush_unlocks()  # 연출을 끝까지 안 보고 닫아도 해금 안내는 놓치지 않는다
 
 
 ## 뽑은 캡슐이 하나씩 굴러 나와 착지하고, 잠시 뒤 뚜껑이 열리며 키캡이 나온다.
@@ -1153,6 +1172,128 @@ func _draw_gacha_tray(ci: Control) -> void:
 				GOLD_COL if hit.fresh else UiKit.MUTED)
 
 
+# --- 해금 안내 팝업 -------------------------------------------------------------
+## 키캡 A~Z를 한 바퀴 채우면 등급이 오르고 무언가가 열린다 — 1등급은 캐릭터 합류,
+## 2~4등급은 그 캐릭터의 파츠 단계(= 나만의 캐릭터 꾸미기 재료)다. 캡슐이 다 열린
+## 뒤 이 팝업이 열린 것을 하나씩(_unlock_queue 순서대로) 보여 준다.
+func _build_unlock_pop() -> void:
+	_unlock_pop = _make_overlay(tr("CHAR_UNLOCK_TITLE"),
+			func() -> void: _next_unlock(),
+			Vector2(minf(vw - 100.0, 760.0), minf(vh - 140.0, 660.0)))
+	var body: Control = _unlock_pop.get_meta("body")
+	_unlock_face = Control.new()
+	_unlock_face.size = Vector2(body.size.x, body.size.y - 88.0)
+	_unlock_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unlock_face.draw.connect(func() -> void: _draw_unlock(_unlock_face))
+	body.add_child(_unlock_face)
+	_unlock_btn = Button.new()
+	_unlock_btn.size = Vector2(260.0, 64.0)
+	_unlock_btn.position = Vector2((body.size.x - 260.0) / 2.0, body.size.y - 68.0)
+	UiKit.btn_primary(_unlock_btn, 26)
+	_unlock_btn.pressed.connect(func() -> void: _next_unlock())
+	body.add_child(_unlock_btn)
+
+
+## 대기 중인 해금 안내가 있으면 띄운다 (없으면 아무 일도 하지 않는다).
+func _flush_unlocks() -> void:
+	if _unlock_pop == null or _unlock_pop.visible:
+		return
+	if _unlock_at >= _unlock_queue.size():
+		return
+	_open_unlock()
+
+
+func _open_unlock() -> void:
+	var item: Dictionary = _unlock_queue[_unlock_at]
+	var head: Label = _unlock_pop.get_meta("head")
+	head.text = tr("CHAR_UNLOCK_TITLE") if int(item.grade) <= 1 \
+			else tr("CHAR_UNLOCK_PARTS_TITLE")
+	var left := _unlock_queue.size() - _unlock_at - 1
+	_unlock_btn.text = tr("CHAR_UNLOCK_NEXT").format({"n": left}) if left > 0 \
+			else tr("UI_CONFIRM")
+	Sfx.play("record")
+	_raise(_unlock_pop)
+	_unlock_pop.visible = true
+	_unlock_face.queue_redraw()
+
+
+## 확인 / 다음 — 남은 안내가 있으면 이어서 띄우고, 없으면 닫는다.
+func _next_unlock() -> void:
+	_unlock_at += 1
+	if _unlock_at < _unlock_queue.size():
+		_open_unlock()
+		return
+	_unlock_queue.clear()
+	_unlock_at = 0
+	_unlock_pop.visible = false
+	_refresh_gacha()
+	queue_redraw()  # 무대 좌석 냥이가 새 파츠를 입었을 수 있다
+
+
+## 팝업 본문 — 위쪽 무대에 해금된 모습(파츠는 이전 → 지금 두 컷), 아래에 무엇이
+## 열렸는지와 어디서 쓰는지 한 줄씩.
+func _draw_unlock(ci: Control) -> void:
+	if _unlock_at >= _unlock_queue.size():
+		return
+	var item: Dictionary = _unlock_queue[_unlock_at]
+	var id := str(item.cat)
+	var grade := int(item.grade)
+	var cat := GameState.get_cat(id)
+	var font := ThemeDB.fallback_font
+	var w := ci.size.x
+	var stage := Rect2(0.0, 0.0, w, ci.size.y * 0.52)
+	ci.draw_style_box(UiKit.panel_box(Color("eaf3fb"), 22, 0.0), stage)
+	UiKit.paw(ci, Vector2(38.0, stage.size.y - 38.0), 13.0, Color(INK, 0.06), 0.5)
+	UiKit.paw(ci, Vector2(w - 46.0, 44.0), 10.0, Color(INK, 0.05), -0.8)
+	var tier := clampi(grade - 1, 0, GameState.CustomCat.TIER_MAX)
+	var cy := stage.size.y / 2.0
+	if grade <= 1:
+		var big := stage.size.y * 0.72
+		UiKit.ellipse(ci, Vector2(w / 2.0, cy + big * 0.5),
+				Vector2(big * 0.4, big * 0.1), Color(0.2, 0.35, 0.45, 0.14))
+		Player.paint_cat(ci, Vector2(w / 2.0, cy), big, 0.0, true, false,
+				GameState.cat_skin(id, tier))
+	else:
+		# 이전 단계 → 새 단계. 무엇이 붙었는지 눈으로 비교할 수 있게 나란히 세운다.
+		var size := stage.size.y * 0.56
+		for i in 2:
+			var at := Vector2(w * (0.28 if i == 0 else 0.72), cy)
+			UiKit.ellipse(ci, at + Vector2(0.0, size * 0.5),
+					Vector2(size * 0.4, size * 0.1), Color(0.2, 0.35, 0.45, 0.14))
+			Player.paint_cat(ci, at, size, 0.0, true, false,
+					GameState.cat_skin(id, tier - 1 + i))
+		# 두 컷 사이 진행 화살표 (보상 줄의 것을 크게 그린 것).
+		var mid := Vector2(w * 0.5, cy)
+		ci.draw_colored_polygon(PackedVector2Array([
+				mid + Vector2(-14.0, -18.0), mid + Vector2(12.0, 0.0),
+				mid + Vector2(-14.0, 18.0)]), Color(INK, 0.45))
+	var y := stage.size.y + 48.0
+	var nm := tr(str(cat.name))
+	var head_line := tr("CHAR_RECRUITED").format({"name": nm}) if grade <= 1 \
+			else tr("KEYCAP_GRADE_UP").format({"name": nm, "grade": grade})
+	_draw_center_text(ci, font, head_line, y, 30, GOLD_COL, w)
+	y += 42.0
+	if grade <= 1:
+		ci.draw_multiline_string(font, Vector2(20.0, y),
+				tr("%s_DESC" % str(cat.name)), HORIZONTAL_ALIGNMENT_CENTER,
+				w - 40.0, 19, 2, Color(INK, 0.62))
+		y += 56.0
+		_draw_center_text(ci, font, tr("CHAR_UNLOCK_HINT"), y, 19, UiKit.MUTED, w)
+		return
+	# 파츠 단계 — 이번에 붙은 파츠 이름을 그대로 알려 준다 (카탈로그 이름).
+	var gains: Array[String] = GameState.CustomCat.tier_gain_names(
+			str(cat.get("char", "")), tier - 1)
+	var line := tr("CHAR_REWARD_PARTS").format({"n": tier})
+	if not gains.is_empty():
+		var names: Array[String] = []
+		for key in gains:
+			names.append(tr(key))
+		line = tr("CHAR_UNLOCK_PARTS_GAIN").format({"parts": " · ".join(names)})
+	_draw_center_text(ci, font, line, y, 22, INK, w)
+	y += 40.0
+	_draw_center_text(ci, font, tr("CHAR_UNLOCK_PARTS_HINT"), y, 19, UiKit.MUTED, w)
+
+
 func _process(delta: float) -> void:
 	if _gacha == null or not _gacha.visible:
 		return
@@ -1168,6 +1309,7 @@ func _process(delta: float) -> void:
 	total += CAPSULE_FALL + CAPSULE_HOLD + CAPSULE_OPEN
 	if _pull_t > total:
 		_pull_anim = false
+		_flush_unlocks()  # 캡슐이 다 열렸으면 해금 안내로 넘어간다
 
 
 ## 더 뽑을 키캡이 남았는가 — 전 냥이가 만렙이면 상점 자체가 닫힌다
@@ -1229,6 +1371,8 @@ func _close_gacha() -> void:
 	_gacha.visible = false
 	_gacha_pick_ui.visible = false
 	_gacha_result.visible = false
+	_unlock_pop.visible = false
+	_unlock_queue.clear()
 	_pull_anim = false
 	queue_redraw()  # title cat may have changed outfit
 

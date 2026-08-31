@@ -50,6 +50,42 @@ func _ready() -> void:
 	GameState.gold = gold_before
 	GameState.keycaps = caps_before
 	GameState.save_game()
+	# 키캡 한 바퀴를 채웠을 때 뜨는 해금 안내 — 캐릭터 합류판과 파츠 단계판.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_unlock_char.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._unlock_queue.assign([{"cat": "wizard", "grade": 1},
+						{"cat": "gray", "grade": 1}])
+				inst._unlock_at = 0
+				inst._open_unlock())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_unlock_parts.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._unlock_queue.assign([{"cat": "cheese", "grade": 3}])
+				inst._unlock_at = 0
+				inst._open_unlock())
+	# 실제 뽑기 → 캡슐 연출 → 해금 안내까지 이어지는지 (전 냥이가 Z 한 장만 남은 상태).
+	gold_before = GameState.gold
+	caps_before = GameState.keycaps.duplicate(true)
+	GameState.gold = 9999
+	GameState.keycaps = _almost_full_keycaps()
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_unlock_flow.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._gacha_n[0] = 1
+				inst._on_gacha(0)
+				inst._pull_t = 99.0  # 캡슐 연출을 끝까지 돌린 셈 치고
+				inst._process(0.0))
+	GameState.gold = gold_before
+	GameState.keycaps = caps_before
+	GameState.save_game()
+	# 세로 화면에서도 팝업이 자리를 지키는지 (모바일은 상점도 세로다).
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_unlock_parts.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._unlock_queue.assign([{"cat": "cheese", "grade": 3}])
+				inst._unlock_at = 0
+				inst._open_unlock())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_ranks.png",
 			func(inst: Node) -> void: inst._open_ranks())
 	# [개발용 · 출시 빌드에서 제거] 업적/리더보드 확인 패널.
@@ -206,6 +242,17 @@ func _capture(scene_path: String, out: String, setup: Callable = Callable()) -> 
 
 
 ## 캡처용 더미 수집 상태: 냥이마다 다른 진행도 (일부는 해금, 일부는 잠김).
+## 모든 냥이가 Z 한 글자만 남은 상태 — 아무 키캡이나 뽑으면 등급이 오른다.
+func _almost_full_keycaps() -> Dictionary:
+	var out := {}
+	for cat in GameState.CATS:
+		var d := {}
+		for j in 25:
+			d[char(65 + j)] = 1
+		out[str(cat.id)] = d
+	return out
+
+
 func _demo_keycaps() -> Dictionary:
 	var out := {}
 	for i in GameState.CATS.size():

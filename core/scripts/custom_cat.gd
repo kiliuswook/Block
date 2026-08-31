@@ -268,6 +268,157 @@ const CHARS: Dictionary = {
 
 const TIER_MAX := 3
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# [임시 · 진짜 아트가 나오면 통째로 제거] 임시 캐릭터 char07 ~ char30
+# ------------------------------------------------------------------------------
+# 목표는 디자인 캐릭터 30종인데 컨셉 시트에는 아직 6종(char01~06)뿐이다.
+# 나머지 24마리는 "시트 파츠를 빌려 색만 갈아 끼운" 임시 조합이다 — 시트 그림이
+# 없으니 CatSprite.has()가 거짓이고, build_skin()이 나만의 캐릭터와 같은
+# 파츠 믹스(skin["mix"]) 경로로 그린다.
+#
+# ※ 제거할 때: 이 블록(TEMP_* / temp_chars / all_chars)과
+#    GameState.CATS의 "[임시]" 표시 구간, shared/locale/content.csv의
+#    CAT_TMP* 줄을 지우고 all_chars() 호출부를 CHARS로 되돌리면 된다.
+# ※ my_sources()는 일부러 CHARS만 훑는다 — 임시 캐릭터가 나만의 캐릭터의
+#    파츠 해금 출처로 새지 않게 하려는 것이다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+const TEMP_FIRST := 7
+const TEMP_LAST := 30
+
+## 임시 캐릭터 한 줄 = 색 + 시트에 이미 있는 모양 옵션 조합.
+## b 몸 · e 귀/꼬리 · p 젤리 · ear 귀 모양 · ey 눈 · ec 눈 색 · m 입 · mc 입 색
+## · w 수염 · pt 무늬 · pc 무늬 색 · x 추가 파츠 · t 해금 3단계.
+const TEMP_DEFS: Array[Dictionary] = [
+	{"b": "a9dcc3", "e": "5fae8e", "p": "fdb3a2", "ear": "round", "ey": "oval",
+		"m": "w", "pt": "none", "x": {},
+		"t": [{"chest": "bowtie"}, {"head": "orange"}, {"tail": "curl"}]},
+	{"b": "cfc0e8", "e": "8f77c4", "p": "d2a08c", "ear": "pointy", "ey": "star",
+		"ec": "f0c53a", "m": "neutral", "mc": "6e5546", "pt": "tabby_head",
+		"pc": "8f77c4", "x": {},
+		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "ring"}]},
+	{"b": "ffd9c2", "e": "f3a06a", "p": "fe856d", "ear": "folded", "ey": "iris",
+		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
+		"t": [{"hold": "mug"}, {"head": "orange"}, {"tail": "curl"}]},
+	{"b": "bcd8f2", "e": "6f9fd0", "p": "fdfbf8", "ear": "round", "ey": "sleep",
+		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
+		"x": {"back": "pillow"},
+		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
+	{"b": "4a4750", "e": "26232c", "p": "fdfbf8", "ear": "pointy", "ey": "iris",
+		"ec": "f0c53a", "m": "w", "pt": "tuxedo_face", "pc": "fbf6ee", "x": {},
+		"t": [{"hold": "tie"}, {"face": "sunglasses"}, {"tail": "curl"}]},
+	{"b": "f6a8bb", "e": "d76b8a", "p": "fe9883", "ear": "round", "ey": "squint",
+		"m": "open_smile", "mc": "eb6000", "pt": "none", "x": {"mark": "moon"},
+		"t": [{"chest": "bowtie"}, {"head": "headset"}, {"tail": "ring"}]},
+	{"b": "c9a37a", "e": "8e6a4a", "p": "d2a08c", "ear": "folded", "ey": "tired",
+		"m": "neutral", "pt": "tabby_head", "pc": "8e6a4a",
+		"x": {"face": "round_glasses"},
+		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "ring"}]},
+	{"b": "7fc9c4", "e": "3f8f8f", "p": "fdfbf8", "ear": "pointy", "ey": "oval",
+		"m": "w", "pt": "siamese", "pc": "3f8f8f", "x": {},
+		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
+	{"b": "f7e08a", "e": "d9b53f", "p": "fe856d", "ear": "round", "ey": "star",
+		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
+		"t": [{"hold": "mug"}, {"head": "orange"}, {"tail": "curl"}]},
+	{"b": "9c6f9e", "e": "6b4470", "p": "d2a08c", "ear": "pointy", "ey": "iris",
+		"ec": "f0c53a", "m": "neutral", "mc": "6e5546", "w": "droop",
+		"pt": "siamese", "pc": "6b4470", "x": {},
+		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
+	{"b": "fdfdfd", "e": "cfd8e3", "p": "fdb3a2", "ear": "round", "ey": "sleep",
+		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
+		"x": {"back": "pillow"},
+		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
+	{"b": "f2854a", "e": "c05a24", "p": "fe9883", "ear": "pointy", "ey": "squint",
+		"m": "open_smile", "mc": "eb6000", "pt": "tabby_head", "pc": "c05a24",
+		"x": {},
+		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
+	{"b": "8fbf5a", "e": "5c8a30", "p": "fdb3a2", "ear": "folded", "ey": "oval",
+		"m": "w", "pt": "none", "x": {"mark": "moon"},
+		"t": [{"hold": "mug"}, {"chest": "bowtie"}, {"tail": "curl"}]},
+	{"b": "3b4a6b", "e": "22304a", "p": "fdfbf8", "ear": "pointy", "ey": "star",
+		"ec": "f0c53a", "m": "neutral", "pt": "tuxedo_face", "pc": "fbf6ee",
+		"x": {"face": "sunglasses"},
+		"t": [{"hold": "tie"}, {"chest": "badge"}, {"tail": "curl"}]},
+	{"b": "ff9d8a", "e": "d96a55", "p": "fe856d", "ear": "round", "ey": "iris",
+		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
+		"t": [{"chest": "bowtie"}, {"head": "orange"}, {"tail": "ring"}]},
+	{"b": "c8cdd4", "e": "949aa4", "p": "fdfbf8", "ear": "round", "ey": "tired",
+		"m": "neutral", "w": "droop", "pt": "tabby_head", "pc": "949aa4",
+		"x": {"face": "round_glasses"},
+		"t": [{"hold": "book"}, {"head": "sleep_mask"}, {"tail": "ring"}]},
+	{"b": "7a6fd0", "e": "4d43a0", "p": "d2a08c", "ear": "pointy", "ey": "star",
+		"ec": "f0c53a", "m": "w", "mc": "6e5546", "pt": "siamese", "pc": "4d43a0",
+		"x": {},
+		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
+	{"b": "fdf0a8", "e": "e8c74a", "p": "fe9883", "ear": "folded", "ey": "squint",
+		"m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
+		"t": [{"hold": "mug"}, {"head": "headset"}, {"tail": "ring"}]},
+	{"b": "8a5a3c", "e": "5e3a24", "p": "d2a08c", "ear": "round", "ey": "oval",
+		"m": "w", "pt": "tabby_head", "pc": "5e3a24", "x": {},
+		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "curl"}]},
+	{"b": "5aa8d8", "e": "2f6f9e", "p": "fdfbf8", "ear": "pointy", "ey": "iris",
+		"ec": "f0c53a", "m": "neutral", "pt": "siamese", "pc": "2f6f9e", "x": {},
+		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
+	{"b": "ffd4e2", "e": "ec9ab6", "p": "fdb3a2", "ear": "folded", "ey": "sleep",
+		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
+		"x": {"mark": "moon"},
+		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
+	{"b": "a8a45c", "e": "6f6c30", "p": "d2a08c", "ear": "round", "ey": "tired",
+		"m": "neutral", "pt": "tabby_head", "pc": "6f6c30",
+		"x": {"face": "round_glasses"},
+		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "ring"}]},
+	{"b": "d8f26a", "e": "9ac02e", "p": "fe856d", "ear": "pointy", "ey": "star",
+		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
+		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
+	{"b": "2e3350", "e": "1b1f36", "p": "fdfbf8", "ear": "round", "ey": "star",
+		"ec": "f0c53a", "m": "w", "w": "droop", "pt": "siamese", "pc": "1b1f36",
+		"x": {"mark": "moon"},
+		"t": [{"head": "wizard"}, {"face": "sunglasses"}, {"tail": "ring"}]},
+]
+
+static var _temp_chars: Dictionary = {}
+
+
+## 임시 캐릭터 정의 {char id: CHARS와 같은 모양}. TEMP_DEFS 한 줄을 CHARS 항목으로
+## 부풀린다 — 적어 두지 않은 자리는 전부 기본값(코·볼·발바닥 모양 등)이다.
+static func temp_chars() -> Dictionary:
+	if not _temp_chars.is_empty():
+		return _temp_chars
+	var out := {}
+	for i in TEMP_DEFS.size():
+		var d: Dictionary = TEMP_DEFS[i]
+		var no := TEMP_FIRST + i
+		var parts := {
+			"body_col": Color(str(d.b)), "ear_col": Color(str(d.e)),
+			"tail_col": Color(str(d.e)), "foot_col": Color("fbf6ee"),
+			"pad_col": Color(str(d.p)),
+			"ear": str(d.ear), "eyes": str(d.ey),
+			"eye_col": Color(str(d.get("ec", "241f28"))),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": str(d.m), "mouth_col": Color(str(d.get("mc", "2c2a33"))),
+			"whisker": str(d.get("w", "basic")), "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": str(d.pt), "tail": "none",
+		}
+		if str(d.pt) != "none":
+			parts["pattern_col"] = Color(str(d.get("pc", d.e)))
+		for k: String in (d.x as Dictionary):
+			parts[k] = (d.x as Dictionary)[k]
+		out["char%02d" % no] = {
+			"name": "CAT_TMP%02d" % no, "parts": parts, "tiers": d.t,
+		}
+	_temp_chars = out
+	return out
+
+
+## 디자인 캐릭터 + 임시 캐릭터. 파츠를 읽는 쪽은 이걸 쓴다
+## (임시 캐릭터를 지우면 이 함수도 CHARS 하나로 돌아간다).
+static func all_chars() -> Dictionary:
+	var out := CHARS.duplicate()
+	out.merge(temp_chars())
+	return out
+
 ## "나만의 캐릭터"(GameState의 custom 슬롯)가 쓰는 백지 몸통 — 디자인 캐릭터가
 ## 아니므로 CHARS에 넣지 않는다. 여기에 사용자가 고른 파츠가 얹힌다.
 const BLANK_CHAR: Dictionary = {
@@ -428,13 +579,34 @@ static func pick(sel: Dictionary, key: String) -> int:
 
 ## 디자인 캐릭터의 파츠 묶음 — tier(0~3)만큼 해금 파츠를 얹어 돌려준다.
 static func char_parts(char_id: String, tier := TIER_MAX) -> Dictionary:
-	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
+	var def: Dictionary = all_chars().get(char_id, BLANK_CHAR)
 	var parts: Dictionary = (def.parts as Dictionary).duplicate(true)
 	var tiers: Array = def.tiers
 	for i in mini(maxi(tier, 0), tiers.size()):
 		for k: String in (tiers[i] as Dictionary):
 			parts[k] = (tiers[i] as Dictionary)[k]
 	return parts
+
+
+## 이 캐릭터가 tier 단계(0=1st, 1=2nd, 2=3rd)에서 새로 받는 파츠의 부위 이름 키들.
+## 키캡 한 바퀴를 채웠을 때 "무엇이 열렸는지" 알리는 데 쓴다 — 옵션 이름은 카탈로그에
+## 한국어로 박혀 있어 번역이 안 되므로, 번역 키가 있는 부위 이름(CAT_PART_*)만 준다.
+static func tier_gain_names(char_id: String, tier: int) -> Array[String]:
+	var out: Array[String] = []
+	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
+	var tiers: Array = def.tiers
+	if tier < 0 or tier >= tiers.size():
+		return out
+	var gained: Dictionary = tiers[tier]
+	for bundle_key: String in gained:
+		for part in PARTS:
+			if _parts_key(str(part.key)) != bundle_key or part.get("type") == "color":
+				continue
+			var nm := str(part.name)
+			if not nm in out:
+				out.append(nm)
+			break
+	return out
 
 
 ## 디자인 캐릭터 → 커스터마이저 선택값(sel). "이 냥이처럼 시작하기"용.
@@ -507,7 +679,8 @@ static func apply_sel(parts: Dictionary, sel: Dictionary) -> Dictionary:
 static func build_skin(char_id: String, tier: int, sel: Dictionary) -> Dictionary:
 	var parts := apply_sel(char_parts(char_id, tier), sel)
 	var skin := skin_from_parts(parts)
-	# 디자인 냥이가 아니면(= 나만의 캐릭터) 시트 파츠 그림을 직접 조립해 그린다.
+	# 디자인 냥이가 아니면(= 나만의 캐릭터, 그리고 아직 시트가 없는 임시 캐릭터)
+	# 시트 파츠 그림을 직접 조립해 그린다.
 	if not CHARS.has(char_id):
 		skin["mix"] = mix_of(parts)
 		skin["tints"] = mix_tints(parts)
