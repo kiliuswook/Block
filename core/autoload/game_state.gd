@@ -112,6 +112,8 @@ const KEYCAP_GRADE_MAX := 4
 const KEYCAP_GACHA_PRICE := 30
 const KEYCAP_GACHA_BULK := 10
 const KEYCAP_GACHA_BULK_PRICE := 250
+## 한 번에 뽑을 수 있는 최대 장수 (상점 개수 스테퍼의 "최대").
+const KEYCAP_GACHA_MAX := 10
 ## 이번 바퀴에서 아직 못 채운 글자가 나올 확률 (나머지는 완전 랜덤 = 중복).
 const KEYCAP_FRESH_CHANCE := 0.7
 ## 선택 뽑기: 이만큼의 냥이를 골라 두면 그 냥이들만 캡슐에서 나온다.
@@ -503,7 +505,7 @@ func has_keycap(cat_id: String, letter: String) -> bool:
 ## 반환: [{"cat": id, "letter": "A", "fresh": bool, "grade_up": bool}, ...]
 ## 골드가 모자라거나 풀이 비면 빈 배열.
 func draw_keycaps(n: int, pick: Array = []) -> Array:
-	n = maxi(1, n)
+	n = clampi(n, 1, KEYCAP_GACHA_MAX)
 	var pool := gacha_pool(pick)
 	if pool.is_empty():
 		return []
@@ -543,12 +545,22 @@ func gacha_pool(pick: Array = []) -> Array[String]:
 	return pool
 
 
-## n장 값. 선택 뽑기는 겨냥하는 대가로 KEYCAP_PICK_MARKUP배.
+## n장 값 — KEYCAP_GACHA_BULK장 묶음은 묶음값으로 계산하고 나머지는 낱장값이다.
+## 선택 뽑기는 겨냥하는 대가로 KEYCAP_PICK_MARKUP배.
 func keycap_price(n: int, pick := false) -> int:
-	var base := KEYCAP_GACHA_PRICE * n
-	if n >= KEYCAP_GACHA_BULK:
-		base = KEYCAP_GACHA_BULK_PRICE
+	n = clampi(n, 1, KEYCAP_GACHA_MAX)
+	var base := (n / KEYCAP_GACHA_BULK) * KEYCAP_GACHA_BULK_PRICE
+	base += (n % KEYCAP_GACHA_BULK) * KEYCAP_GACHA_PRICE
 	return int(ceil(base * KEYCAP_PICK_MARKUP)) if pick else base
+
+
+## 지금 골드로 살 수 있는 최대 장수 ("최대" 버튼). 묶음값이 낱장값보다 싸서
+## 값이 장수에 비례하지 않으므로 위에서부터 훑는다. 못 사면 1을 돌려준다.
+func keycap_max_draws(pick := false) -> int:
+	for n in range(KEYCAP_GACHA_MAX, 1, -1):
+		if keycap_price(n, pick) <= gold:
+			return n
+	return 1
 
 
 ## 이번 바퀴에서 비어 있는 글자를 우선으로 하나 고른다. 확정이 아니라

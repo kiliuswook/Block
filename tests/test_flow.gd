@@ -28,18 +28,26 @@ func _ready() -> void:
 		t._on_tile_pressed(GameState.get_cat(other))
 		assert(t._char_view == other, "둘러보기에서 냥이가 안 펼쳐짐")
 		assert(GameState.selected_cat == first, "둘러보기가 자리 냥이를 바꿈")
+	# --- 격자는 디자인 냥이, 아래 줄은 커스텀 슬롯 ---
+	var design := 0
+	for cat in GameState.all_cats():
+		if not GameState.is_custom_cat(str(cat.id)):
+			design += 1
+	assert(t._char_grid.get_child_count() == design, "격자에 디자인 냥이가 안 참")
+	assert(t._char_grid.columns == 5, "격자가 한 줄 5칸이 아님")
 	# --- "+" 타일: 커스텀 슬롯이 하나 더 열리고, 그 슬롯이 본문에 펼쳐진다 ---
 	var slots0: int = GameState.custom_slots
 	if GameState.can_add_custom_slot():
-		var tiles0: int = t._char_strip.get_child_count()
-		var add: Button = t._char_strip.get_child(tiles0 - 1)
+		var slots_n: int = t._char_slots.get_child_count()
+		var add: Button = t._char_slots.get_child(slots_n - 1)
 		add.pressed.emit()
 		await tree.process_frame
 		assert(GameState.custom_slots == slots0 + 1, "커스텀 슬롯이 안 열림")
 		assert(t._char_view == GameState.custom_slot_id(GameState.custom_slots),
 				"새 슬롯이 본문에 안 펼쳐짐")
 		assert(GameState.is_custom_cat(t._char_view), "새 슬롯이 커스텀이 아님")
-		assert(not t._char_right.visible, "커스텀 슬롯에 보상 열이 떠 있음")
+		assert(t._customizer.visible, "커스텀 슬롯에 꾸미기 패널이 안 뜸")
+		assert(t._char_slots.get_child_count() >= slots_n, "슬롯 줄이 안 늘어남")
 		GameState.custom_slots = slots0  # 테스트가 세이브를 늘리지 않게 되돌린다
 		GameState.save_game()
 		t._build_char_tiles()

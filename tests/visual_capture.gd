@@ -33,8 +33,8 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pick.png",
 			func(inst: Node) -> void:
-				inst._gacha_pick_mode = true
-				inst._open_gacha())
+				inst._open_gacha()
+				inst._open_gacha_pick())
 	# 10연차 캡슐이 굴러 나오는 중간 프레임. 뽑기는 진짜 저장을 건드리므로
 	# 지갑·키캡을 스냅샷 떠 두고 캡처가 끝나면 그대로 되돌린다.
 	var gold_before := GameState.gold
@@ -43,7 +43,8 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pull.png",
 			func(inst: Node) -> void:
 				inst._open_gacha()
-				inst._on_gacha(10)
+				inst._gacha_n[0] = GameState.KEYCAP_GACHA_MAX
+				inst._on_gacha(0)
 				inst._pull_t = 1.15
 				inst._gacha_tray.queue_redraw())
 	GameState.gold = gold_before
