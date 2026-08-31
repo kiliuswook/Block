@@ -4,11 +4,10 @@ extends Node
 const SAVE_PATH := "user://save.json"
 const KeyBinds := preload("res://core/scripts/key_binds.gd")
 
-# 2번은 제거된 2P 대전 자리라 비워 둔다 (escape_board.Mode 와 값이 1:1).
-const MODE_STORY := 0
+# 내린 모드(0 스토리 · 2 2P 대전 · 4 젤리 피크닉) 자리는 남은 모드의 번호가
+# 흔들리지 않게 비워 둔다 (escape_board.Mode 와 값이 1:1).
 const MODE_ENDLESS := 1
 const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
-const MODE_PICNIC := 4  # casual jelly picnic: no death, collect snacks on a timer
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — 시작부터 지급되는 첫 캐릭터 (첫 키캡 한 바퀴를 공짜로 갖고 시작)
@@ -52,59 +51,6 @@ const CATS: Array[Dictionary] = [
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 
-## Procedural accessories, drawn by Player.paint_cat on top of the skin.
-## Two independent slots (head / neck), purely cosmetic — no stat effects.
-## kind selects the draw routine in player.gd; col/col2 tint it.
-const ACCESSORIES: Array[Dictionary] = [
-	{"id": "beanie", "name": "ACC_BEANIE", "slot": "head", "kind": "beanie",
-		"price": {"type": "gold", "amount": 200},
-		"col": Color("5a8fd0"), "col2": Color("e8eef6")},
-	{"id": "leaf", "name": "ACC_LEAF", "slot": "head", "kind": "leaf",
-		"price": {"type": "gold", "amount": 250},
-		"col": Color("7ec850"), "col2": Color("5a9a38")},
-	{"id": "ribbon", "name": "ACC_RIBBON", "slot": "head", "kind": "ribbon",
-		"price": {"type": "gold", "amount": 300},
-		"col": Color("e0607a"), "col2": Color("b84760")},
-	{"id": "flower", "name": "ACC_FLOWER", "slot": "head", "kind": "flower",
-		"price": {"type": "gold", "amount": 400},
-		"col": Color("f6cdd8"), "col2": Color("f2b93e")},
-	{"id": "wizard", "name": "ACC_WIZARD", "slot": "head", "kind": "wizard",
-		"price": {"type": "gold", "amount": 1200},
-		"col": Color("6a55b0"), "col2": Color("f2d365")},
-	{"id": "tophat", "name": "ACC_TOPHAT", "slot": "head", "kind": "tophat",
-		"price": {"type": "gold", "amount": 1500},
-		"col": Color("2c2833"), "col2": Color("b8433f")},
-	{"id": "crown", "name": "ACC_CROWN", "slot": "head", "kind": "crown",
-		"price": {"type": "gold", "amount": 3000},
-		"col": Color("f2c94c"), "col2": Color("e05f5f")},
-	{"id": "halo", "name": "ACC_HALO", "slot": "head", "kind": "halo",
-		"price": {"type": "gold", "amount": 5000},
-		"col": Color("fff3d0"), "col2": Color("f7d354")},
-	{"id": "bell", "name": "ACC_BELL", "slot": "neck", "kind": "bell",
-		"price": {"type": "gold", "amount": 200},
-		"col": Color("b8433f"), "col2": Color("f2c94c")},
-	{"id": "scarf", "name": "ACC_SCARF", "slot": "neck", "kind": "scarf",
-		"price": {"type": "gold", "amount": 300},
-		"col": Color("c94f43"), "col2": Color("a83d33")},
-	{"id": "bowtie", "name": "ACC_BOWTIE", "slot": "neck", "kind": "bowtie",
-		"price": {"type": "gold", "amount": 400},
-		"col": Color("4a6fb8"), "col2": Color("35507f")},
-	{"id": "bandana", "name": "ACC_BANDANA", "slot": "neck", "kind": "bandana",
-		"price": {"type": "gold", "amount": 800},
-		"col": Color("d08a3c"), "col2": Color("f4e3c8")},
-	{"id": "goldchain", "name": "ACC_GOLDCHAIN", "slot": "neck", "kind": "goldchain",
-		"price": {"type": "gold", "amount": 3000},
-		"col": Color("f2c94c"), "col2": Color("c9982a")},
-	{"id": "gemchain", "name": "ACC_GEMCHAIN", "slot": "neck", "kind": "gemchain",
-		"price": {"type": "gold", "amount": 4000},
-		"col": Color("d8dee8"), "col2": Color("6fd0e8")},
-]
-
-## One-run boosts for endless mode, bought before a run and consumed on start.
-const BOOSTS: Array[Dictionary] = [
-	{"id": "warmup", "name": "BOOST_WARMUP", "desc": "BOOST_WARMUP_DESC", "price": 50},
-]
-
 ## 캐릭터 등급 1~4 (0 = 잠김). 등급 하나 = 그 캐릭터의 키캡 A~Z 한 바퀴.
 const KEYCAP_GRADE_MAX := 4
 ## 키캡 가챠 — 상점에서 골드로 뽑는다. 10연차는 한 장 값을 깎아 준다.
@@ -129,8 +75,6 @@ const MYCAT_SLOT_MAX := 3
 var mode: int = MODE_CLASSIC
 var best_height: int = 0
 var classic_best: int = 0  # classic mode all-time high score
-var picnic_best: int = 0  # jelly picnic all-time high score
-var story_stage: int = 0  # highest story stage cleared
 var games_played: int = 0
 ## 계정 레벨 — 판을 마칠 때마다 쌓이는 누적 경험치와, 보상까지 지급이 끝난 레벨.
 ## 커브·보상·경험치 계산은 전부 Account(autoload)가 소유한다.
@@ -147,13 +91,8 @@ var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on fir
 ## (스팀 페르소나)이 생길 때 그쪽으로 갈아탄다 — adopt_platform_name() 참고.
 var nick_custom: bool = false
 var player_id: String = ""  # stable random id identifying this save on boards
-var weekly: Dictionary = {}  # this week's bests: {"week": id, "story": n, ...}
+var weekly: Dictionary = {}  # this week's bests: {"week": id, "endless": n, ...}
 var weekly_claimed: int = 0  # last finished week whose prize was checked
-var acc_owned: Array = []  # ids of purchased accessories
-var acc_head: String = ""  # equipped accessory per slot ("" = none)
-var acc_neck: String = ""
-var pending_boosts: Array = []  # boost ids paid for, consumed by the next endless run
-var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
 ## 선택 뽑기에 걸어 둔 냥이 id들 (최대 KEYCAP_PICK_SIZE) — 뽑기 화면에서 유지된다.
 var gacha_pick: Array = []
@@ -266,15 +205,13 @@ func reset() -> void:
 	score = 0
 
 
-## Full progress wipe (설정 > 게임 초기화): records, story progress, wallet,
-## unlocked cats, accessories, keycaps, custom cat, weekly bests.
+## Full progress wipe (설정 > 게임 초기화): records, wallet, unlocked cats,
+## keycaps, custom cat, weekly bests.
 ## Keeps the volume settings, language, nickname and player_id (same identity).
 func reset_all() -> void:
 	score = 0
 	best_height = 0
 	classic_best = 0
-	picnic_best = 0
-	story_stage = 0
 	games_played = 0
 	xp = 0
 	account_level = 1
@@ -285,42 +222,11 @@ func reset_all() -> void:
 	selected_cat = "cream"
 	weekly = {}
 	weekly_claimed = 0
-	acc_owned = []
-	acc_head = ""
-	acc_neck = ""
-	pending_boosts = []
-	skipped_stages = []
 	keycaps = {}
 	cat_custom = {}
 	custom_slots = 1
 	feature_cat = ""
 	last_daily = ""
-	save_game()
-
-
-## Records a cleared story stage (progress only ever moves forward).
-## A first-time clear pays a reward: 20~50 gold scaling with the stage.
-## Announced via EventBus.story_reward.
-func story_clear(stage_num: int) -> void:
-	# Weekly board counts every clear — replayed stages included.
-	var weekly_up := record_weekly("story", stage_num)
-	if stage_num <= story_stage:
-		if weekly_up:
-			Ranks.submit("story", story_stage)
-		return
-	story_stage = stage_num
-	var reward_gold := 20 + stage_num / 4
-	add_currency(reward_gold)  # save_game included
-	EventBus.story_reward.emit(reward_gold)
-	Ranks.submit("story", story_stage)
-
-
-## Skip ticket: marks the stage as passed without paying the first-clear
-## reward. The stage is remembered as skipped (shown differently in UI).
-func story_skip(stage_num: int) -> void:
-	if stage_num not in skipped_stages:
-		skipped_stages.append(stage_num)
-	story_stage = maxi(story_stage, stage_num)
 	save_game()
 
 
@@ -331,16 +237,6 @@ func record_classic(s: int) -> bool:
 	classic_best = s
 	save_game()
 	Ranks.submit("classic", classic_best)
-	return true
-
-
-## Records a finished picnic run. Returns true on a new all-time high score.
-func record_picnic(s: int) -> bool:
-	if s <= picnic_best:
-		return false
-	picnic_best = s
-	save_game()
-	Ranks.submit("picnic", picnic_best)
 	return true
 
 
@@ -360,7 +256,7 @@ func record_height(h: int) -> bool:
 func _roll_weekly() -> void:
 	var wk: int = Ranks.week_id()
 	if int(weekly.get("week", -1)) != wk:
-		weekly = {"week": wk, "story": 0, "endless": 0, "classic": 0, "picnic": 0}
+		weekly = {"week": wk, "endless": 0, "classic": 0}
 
 
 func weekly_value(mode_key: String) -> int:
@@ -512,7 +408,8 @@ func draw_keycaps(n: int, pick: Array = []) -> Array:
 	n = mini(clampi(n, 1, KEYCAP_GACHA_MAX), gacha_capacity(pick))
 	if n <= 0:
 		return []
-	if not spend_gold(keycap_price(n, not pick.is_empty())):
+	var paid := keycap_price(n, not pick.is_empty())
+	if not spend_gold(paid):
 		return []
 	var out: Array = []
 	for i in n:
@@ -528,6 +425,10 @@ func draw_keycaps(n: int, pick: Array = []) -> Array:
 		add_keycap(cat_id, letter, false)
 		out.append({"cat": cat_id, "letter": letter, "fresh": true,
 				"grade_up": cat_grade(cat_id) > before})
+	# 풀이 도중에 비면 부른 장수보다 적게 나온다 — 못 받은 몫은 돌려준다.
+	if out.size() < n:
+		var due := keycap_price(out.size(), not pick.is_empty()) if not out.is_empty() else 0
+		gold += paid - due
 	gacha_drawn += out.size()
 	save_game()
 	Achv.check()  # 키캡·등급·누적 뽑기 업적
@@ -554,11 +455,18 @@ func gacha_pool(pick: Array = []) -> Array[String]:
 
 
 ## 이 냥이에게서 앞으로 더 뽑을 수 있는 키캡 수 (만렙까지 남은 글자 총합).
+## 글자마다 실제 부족분을 센다 — 중복을 허용하던 구버전 세이브는 어떤 글자가
+## 이번 바퀴보다 앞서 있을 수 있어서, 남은 바퀴 × 26으로 어림하면 실제보다
+## 많이 나온다 (그만큼 값을 받고 못 내주게 된다).
 func keycaps_left(id: String) -> int:
-	var grade := cat_grade(id)
-	if grade >= KEYCAP_GRADE_MAX:
+	if cat_grade(id) >= KEYCAP_GRADE_MAX:
 		return 0
-	return keycaps_to_next(id) + 26 * (KEYCAP_GRADE_MAX - grade - 1)
+	var d := cat_keycaps(id)
+	var need := KEYCAP_GRADE_MAX - free_sets(id)  # 만렙에 필요한 글자당 장수
+	var left := 0
+	for i in 26:
+		left += maxi(0, need - int(d.get(char(65 + i), 0)))
+	return left
 
 
 ## 이번 뽑기 풀에 남아 있는 키캡 총량 — 중복이 없으니 이보다 많이는 못 뽑는다.
@@ -610,6 +518,8 @@ func keycap_price(n: int, pick := false) -> int:
 ## 값이 장수에 비례하지 않으므로 위에서부터 훑는다. 남은 키캡이 그보다 적으면
 ## 거기서 멈춘다 (중복이 없으니 그 이상은 뽑히지 않는다). 못 사면 1.
 func keycap_max_draws(pick := false) -> int:
+	if pick and gacha_pick.is_empty():
+		return 1  # 걸어 둔 냥이가 없으면 선택 뽑기는 돌지 않는다
 	var cap := mini(KEYCAP_GACHA_MAX,
 			gacha_capacity(gacha_pick if pick else []))
 	for n in range(cap, 1, -1):
@@ -630,86 +540,6 @@ func _roll_letter(cat_id: String) -> String:
 	if missing.is_empty():
 		return ""
 	return missing[randi() % missing.size()]
-
-
-# --- Accessories --------------------------------------------------------------
-
-
-func get_acc(id: String) -> Dictionary:
-	for acc in ACCESSORIES:
-		if acc.id == id:
-			return acc
-	return {}
-
-
-func try_buy_acc(id: String) -> bool:
-	if id in acc_owned:
-		return false
-	var price: Dictionary = get_acc(id).get("price", {})
-	if not spend_gold(int(price.amount)):
-		return false
-	acc_owned.append(id)
-	save_game()
-	return true
-
-
-## Equips an owned accessory into its slot; equipping the worn one takes it off.
-func toggle_acc(id: String) -> void:
-	if id not in acc_owned:
-		return
-	var slot := str(get_acc(id).get("slot", "head"))
-	if slot == "head":
-		acc_head = "" if acc_head == id else id
-	else:
-		acc_neck = "" if acc_neck == id else id
-	save_game()
-
-
-## Accessory defs the given cat should wear — only the selected cat dresses up.
-func equipped_accs(cat_id: String) -> Array:
-	if cat_id != selected_cat:
-		return []
-	var accs: Array = []
-	for id in [acc_head, acc_neck]:
-		if id != "":
-			var acc := get_acc(id)
-			if not acc.is_empty():
-				accs.append(acc)
-	return accs
-
-
-# --- Boosts (endless, one run) -------------------------------------------------
-
-
-func get_boost(id: String) -> Dictionary:
-	for b in BOOSTS:
-		if b.id == id:
-			return b
-	return {}
-
-
-## Buys a boost for the next endless run, or refunds it when already pending.
-## Returns true if the toggle went through (false = not enough gold).
-func toggle_boost(id: String) -> bool:
-	var price := int(get_boost(id).get("price", 0))
-	if id in pending_boosts:
-		pending_boosts.erase(id)
-		add_currency(price)  # save included
-		return true
-	if not spend_gold(price):
-		return false
-	pending_boosts.append(id)
-	save_game()
-	return true
-
-
-## Hands the paid boosts to the board starting an endless run and clears them.
-func take_boosts() -> Array:
-	var taken := pending_boosts
-	pending_boosts = []
-	if not taken.is_empty():
-		save_game()
-	return taken
 
 
 # --- 캐릭터 커스터마이징 ----------------------------------------------------------
@@ -920,7 +750,6 @@ func cat_stats(id: String) -> Dictionary:
 
 
 ## Skin dictionary consumed by Player.paint_cat. The selected cat also
-## carries its equipped accessory defs under "acc".
 ## tier_override >= 0 이면 그 파츠 단계로 그린다 (보상 열의 "이 등급에서 받는 모습").
 func cat_skin(id: String, tier_override := -1) -> Dictionary:
 	var cat := get_cat(id)
@@ -935,9 +764,6 @@ func cat_skin(id: String, tier_override := -1) -> Dictionary:
 		skin["sprite"] = char_id
 		skin["tier"] = tier
 		skin["tints"] = CustomCat.sprite_tints(sel)
-	var accs: Array = equipped_accs(id)
-	if not accs.is_empty():
-		skin["acc"] = accs
 	return skin
 
 
@@ -989,8 +815,6 @@ func save_game() -> void:
 		"score": score,
 		"best_height": best_height,
 		"classic_best": classic_best,
-		"picnic_best": picnic_best,
-		"story_stage": story_stage,
 		"games_played": games_played,
 		"xp": xp,
 		"account_level": account_level,
@@ -1005,11 +829,6 @@ func save_game() -> void:
 		"player_id": player_id,
 		"weekly": weekly,
 		"weekly_claimed": weekly_claimed,
-		"acc_owned": acc_owned,
-		"acc_head": acc_head,
-		"acc_neck": acc_neck,
-		"pending_boosts": pending_boosts,
-		"skipped_stages": skipped_stages,
 		"keycaps": keycaps,
 		"gacha_pick": gacha_pick,
 		"cat_custom": cat_custom,
@@ -1041,8 +860,6 @@ func load_game() -> void:
 		score = int(data.get("score", 0))
 		best_height = int(data.get("best_height", 0))
 		classic_best = int(data.get("classic_best", 0))
-		picnic_best = int(data.get("picnic_best", 0))
-		story_stage = int(data.get("story_stage", 0))
 		games_played = int(data.get("games_played", 0))
 		xp = int(data.get("xp", 0))
 		account_level = maxi(int(data.get("account_level", 1)), 1)
@@ -1063,23 +880,6 @@ func load_game() -> void:
 			for k in wkly:
 				weekly[str(k)] = int(wkly[k])
 		weekly_claimed = int(data.get("weekly_claimed", 0))
-		var owned: Variant = data.get("acc_owned", [])
-		if owned is Array:
-			acc_owned = owned
-		acc_head = str(data.get("acc_head", ""))
-		acc_neck = str(data.get("acc_neck", ""))
-		if acc_head not in acc_owned:
-			acc_head = ""
-		if acc_neck not in acc_owned:
-			acc_neck = ""
-		var boosts: Variant = data.get("pending_boosts", [])
-		if boosts is Array:
-			pending_boosts = boosts
-		var skipped: Variant = data.get("skipped_stages", [])
-		if skipped is Array:
-			skipped_stages = []
-			for s in skipped:
-				skipped_stages.append(int(s))
 		var caps: Variant = data.get("keycaps", {})
 		if caps is Dictionary:
 			keycaps = {}

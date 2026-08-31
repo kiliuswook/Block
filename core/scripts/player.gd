@@ -287,12 +287,8 @@ static func paint_sparkle(ci: CanvasItem, at: Vector2, r: float, col: Color) -> 
 
 
 ## Draws the cube cat onto any canvas item (player, title screen, ...).
-## skin carries the part set: {"body", "ear", "ink", "acc", "parts"}.
+## skin carries the part set: {"body", "ear", "ink", "parts"}.
 static func paint_cat(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		cat_alive := true, mouth_open := false, skin: Dictionary = {}) -> void:
 	CatArt.paint(ci, center, s, look, cat_alive, mouth_open, skin)
 
-
-## Draws one procedural accessory (see GameState.ACCESSORIES) on the cube cat.
-static func paint_acc(ci: CanvasItem, center: Vector2, s: float, acc: Dictionary) -> void:
-	CatArt.paint_acc(ci, center, s, acc)

@@ -7,14 +7,8 @@ signal game_over
 signal score_changed(new_score: int)
 signal lines_changed(total_lines: int)
 signal level_changed(new_level: int)
-signal player_escaped(new_level: int)
 signal height_changed(new_height: int)
 signal next_piece_changed(piece_type: String)
-signal story_stage_started(stage_num: int)
-signal story_progress_changed(text: String)
-signal story_doors_opened
-signal story_completed
-signal story_reward(gold: int)  # first-clear payout for a story stage
 signal keycap_collected(cat_id: String, letter: String, count: int)  # 캐릭터별 키캡 적립
 # Classic (arcade B-type): a level's board opens, its line goal ticks, and the
 # shutter finishes paying out the empty-row bonus.

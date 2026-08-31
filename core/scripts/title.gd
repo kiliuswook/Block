@@ -57,15 +57,11 @@ const CAPSULE_FALL := 0.34
 const CAPSULE_HOLD := 0.16
 const CAPSULE_OPEN := 0.26
 
-@onready var escape_btn: Button = $UI/EscapeBtn
 @onready var endless_btn: Button = $UI/EndlessBtn
 @onready var classic_btn: Button = $UI/ClassicBtn
-@onready var picnic_btn: Button = $UI/PicnicBtn
 # 설명 라벨은 모드 오버레이 안으로 옮겨지므로 참조를 미리 잡아 둔다.
-@onready var escape_desc: Label = $UI/EscapeDesc
 @onready var endless_desc: Label = $UI/EndlessDesc
 @onready var classic_desc: Label = $UI/ClassicDesc
-@onready var picnic_desc: Label = $UI/PicnicDesc
 
 # 레이아웃은 뷰포트 크기 기준으로 계산 — 모바일(세로 1080×1920)도 같은 코드를 쓴다.
 var vw := 1920.0
@@ -275,14 +271,12 @@ func _build_menu() -> void:
 
 
 ## 씬에 있던 모드 버튼들을 흰 패널 오버레이 안으로 옮기고 컨셉 톤으로 다시 칠한다.
-## 플레이 가능한 모드는 스테이지 모드 · 무한의 계단 둘뿐 — 나머지 버튼은 숨긴다.
+## 플레이 가능한 모드는 스테이지 모드 · 무한의 계단 둘뿐이다.
 func _build_mode_select() -> void:
 	_modes = _make_overlay(tr("MENU_MODE_SELECT"), func() -> void: _modes.visible = false,
 			Vector2(minf(vw - 80.0, 900.0), minf(vh - 140.0, 460.0)))
 	var panel: Control = _modes.get_meta("body")
 	var pw: float = panel.size.x
-	for n: Control in [escape_btn, escape_desc, picnic_btn, picnic_desc]:
-		n.visible = false
 	# 버튼 라벨 키를 코드에 명시적으로 들고 간다 — 씬의 text를 번호까지 붙여
 	# 덮어쓰기 때문에, 키가 없으면 자동 번역이 끊긴다. (/i18n 철칙 1)
 	var entries := [

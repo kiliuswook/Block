@@ -36,7 +36,6 @@ const HUD_CAPTION_H := 26.0
 @onready var lines_label: Label = $UI/LinesLabel
 @onready var goal_label: Label = $UI/GoalLabel
 @onready var pause_label: Label = $UI/PauseLabel
-@onready var escape_label: Label = $UI/EscapeLabel
 @onready var death_popup: Control = $PopupLayer/DeathPopup
 @onready var help_label: Label = $UI/HelpLabel
 
@@ -44,15 +43,6 @@ var height := 0
 var record_broken := false
 var height_tween: Tween
 var record_tween: Tween
-# Story mode: full-screen stage intro / completion overlay (built in code).
-var story_intro: Control
-var intro_mode := "stage"  # "stage" resumes play on dismiss, "complete" → title
-var intro_clear: Label
-var intro_stage: Label
-var intro_name: Label
-var intro_hint: Label
-var intro_prompt: Label
-var stage_header := ""
 var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
 # Gold already paid out this run.
 var gold_awarded := 0
@@ -72,23 +62,20 @@ func _ready() -> void:
 	EventBus.height_changed.connect(_on_height_changed)
 	EventBus.game_started.connect(_on_game_started)
 	EventBus.game_over.connect(_on_game_over)
-	EventBus.player_escaped.connect(_on_escaped)
 	death_popup.restart_pressed.connect(_restart)
 	death_popup.title_pressed.connect(_to_title)
-	EventBus.story_reward.connect(_on_story_reward)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
-	var picnic := GameState.mode == GameState.MODE_PICNIC
-	level_title.visible = not endless and not picnic and not classic
-	level_label.visible = not endless and not picnic and not classic
+	level_title.visible = not endless and not classic
+	level_label.visible = not endless and not classic
 	score_title.visible = true
 	score_label.visible = true
-	lines_title.visible = not picnic
-	lines_label.visible = not picnic
-	height_title.visible = endless or picnic or classic
-	height_label.visible = endless or picnic or classic
-	best_title.visible = endless or picnic or classic
-	best_label.visible = endless or picnic or classic
+	lines_title.visible = true
+	lines_label.visible = true
+	height_title.visible = true
+	height_label.visible = true
+	best_title.visible = true
+	best_label.visible = true
 	if classic:
 		# Arcade cabinet HUD: LEVEL is the board you're on, TOP is the high score,
 		# and LINES is a rack of tiles rather than a number.
@@ -102,21 +89,9 @@ func _ready() -> void:
 		EventBus.classic_level_started.connect(_on_classic_level_started)
 		EventBus.classic_level_progress.connect(_on_classic_level_progress)
 		EventBus.classic_level_cleared.connect(_on_classic_level_cleared)
-	if picnic:
-		# Casual mode: the big number slot becomes the countdown timer.
-		height_title.text = tr("HUD_TIME_LEFT")
-		best_title.text = tr("HUD_BEST_SCORE")
-		goal_label.text = tr("TUT_PICNIC")
 	if endless:
 		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
 		goal_label.visible = false
-	if GameState.mode == GameState.MODE_STORY:
-		EventBus.story_stage_started.connect(_on_story_stage)
-		EventBus.story_progress_changed.connect(_on_story_progress)
-		EventBus.story_doors_opened.connect(_on_story_doors_opened)
-		EventBus.story_completed.connect(_on_story_completed)
-		_build_story_intro()
-		_layout_story_goal_label()
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
 	if get_viewport_rect().size.y > get_viewport_rect().size.x:
@@ -146,13 +121,10 @@ func _on_game_started() -> void:
 	record_label.visible = false
 	if record_tween:
 		record_tween.kill()
-	match GameState.mode:
-		GameState.MODE_PICNIC:
-			best_label.text = tr("HUD_POINTS").format({"n": GameState.picnic_best})
-		GameState.MODE_CLASSIC:
-			best_label.text = tr("HUD_POINTS").format({"n": GameState.classic_best})
-		_:
-			best_label.text = tr("HUD_FLOOR").format({"n": GameState.best_height})
+	if GameState.mode == GameState.MODE_CLASSIC:
+		best_label.text = tr("HUD_POINTS").format({"n": GameState.classic_best})
+	else:
+		best_label.text = tr("HUD_FLOOR").format({"n": GameState.best_height})
 	best_label.modulate = Color.WHITE
 	height_label.modulate = Color.WHITE
 	height_label.scale = Vector2.ONE
@@ -269,7 +241,6 @@ func _on_game_over() -> void:
 	var stats := ""
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
-	var picnic := GameState.mode == GameState.MODE_PICNIC
 	if endless:
 		var weekly_up := GameState.record_weekly("endless", height)
 		was_record = GameState.record_height(height)
@@ -288,14 +259,6 @@ func _on_game_over() -> void:
 			Replays.save_replay("classic", board.rec_export())
 		if weekly_up and not was_record:
 			Ranks.submit("classic", GameState.classic_best)
-	elif picnic:
-		var weekly_up := GameState.record_weekly("picnic", GameState.score)
-		was_record = GameState.record_picnic(GameState.score)
-		stats = tr("HUD_STATS_PICNIC").format({"score": GameState.score})
-		if was_record:
-			Replays.save_replay("picnic", board.rec_export())
-		if weekly_up and not was_record:
-			Ranks.submit("picnic", GameState.picnic_best)
 	else:
 		stats = "STAGE %d      SCORE %d" % [board.level, GameState.score]
 	# 보상은 지금 바로 세이브에 들어가지만, HUD 표시는 결과창의 연출이 맡는다 —
@@ -320,13 +283,11 @@ func _on_game_over() -> void:
 		Achv.unlock(Achv.FIRST_ESCAPE)
 	Achv.check()
 	# Let the death sink in for a beat before the popup slides up.
-	# Picnic ends on the clock, not in defeat: a cheerier title.
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void:
 		if not board.playing:
-			death_popup.open(stats, was_record, earned,
-					tr("POP_PICNIC_END") if picnic else "", xp_line, reward))
+			death_popup.open(stats, was_record, earned, "", xp_line, reward))
 
 
 ## 유저 정보 HUD — 타이틀과 같은 스크립트·같은 자리(좌상단).
@@ -374,7 +335,7 @@ func _tone_hud() -> void:
 	_ink_label(help_label, Color(UiKit.INK, 0.72))
 	help_label.add_theme_font_size_override("font_size", 19)
 	# 화면 한가운데 배너는 우물(어두움) 위에도 뜨므로 잉크 외곽선을 유지한다.
-	for l: Label in [milestone_label, escape_label, pause_label]:
+	for l: Label in [milestone_label, pause_label]:
 		l.add_theme_color_override("font_outline_color", UiKit.INK)
 	milestone_label.add_theme_color_override("font_color", UiKit.CREAM)
 	pause_label.add_theme_color_override("font_color", UiKit.CREAM)
@@ -389,7 +350,7 @@ func _ink_label(l: Label, col: Color) -> void:
 
 
 ## 오른쪽 계기판 열: 보이는 줄만 위에서부터 차곡차곡 쌓는다. 모드마다 켜지는 줄이
-## 다른데(무한=층 · 스테이지=LEVEL · 피크닉=남은 시간) 씬의 y를 그대로 쓰면 서로
+## 다른데(무한=층 · 스테이지=LEVEL) 씬의 y를 그대로 쓰면 서로
 ## 겹치므로, 순서·글자 크기·간격을 여기서 한 번에 정해 두 모드를 같은 모양으로 만든다.
 ## 순서: NEXT → 큰 숫자 슬롯 → BEST/TOP → SCORE → (LEVEL) → LINES(+타일 랙) → 기록.
 ## 세로 화면(모바일)은 계기판이 화면 곳곳에 흩어져 있어 건드리지 않는다 (PC 우선 기간).
@@ -554,42 +515,10 @@ func _award_run_xp(record: bool) -> Dictionary:
 				{"level": int(levels[-1]), "gold": int(got.get("gold", 0))})
 	return {"xp": earn_xp, "levels": levels, "line": line}
 
-
-func _process(_delta: float) -> void:
-	if GameState.mode == GameState.MODE_PICNIC:
-		var t := ceili(board.picnic_time)
-		height_label.text = "%d:%02d" % [t / 60, t % 60]
-		height_label.modulate = Color(1.0, 0.5, 0.45) if t <= 10 else Color.WHITE
-
-
-## Floating banner for a first-clear story payout.
-func _on_story_reward(reward_gold: int) -> void:
-	var text := tr("HUD_STORY_REWARD").format({"gold": reward_gold})
-	var vp := get_viewport_rect().size
-	var pop := Label.new()
-	pop.text = text
-	pop.position = Vector2(0.0, vp.y * 0.30)
-	pop.size = Vector2(vp.x, 50.0)
-	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pop.add_theme_font_size_override("font_size", 34)
-	pop.add_theme_color_override("font_color", GOLD)
-	pop.add_theme_color_override("font_outline_color", UiKit.INK)
-	pop.add_theme_constant_override("outline_size", 8)
-	$UI.add_child(pop)
-	Sfx.play("gold")
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(pop, "position:y", pop.position.y - 70.0, 1.4) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(pop, "modulate:a", 0.0, 0.6).set_delay(0.9)
-	tw.chain().tween_callback(pop.queue_free)
-
-
 func _restart() -> void:
 	death_popup.close()
 	pause_label.visible = false
 	settings_panel.visible = false  # bypass close(): start_game resets pause
-	escape_label.visible = false
 	milestone_label.visible = false
 	board.start_game()
 
@@ -689,147 +618,12 @@ func _on_classic_level_cleared(_level: int, bonus: int) -> void:
 	_screen_flash(0.25)
 
 
-func _on_escaped(new_level: int) -> void:
-	if story_intro:
-		# Story: the next stage's intro is already up — stamp the clear line on it.
-		intro_clear.text = tr("HUD_STAGE_CLEAR").format({"n": new_level - 1})
-		_screen_flash(0.2)
-		return
-	escape_label.text = "ESCAPE!\nLEVEL %d" % new_level
-	escape_label.visible = true
-	var tw := create_tween()
-	tw.tween_interval(1.2)
-	tw.tween_callback(func() -> void: escape_label.visible = false)
-
-
-# --- Story mode UI --------------------------------------------------------------
-
-
-## Story HUD goal readout: portrait (mobile) screens tuck it top-center;
-## landscape keeps the scene's side-panel placement.
-func _layout_story_goal_label() -> void:
-	var vp := get_viewport_rect().size
-	goal_label.visible = true
-	if vp.y > vp.x:
-		goal_label.position = Vector2(240.0, 20.0)
-		goal_label.size = Vector2(vp.x - 480.0, 170.0)
-		goal_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		goal_label.add_theme_font_size_override("font_size", 24)
-		goal_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
-		goal_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-		goal_label.add_theme_constant_override("outline_size", 6)
-
-
-## Full-screen stage intro / story-complete overlay, viewport-relative so the
-## same code serves the landscape and portrait layouts.
-func _build_story_intro() -> void:
-	var vp := get_viewport_rect().size
-	story_intro = Control.new()
-	story_intro.set_anchors_preset(Control.PRESET_FULL_RECT)
-	story_intro.visible = false
-	$UI.add_child(story_intro)
-	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.68)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	story_intro.add_child(dim)
-	intro_clear = _intro_label(vp, vp.y * 0.17, 40, GOLD)
-	intro_stage = _intro_label(vp, vp.y * 0.24, 92, CREAM)
-	intro_name = _intro_label(vp, vp.y * 0.36, 46, Color.WHITE)
-	intro_hint = _intro_label(vp, vp.y * 0.46, 27, Color(1, 1, 1, 0.9))
-	# Portrait keeps the prompt above the touch-control zone.
-	var prompt_y := vp.y * (0.62 if vp.y > vp.x else 0.8)
-	intro_prompt = _intro_label(vp, prompt_y, 24, Color(CREAM, 0.8))
-
-
-func _intro_label(vp: Vector2, y: float, font_size: int, col: Color) -> Label:
-	var l := Label.new()
-	l.position = Vector2(40.0, y)
-	l.size = Vector2(vp.x - 80.0, 60.0)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", col)
-	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	l.add_theme_constant_override("outline_size", 10)
-	story_intro.add_child(l)
-	return l
-
-
-func _on_story_stage(stage_num: int) -> void:
-	var stage := StoryStages.get_stage(stage_num)
-	stage_header = "STAGE %d — %s" % [stage_num, stage.name]
-	goal_label.text = stage_header
-	intro_mode = "stage"
-	intro_clear.text = ""
-	intro_stage.text = "STAGE %d" % stage_num
-	intro_name.text = str(stage.name)
-	var hint := str(stage.get("hint", ""))
-	if $TouchControls.visible:
-		hint = str(stage.get("hint_touch", hint))
-	intro_hint.text = hint
-	intro_prompt.text = tr("HUD_TAP_TO_START")
-	story_intro.visible = true
-	board.is_paused = true
-
-
-func _hide_story_intro() -> void:
-	if story_intro == null or not story_intro.visible:
-		return
-	story_intro.visible = false
-	if intro_mode == "complete":
-		_to_title()
-	else:
-		board.is_paused = false
-
-
-func _on_story_progress(text: String) -> void:
-	goal_label.text = "%s\n%s" % [stage_header, text]
-
-
-func _on_story_doors_opened() -> void:
-	milestone_label.text = tr("HUD_EXIT_OPEN")
-	_pop_milestone()
-	_screen_flash(0.18)
-
-
-func _on_story_completed() -> void:
-	Sfx.play("record")
-	var earned: String = _award_run_rewards().get("line", "")
-	var xp_line: String = _award_run_xp(true).get("line", "")
-	intro_mode = "complete"
-	intro_clear.text = tr("STORY_ALL_CLEAR")
-	intro_stage.text = tr("STORY_COMPLETE")
-	intro_name.text = tr("STORY_COMPLETE_DESC")
-	intro_hint.text = "SCORE %d" % GameState.score \
-			+ ("\n%s" % earned if earned != "" else "")
-	intro_prompt.text = tr("STORY_TAP_TO_TITLE")
-	story_intro.visible = true
-	_screen_flash(0.3)
-
-
-## Any key / click / touch dismisses the story overlay (Esc keeps its
-## return-to-title role and passes through).
-func _input(event: InputEvent) -> void:
-	if story_intro == null or not story_intro.visible:
-		return
-	var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) \
-			or (event is InputEventMouseButton and event.pressed) \
-			or (event is InputEventScreenTouch and event.pressed)
-	if not pressed:
-		return
-	if event is InputEventKey and event.physical_keycode == KEY_ESCAPE:
-		return
-	_hide_story_intro()
-	get_viewport().set_input_as_handled()
-
-
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("to_title"):
 		_to_title()
 	elif event.is_action_pressed("restart"):
 		_restart()
-	elif event.is_action_pressed("pause") \
-			and (story_intro == null or not story_intro.visible) \
-			and board.playing:
+	elif event.is_action_pressed("pause") and board.playing:
 		if board.is_paused:
 			settings_panel.close()  # closed signal resumes the board
 		else:

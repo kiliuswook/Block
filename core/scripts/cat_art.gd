@@ -129,7 +129,7 @@ static func _sid(p: Dictionary, key: String, def: String) -> String:
 
 
 ## 큐브 고양이를 아무 CanvasItem에나 그린다.
-## skin: {"body","ear","ink","acc","parts"} — parts가 실제 외형을 결정한다.
+## skin: {"body","ear","ink","parts"} — parts가 실제 외형을 결정한다.
 static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 		alive := true, mouth_open := false, skin: Dictionary = {}) -> void:
 	var p := parts_of(skin)
@@ -155,8 +155,6 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			return
 		if bool(skin.get("gray", false)):
 			return
-		for acc in skin.get("acc", []):
-			paint_acc(ci, center, s, acc)
 		return
 	if sprite != "" and CatSprite.paint(ci, center, s, sprite,
 			int(skin.get("tier", CatSprite.TIER_MAX)), not gray,
@@ -166,8 +164,6 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			return
 		if bool(skin.get("gray", false)):
 			return
-		for acc in skin.get("acc", []):
-			paint_acc(ci, center, s, acc)
 		return
 
 	# Layer 6 — 등 소품 (망토·날개).
@@ -217,8 +213,6 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	_paint_face_prop(ci, center, s, _sid(p, "face", "none"), line, ink)
 	# Layer 85 — 머리 소품 (모자·과일·리본).
 	_paint_head_prop(ci, center, s, _sid(p, "head", "none"), line, ink)
-	for acc in skin.get("acc", []):
-		paint_acc(ci, center, s, acc)
 
 
 static func _paint_dead_face(ci: CanvasItem, center: Vector2, s: float,
@@ -1399,18 +1393,3 @@ static func _paint_back(ci: CanvasItem, center: Vector2, s: float, style: String
 			_poly(ci, PackedVector2Array([
 				center + Vector2(-s * 0.56, s * 0.26), center + Vector2(-s * 0.42, s * 0.26),
 				center + Vector2(-s * 0.49, s * 0.50)]), Color("f2a03a"), 0.0)
-
-
-# --- 상점 액세서리 (구버전 ACCESSORIES 호환) --------------------------------------
-
-
-## GameState.ACCESSORIES 한 개를 그린다 — 소품 파츠와 같은 그림을 재사용한다.
-static func paint_acc(ci: CanvasItem, center: Vector2, s: float, acc: Dictionary) -> void:
-	var line := _w(s)
-	match str(acc.get("kind", "")):
-		"beanie", "leaf", "ribbon", "flower", "wizard", "tophat", "crown", "halo":
-			_paint_head_prop(ci, center, s, str(acc.kind), line, INK)
-		"bell", "scarf", "bowtie", "bandana":
-			_paint_neck(ci, center, s, str(acc.kind), line, INK)
-		"goldchain", "gemchain":
-			_paint_neck(ci, center, s, "chain", line, INK)

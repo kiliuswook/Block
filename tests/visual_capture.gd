@@ -89,8 +89,7 @@ func _ready() -> void:
 				inst._customizer._pick("eyes", 3))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
-				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "door": 0,
-					"dl": false, "dr": false, "level": 1,
+				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "level": 1,
 					"frames": PackedInt32Array([
 						320, 1216, 2, 0, 3, 14, 1, 1500,
 						330, 1180, 2, 0, 3, 15, 1, 1498]),
@@ -100,19 +99,6 @@ func _ready() -> void:
 				inst._replay_viewer.open(rep, "테스트냥  ·  42층")
 				inst._replay_viewer.playing_back = false)
 	await _capture("res://steam/ui/title_steam.tscn", OUT + "/title_steam.png")
-	var saved_story: int = GameState.story_stage
-	GameState.mode = GameState.MODE_STORY
-	GameState.story_stage = 0
-	await _capture("res://core/scenes/main.tscn", OUT + "/story_intro.png")
-	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage1.png",
-			func(inst: Node) -> void: inst._hide_story_intro())
-	GameState.story_stage = 1
-	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage2.png",
-			func(inst: Node) -> void: inst._hide_story_intro())
-	GameState.story_stage = 5
-	await _capture("res://core/scenes/main.tscn", OUT + "/story_stage6.png",
-			func(inst: Node) -> void: inst._hide_story_intro())
-	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic.png")
 	# Level structure: a deep board with its garbage floor and a half-filled
@@ -139,8 +125,6 @@ func _ready() -> void:
 				b._classic_start_shutter()
 				for i in range(12):
 					b._update_shutter(1.0))
-	GameState.mode = GameState.MODE_PICNIC
-	await _capture("res://core/scenes/main.tscn", OUT + "/picnic.png")
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
@@ -160,14 +144,6 @@ func _ready() -> void:
 						"경험치   +56\n레벨 업!   Lv.7   +220 G",
 						{"gold": 87, "gold_from": GameState.gold - 87,
 						"xp": 56, "xp_from": maxi(GameState.xp - 56, 0)}))
-	GameState.mode = GameState.MODE_STORY
-	await _capture("res://core/scenes/main.tscn", OUT + "/death_popup_skip.png",
-			func(inst: Node) -> void:
-				inst._hide_story_intro()
-				inst.get_node("Board")._kill_player()
-				inst.get_node("PopupLayer/DeathPopup").open(
-						"STAGE 7      SCORE 4200", false, ""))
-	GameState.mode = GameState.MODE_ENDLESS
 	# --- 모바일(세로 1080×1920) 레이아웃 ---
 	get_window().size = Vector2i(540, 960)
 	get_window().content_scale_size = Vector2i(1080, 1920)
@@ -184,23 +160,11 @@ func _ready() -> void:
 	GameState.keycaps = saved_caps
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_customizer.png",
 			func(inst: Node) -> void: _view_cat(inst, "mycat"))
-	GameState.mode = GameState.MODE_STORY
-	GameState.story_stage = 0
-	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_intro.png",
-			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
-	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_story_stage1.png",
-			func(inst: Node) -> void:
-				inst.get_node("TouchControls").visible = true
-				inst._hide_story_intro())
-	GameState.story_stage = saved_story
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
-			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
-	GameState.mode = GameState.MODE_PICNIC
-	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_picnic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
 	get_tree().quit()
 

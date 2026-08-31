@@ -237,11 +237,6 @@ func _build_sounds() -> void:
 	_add_tone(b, 0.0, 0.5, 280.0, 90.0, 0.16, SQUARE)
 	_add_tone(b, 0.42, 0.13, 150.0, 70.0, 0.3, SINE)  # the clunk at the bottom
 	_sounds["shutter"] = _wav(b)
-	# Story doors unlock: warm two-note chime.
-	b = _buf(0.7)
-	_add_tone(b, 0.0, 0.5, 783.99, 783.99, 0.18, TRIANGLE)
-	_add_tone(b, 0.12, 0.55, 1046.5, 1046.5, 0.18, TRIANGLE)
-	_sounds["door"] = _wav(b)
 	# Death: sad two-voice slide down.
 	b = _buf(0.7)
 	_add_tone(b, 0.0, 0.6, 392.0, 98.0, 0.28, SQUARE, 0.8)

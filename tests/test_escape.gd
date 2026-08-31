@@ -6,12 +6,8 @@ var failures := 0
 
 
 func _ready() -> void:
-	# Park the story on its final stage: escape goal, top doors, full bag,
-	# no prefill — the neutral config the mechanical tests below assume.
-	# (Restored, along with the save file, at the end of the run.)
-	var saved_story: int = GameState.story_stage
-	GameState.mode = GameState.MODE_STORY
-	GameState.story_stage = StoryStages.TOTAL - 1
+	# 아래 기계 판정들은 밀폐 우물(스테이지 모드) 기준이다.
+	GameState.mode = GameState.MODE_CLASSIC
 	var board: Node2D = load("res://core/scripts/escape_board.gd").new()
 	var player: Node2D = load("res://core/scripts/player.gd").new()
 	player.name = "Player"
@@ -29,26 +25,26 @@ func _ready() -> void:
 
 	# Solidity queries
 	var c := EscapeBoard.CELL
-	_check(board.rect_hits_solid(Rect2(-5, 300, 10, 10)), "left wall below the door is solid")
+	_check(board.rect_hits_solid(Rect2(-5, 300, 10, 10)), "left wall is solid")
 	_check(board.rect_hits_solid(Rect2(EscapeBoard.COLS * c - 5, 300, 10, 10)),
-			"right wall below the door is solid")
+			"right wall is solid")
 	_check(board.rect_hits_solid(Rect2(100, board.rows * c - 5, 10, 10)), "floor is solid")
 	_check(board.rect_hits_solid(Rect2(100, -20, 10, 10)), "ceiling is solid")
-	# The 14-row stage data shifts +6 in the 20-row pit: top doors sit at rows 6-7.
-	var door_y: float = (EscapeBoard.PIT_ROWS - EscapeBoard.ROWS) * c + 10.0
-	_check(not board.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "left side door is open")
-	_check(not board.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, door_y, 10, 10)),
-			"right side door is open")
+	# 우물은 사방이 막혀 있다 — 옛 스토리 모드의 옆벽 출구는 없어졌다.
+	var wall_y := 6.0 * c + 10.0
+	_check(board.rect_hits_solid(Rect2(-30, wall_y, 10, 10)), "left wall has no exit")
+	_check(board.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, wall_y, 10, 10)),
+			"right wall has no exit")
 	board.grid[Vector2i(4, 10)] = "T"
 	_check(board.rect_hits_solid(Rect2(4 * c + 10, 10 * c + 10, 10, 10)), "locked cell is solid")
 	board.grid.clear()
 
 	# Line clear shifts cells down
 	for x in range(EscapeBoard.COLS):
-		board.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"
-	board.grid[Vector2i(0, EscapeBoard.ROWS - 2)] = "T"
+		board.grid[Vector2i(x, EscapeBoard.PIT_ROWS - 1)] = "O"
+	board.grid[Vector2i(0, EscapeBoard.PIT_ROWS - 2)] = "T"
 	_check(board._clear_lines() == 1, "full row clears")
-	_check(board.grid.has(Vector2i(0, EscapeBoard.ROWS - 1)), "cell above shifted down")
+	_check(board.grid.has(Vector2i(0, EscapeBoard.PIT_ROWS - 1)), "cell above shifted down")
 	board.grid.clear()
 
 	# Two-stage breaking: first hit cracks, second destroys — one block at a time
@@ -85,11 +81,11 @@ func _ready() -> void:
 
 	# Cracks follow blocks down through a line clear
 	for x in range(EscapeBoard.COLS):
-		board.grid[Vector2i(x, EscapeBoard.ROWS - 1)] = "O"
-	board.grid[Vector2i(0, EscapeBoard.ROWS - 2)] = "T"
-	board.cracked[Vector2i(0, EscapeBoard.ROWS - 2)] = true
+		board.grid[Vector2i(x, EscapeBoard.PIT_ROWS - 1)] = "O"
+	board.grid[Vector2i(0, EscapeBoard.PIT_ROWS - 2)] = "T"
+	board.cracked[Vector2i(0, EscapeBoard.PIT_ROWS - 2)] = true
 	board._clear_lines()
-	_check(board.cracked.has(Vector2i(0, EscapeBoard.ROWS - 1)), "crack shifted down with its block")
+	_check(board.cracked.has(Vector2i(0, EscapeBoard.PIT_ROWS - 1)), "crack shifted down with its block")
 	board.grid.clear()
 	board.cracked.clear()
 
@@ -201,15 +197,17 @@ func _ready() -> void:
 	cam2.position = Vector2(320, 448)
 	p2.position = Vector2(320, 200)
 	# The camera sits above the player by 1/6 of the viewport height, keeping
-	# the cat at ~1/3 from the screen bottom with open space above.
-	var cam_off: float = b2.get_viewport_rect().size.y / 6.0
+	# the cat at ~1/3 from the screen bottom with open space above. 화면 픽셀
+	# 거리라 카메라 줌으로 나눠야 월드 거리가 된다 (b2.view_zoom).
+	var cam_off: float = b2.get_viewport_rect().size.y / 6.0 / b2.view_zoom
 	b2._update_endless(0.016)
-	_check(cam2.position.y == 200.0 - cam_off, "camera follows the player up")
+	_check(absf(cam2.position.y - (200.0 - cam_off)) < 0.01, "camera follows the player up")
 	_check(b2.best_height > 0, "height is tracked")
 	var lava_before: float = b2.lava_y
 	p2.position = Vector2(320, 400)
 	b2._update_endless(0.016)
-	_check(cam2.position.y == 400.0 - cam_off, "camera follows the player back down")
+	_check(absf(cam2.position.y - (400.0 - cam_off)) < 0.01,
+			"camera follows the player back down")
 	_check(p2.alive, "falling down a hole is not death by itself")
 	_check(b2.lava_y < lava_before, "lava rises over time")
 	b2.lava_y = p2.position.y  # lava reaches the player's feet
@@ -234,7 +232,7 @@ func _ready() -> void:
 	b2._endless_line_reward(endless_cleared)
 	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
 
-	GameState.mode = GameState.MODE_STORY
+	GameState.mode = GameState.MODE_CLASSIC
 
 	# Classic Tetris block out: stack reaching the spawn area ends the game
 	var b3: Node2D = load("res://core/scripts/escape_board.gd").new()
@@ -265,137 +263,6 @@ func _ready() -> void:
 			b4.grid[Vector2i(x, y)] = "O"
 	b4._spawn_piece()
 	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
-	GameState.mode = GameState.MODE_STORY
-
-	# --- Story mode stages ---
-	# Stage 1: movement tutorial — prefilled stairs, no pieces, doors open
-	GameState.story_stage = 0
-	var s1: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp1: Node2D = load("res://core/scripts/player.gd").new()
-	sp1.name = "Player"
-	s1.add_child(sp1)
-	add_child(s1)
-	s1.start_game()
-	_check(s1.level == 1, "story starts at stage 1")
-	_check(s1.piece_type == "", "stage 1 spawns no pieces")
-	_check(not s1.grid.is_empty(), "stage 1 prefills the staircase")
-	_check(not s1.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "stage 1 left door is open")
-	s1._escape()
-	_check(s1.level == 2, "escape advances to the next stage")
-	_check(s1.playing, "the run continues into the next stage")
-	_check(GameState.story_stage == 1, "stage clear is recorded")
-	_check(s1.piece_type == "O", "stage 2 restricts the piece bag")
-	# Stage 2 lowers the exit: top wall closed, authored rows 10-11 (+6 shift)
-	_check(s1.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "lowered door: top wall is solid")
-	_check(not s1.rect_hits_solid(Rect2(-30, 16 * c + 10, 10, 10)),
-			"lowered door: mid-wall exit is open")
-
-	# Stage 5: shove goal — ground doors locked until one shove opens them
-	GameState.story_stage = 4
-	var s5: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp5: Node2D = load("res://core/scripts/player.gd").new()
-	sp5.name = "Player"
-	s5.add_child(sp5)
-	add_child(s5)
-	s5.start_game()
-	_check(s5.level == 5, "story resumes from the next uncleared stage")
-	_check(not s5.goal_done, "goal stage starts locked")
-	_check(s5.rect_hits_solid(Rect2(-30, 18 * c + 10, 10, 10)),
-			"locked ground door is solid")
-	s5.piece_type = "O"
-	s5.piece_rot = 0
-	s5.piece_state = s5.PieceState.FALLING
-	s5.piece_pos = Vector2i(3, 4)
-	sp5.position = Vector2(2 * c, 700.0)  # clear of the piece's path
-	s5.shove_piece(1)
-	_check(s5.goal_done, "one shove completes the stage 5 goal")
-	_check(not s5.rect_hits_solid(Rect2(-30, 18 * c + 10, 10, 10)),
-			"ground door opens once the goal is met")
-
-	# Stage 4: break goal counts destroyed blocks
-	GameState.story_stage = 3
-	var s4: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp4: Node2D = load("res://core/scripts/player.gd").new()
-	sp4.name = "Player"
-	s4.add_child(sp4)
-	add_child(s4)
-	s4.start_game()
-	_check(s4.piece_type == "", "break stage spawns no pieces")
-	_check(s4.grid.has(Vector2i(6, 18)), "break stage prefills the wall (+6 shift)")
-	_check(not s4.goal_done, "break stage starts locked")
-	var wall_probe := Rect2(6 * c + 30, 18 * c + 30, 10, 10)
-	s4.break_cell_in_rect(wall_probe)  # crack
-	s4.break_cell_in_rect(wall_probe)  # destroy
-	_check(s4.goal_count == 1, "destroying a block counts toward the goal")
-	s4._story_add_progress("breaks", 1)
-	_check(s4.goal_done, "reaching the break count opens the doors")
-
-	# Line goal counts cleared lines the same way
-	GameState.story_stage = 5
-	var s6: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp6: Node2D = load("res://core/scripts/player.gd").new()
-	sp6.name = "Player"
-	s6.add_child(sp6)
-	add_child(s6)
-	s6.start_game()
-	_check(not s6.grid.is_empty(), "stage 6 prefills the line gaps")
-	_check(not s6.goal_done, "stage 6 starts locked")
-	s6._story_add_progress("lines", 1)
-	_check(s6.goal_done, "the cleared line opens the doors")
-
-	# Survive goal ticks with _process time
-	GameState.story_stage = 6
-	var s7: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp7: Node2D = load("res://core/scripts/player.gd").new()
-	sp7.name = "Player"
-	s7.add_child(sp7)
-	add_child(s7)
-	s7.start_game()
-	_check(not s7.goal_done, "survive stage starts locked")
-	s7._process(21.0)
-	_check(s7.goal_done, "surviving the full time opens the doors")
-
-	# Stage 19: only the right door opens, up at rows 2-3
-	GameState.story_stage = 18
-	var s19: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp19: Node2D = load("res://core/scripts/player.gd").new()
-	sp19.name = "Player"
-	s19.add_child(sp19)
-	add_child(s19)
-	s19.start_game()
-	_check(s19.rect_hits_solid(Rect2(-30, 8 * c + 10, 10, 10)),
-			"stage 19 left door stays shut")
-	_check(not s19.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, 8 * c + 10, 10, 10)),
-			"stage 19 right door is open")
-
-	# Generated stages cover the long tail up to the finale
-	var gen: Dictionary = StoryStages.get_stage(37)
-	_check(gen.has("goal") and gen.has("hint"), "generated stages have goal and hint")
-	var late: Dictionary = StoryStages.get_stage(100)
-	var early_gen: Dictionary = StoryStages.get_stage(25)
-	_check(float(late.track_time) < float(early_gen.track_time),
-			"generated stages speed up with the stage number")
-
-	# Clearing the final stage completes the story
-	GameState.story_stage = StoryStages.TOTAL - 1
-	var s12: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp12: Node2D = load("res://core/scripts/player.gd").new()
-	sp12.name = "Player"
-	s12.add_child(sp12)
-	add_child(s12)
-	s12.start_game()
-	_check(s12.level == StoryStages.TOTAL, "final stage loads")
-	s12._escape()
-	_check(not s12.playing, "final stage clear ends the run")
-	_check(GameState.story_stage == StoryStages.TOTAL, "story completion is recorded")
-	GameState.story_stage = StoryStages.TOTAL
-	var s13: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var sp13: Node2D = load("res://core/scripts/player.gd").new()
-	sp13.name = "Player"
-	s13.add_child(sp13)
-	add_child(s13)
-	s13.start_game()
-	_check(s13.level == 1, "a finished story replays from stage 1")
 
 	# --- Classic mode: arcade rules, cat controls ------------------------------
 	GameState.mode = GameState.MODE_CLASSIC
@@ -409,13 +276,12 @@ func _ready() -> void:
 	_check(cl.rows == EscapeBoard.PIT_ROWS, "classic: standard 20-row well")
 	_check(cl.rect_hits_solid(Rect2(100, cl.rows * c + 5, 10, 10)),
 			"classic: floor sits at the 20-row bottom")
-	_check(not cl.rect_hits_solid(Rect2(100, (EscapeBoard.ROWS + 2) * c, 10, 10)),
-			"classic: old 14-row floor line is open air")
-	_check(not cl.door_left and not cl.door_right, "classic: both exits sealed")
+	_check(not cl.rect_hits_solid(Rect2(100, 16.0 * c, 10, 10)),
+			"classic: mid-pit is open air")
 	_check(cl.rect_hits_solid(Rect2(-30, c, 10, 10)),
-			"classic: left door wall is solid")
+			"classic: left wall is solid")
 	_check(cl.rect_hits_solid(Rect2(EscapeBoard.COLS * c + 20, c, 10, 10)),
-			"classic: right door wall is solid")
+			"classic: right wall is solid")
 	# NES gravity mapping: stage 1 keeps base pacing, deep stages hit the floor.
 	_check(absf(cl._track_time() - EscapeBoard.TRACK_TIME_BASE) < 0.01,
 			"classic: stage 1 keeps the full tracking window")
@@ -463,8 +329,6 @@ func _ready() -> void:
 			"classic: single pays the arcade 40 x level")
 	_check(cl.level_lines == 1, "classic: the clear counts toward the level quota")
 	_check(not cl._shutter_on(), "classic: the level runs on until its quota is met")
-	_check(not cl.door_left and not cl.door_right,
-			"classic: clears never open the doors")
 	# Quota met: the shutter rolls down, paying for every empty row it passes.
 	cl.level_lines = Board.classic_quota(cl.level) - 1
 	for x in range(EscapeBoard.COLS):
@@ -615,51 +479,6 @@ func _ready() -> void:
 			"endless: shove moved it by the push-stat cells")
 	b6.loose.clear()
 
-	# --- 젤리 피크닉: casual no-death timed run ---------------------------------
-	GameState.mode = GameState.MODE_PICNIC
-	var pk: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var pkp: Node2D = load("res://core/scripts/player.gd").new()
-	pkp.name = "Player"
-	pk.add_child(pkp)
-	add_child(pk)
-	pk.start_game()
-	_check(pk.mode == pk.Mode.PICNIC, "picnic: mode starts")
-	_check(not pk.door_left and not pk.door_right, "picnic: pit is sealed")
-	_check(pk.rect_hits_solid(Rect2(-30, door_y, 10, 10)), "picnic: side walls have no exits")
-	_check(pk.picnic_time == EscapeBoard.PICNIC_TIME, "picnic: timer starts full")
-	_check(absf(pk._track_time() - EscapeBoard.PICNIC_TRACK_TIME) < 0.01,
-			"picnic: relaxed tracking window")
-	_check(absf(pk._fall_interval() - EscapeBoard.PICNIC_FALL_INTERVAL) < 0.01,
-			"picnic: slow fixed gravity")
-	# A crush pops the piece like jelly instead of killing the cat.
-	pk.piece_type = "O"
-	pk.piece_rot = 0
-	pk.piece_state = pk.PieceState.FALLING
-	pk.piece_pos = Vector2i(3, pk.rows - 2)
-	pkp.position = pk._spawn_point()
-	pk._resolve_piece_overlap()
-	_check(pkp.alive, "picnic: crush rescues instead of killing")
-	_check(pk.playing, "picnic: game keeps running after a rescue")
-	pk.grid.clear()
-	# Stack overflow bursts the whole pit instead of ending the run.
-	pkp.position = Vector2(5 * c, 18 * c)
-	for x in range(EscapeBoard.COLS):
-		for y in range(3):
-			pk.grid[Vector2i(x, y)] = "O"
-	pk.piece_type = "O"
-	pk.piece_rot = 0
-	pk.piece_state = pk.PieceState.FALLING
-	pk.piece_pos = Vector2i(0, -1)
-	pk._lock_piece()
-	_check(pk.playing, "picnic: overflow keeps the game running")
-	_check(pk.grid.is_empty(), "picnic: overflow bursts the whole stack")
-	# The clock is the only thing that ends a picnic.
-	pk._update_picnic(EscapeBoard.PICNIC_TIME + 1.0)
-	_check(not pk.playing, "picnic: timer end stops the run")
-	_check(pk.picnic_time == 0.0, "picnic: timer clamps at zero")
-
-	# Restore the real save the story tests overwrote
-	GameState.story_stage = saved_story
 	GameState.save_game()
 
 	if failures == 0:

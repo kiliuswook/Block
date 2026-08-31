@@ -305,11 +305,12 @@ func _build_cheats() -> void:
 	_body.add_child(_kv("누적 획득 골드", _comma(GameState.gold_earned)))
 
 
-## 치트로 재화를 바꾼 뒤 타이틀의 유저 HUD(지갑)를 다시 그린다.
+## 치트로 재화를 바꾼 뒤 패널의 골드 표시와 타이틀의 유저 HUD(지갑)를 다시 그린다.
 func _refresh_wallet() -> void:
 	var scene := get_tree().current_scene
 	if scene and scene.has_method("_refresh_currency"):
 		scene.call("_refresh_currency")
+	_rebuild()
 
 
 func _comma(n: int) -> String:

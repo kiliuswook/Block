@@ -1,5 +1,5 @@
 extends Node
-## Online leaderboards, one board per mode (story / endless / classic).
+## Online leaderboards, one board per mode (endless / classic).
 ## Entries: {"id": String, "name": String, "v": int, "cat": String}.
 ##
 ## 백엔드는 셋 중 하나로 정해진다 (`backend()`):
@@ -19,10 +19,9 @@ enum Backend { OFFLINE, HTTP, STEAM }
 ## The shared board: a jsonblob.com blob (anonymous, CORS-enabled, extended
 ## on every access). Point this at any GET/PUT JSON endpoint to migrate.
 const BOARD_URL := "https://jsonblob.com/api/jsonBlob/019f9dbf-29d9-7346-bf9d-32c674bfed1c"
-const MODES := ["story", "endless", "classic", "picnic"]
-## 지금 실제로 플레이할 수 있는 모드. 스팀 리더보드는 여기 있는 것만 만든다 —
-## 내려둔 모드(story/picnic)까지 만들면 앱에 죽은 보드가 쌓인다.
-const LIVE_MODES := ["endless", "classic"]
+const MODES := ["endless", "classic"]
+## 지금 실제로 플레이할 수 있는 모드 — 스팀 리더보드는 여기 있는 것만 만든다.
+const LIVE_MODES := MODES
 const MAX_ENTRIES := 100  # kept per mode, sorted by value desc
 ## 스팀 보드에서 한 번에 받아 오는 상위 엔트리 수 (UI는 50줄까지 그린다).
 const STEAM_FETCH := 50
@@ -114,21 +113,15 @@ func week_remaining_text() -> String:
 ## My current local best for a mode key.
 func local_value(mode_key: String) -> int:
 	match mode_key:
-		"story":
-			return GameState.story_stage
 		"endless":
 			return GameState.best_height
 		"classic":
 			return GameState.classic_best
-		"picnic":
-			return GameState.picnic_best
 	return 0
 
 
 func value_text(mode_key: String, v: int) -> String:
 	match mode_key:
-		"story":
-			return "STAGE %d" % v
 		"endless":
 			return tr("HUD_FLOOR").format({"n": v})
 	return tr("HUD_POINTS").format({"n": v})
@@ -349,14 +342,10 @@ func _mock_entries(mode_key: String, weekly := false) -> Array:
 	for i in MOCK_NAMES.size():
 		var v := 0
 		match mode_key:
-			"story":
-				v = clampi(int((120 - i * 5 - rng.randi_range(0, 3)) * s), 1, 120)
 			"endless":
 				v = maxi(int(130.0 * s * pow(0.83, i)) + rng.randi_range(0, 4), 2)
 			"classic":
 				v = maxi(int(240000.0 * s * pow(0.72, i)) + rng.randi_range(0, 900), 400)
-			"picnic":
-				v = maxi(int(2600.0 * s * pow(0.85, i)) + rng.randi_range(0, 90), 150)
 		out.append({"id": "bot-%d" % i, "name": MOCK_NAMES[i], "v": v,
 				"cat": MOCK_CATS[rng.randi_range(0, MOCK_CATS.size() - 1)]})
 	return out

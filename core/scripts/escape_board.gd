@@ -1,34 +1,28 @@
 class_name EscapeBoard
 extends Node2D
-## Story mode pit: a tetromino tracks the player's column at the top of the
-## field, free-falls after a countdown, and locks into the grid. The player
-## climbs the stack and escapes through the door at the top. Getting caught
-## under a falling piece is death. Reuses SHAPES/KICKS/COLORS from Board.
-## In story mode (single player) the run walks through StoryStages: each
-## stage has a tutorial goal (escape / lines / shoves / survive) and the exit
-## doors stay locked until the goal is met. Split screen reuses this board as
-## a plain escape race with no stage logic.
+## 우물 보드: 테트로미노가 화면 위에서 플레이어의 열을 따라다니다가, 카운트다운이
+## 끝나면 자유낙하해 격자에 박힌다. 플레이어는 쌓인 블록을 밟고 오른다. 떨어지는
+## 블록에 깔리면 사망. SHAPES/KICKS/COLORS는 Board에서 재사용한다.
+## 모드는 둘뿐이다 — 스테이지 모드(밀폐 우물 + 레벨 클리어 셔터)와 무한의 계단
+## (카메라 추적 + 상승하는 용암). 둘 다 우물이 사방으로 막혀 있어서, 예전
+## 스토리 모드가 쓰던 옆벽 출구(문)는 함께 걷어 냈다.
 
 enum PieceState { TRACKING, FALLING, LANDED }
-# 값은 GameState.MODE_* 와 1:1 (2번은 제거된 2P 대전 자리라 비워 둔다).
-enum Mode { STORY = 0, ENDLESS = 1, CLASSIC = 3, PICNIC = 4 }
+# 값은 GameState.MODE_* 와 1:1 — 내린 모드(0 스토리 · 2 2P 대전 · 4 피크닉)
+# 자리는 남은 모드의 번호가 흔들리지 않게 비워 둔다.
+enum Mode { ENDLESS = 1, CLASSIC = 3 }
 
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const UiKit := preload("res://core/scripts/ui_kit.gd")
 
 const COLS := 10
-const ROWS := 14  # story stage data coordinate base — prefills/door_row are
-				  # authored on the original 14-row pit and shifted at load
 const PIT_ROWS := 20  # actual well height, every mode — standard tetris
 const CELL := 64.0
-const DOOR_ROW_TOP := 0
-const DOOR_ROW_BOTTOM := 1
 const TRACK_TIME_BASE := 5.0
 const TRACK_TIME_MIN := 2.0
 const TRACK_STEP := 0.07
 const FALL_INTERVAL_BASE := 0.26
 const FALL_INTERVAL_MIN := 0.1
-const ESCAPE_SCORE := 1000
 const LINE_SCORES := [0, 100, 300, 500, 800]
 const CRUSH_MARGIN := 6.0
 const SOFT_DROP_FACTOR := 4.0
@@ -45,14 +39,7 @@ const LAVA_SPEED_BASE := 8.0
 const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the player by more than this
-const BLAST_FX_RADIUS := 16.0  # blast: cells beyond this erase without FX (off-screen)
-const BLAST_FX_WAVE := 0.018  # blast ripple: FX delay per cell of distance from the cat
 const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
-# Jelly picnic (casual): a 2-minute no-death timed run. Pieces fall slow and
-# never speed up; anything that would kill the cat pops like jelly instead.
-const PICNIC_TIME := 120.0
-const PICNIC_TRACK_TIME := 6.0
-const PICNIC_FALL_INTERVAL := 0.34
 # Classic level-clear shutter (Atari B-type): a steel curtain rolls down over
 # the well, paying a bonus for every empty row it passes at the top, holds shut
 # while the next level's board is dealt behind it, then rolls back up.
@@ -94,7 +81,7 @@ var shutter_pop := 0.0  # flare left on the tally after its latest tick
 var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
-var mode := Mode.STORY
+var mode := Mode.CLASSIC
 var rows := PIT_ROWS  # pit height in cells
 ## 무한의 계단 카메라 배율과, 그 배율에서 화면을 덮는 "카메라 아래로 더 그리는
 ## 거리". 스테이지 모드와 같은 크기의 우물을 쓰려고 start_game에서 정해진다.
@@ -112,10 +99,8 @@ var lava_phase := 0.0
 # more rotation), so the next piece starts tracking immediately. Each entry:
 # {t: type, r: rot, p: pos, s: PieceState, ft: fall timer, lt: land timer}.
 var loose: Array = []
-# Picnic: time left on the clock.
-var picnic_time := 0.0
 # Replay recording: 10Hz state frames (cat + piece + score) plus grid-diff
-# events, exported via rec_export(). Story records one stage at a time.
+# events, exported via rec_export().
 const REC_STEP := 0.1
 const REC_MAX_FRAMES := 6000  # ~10 minutes, then the recording just stops
 const REC_STRIDE := 8
@@ -124,14 +109,6 @@ var rec_events: Array = []
 var _rec_shadow := {}
 var _rec_timer := 0.0
 var _rec_on := false
-# Story mode: the active stage config and its goal/door state.
-var stage := {}
-var door_left := true
-var door_right := true
-var door_row := DOOR_ROW_TOP  # top row of the 2-row exit (story stages move it)
-var goal_done := true  # true once the doors are open (escape goals start true)
-var goal_count := 0
-var survive_time := 0.0
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -157,16 +134,7 @@ func start_game() -> void:
 	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	loose.clear()
-	picnic_time = 0.0
 	is_paused = false
-	stage = {}
-	door_left = true
-	door_right = true
-	# Non-story exits keep their original height-above-floor: the pit grew
-	# from 14 to 20 rows, so "top" doors ride 6 rows down with the old summit.
-	# Classic keeps its sealed slabs at the true top corners.
-	door_row = DOOR_ROW_TOP if mode == Mode.CLASSIC else DOOR_ROW_TOP + (PIT_ROWS - ROWS)
-	goal_done = true
 	GameState.reset()
 	view_zoom = _fit_zoom() if mode == Mode.ENDLESS else 1.0
 	view_below = VIEW_BELOW / view_zoom
@@ -175,27 +143,10 @@ func start_game() -> void:
 		cam.zoom = Vector2(view_zoom, view_zoom)
 		cam.position = Vector2(COLS * CELL / 2.0, rows * CELL / 2.0)
 		cam.reset_smoothing()
-	if _story():
-		# Resume from the next uncleared stage; a finished story replays from 1.
-		level = GameState.story_stage % StoryStages.TOTAL + 1
-		_apply_stage()
-	elif mode == Mode.CLASSIC:
-		# Arcade pit: both exits sealed — clear the level's 10 lines and survive
-		# with the usual cat controls. Each level is a fresh, harder board.
-		door_left = false
-		door_right = false
+	if mode == Mode.CLASSIC:
+		# Arcade pit: clear the level's 10 lines and survive with the usual cat
+		# controls. Each level is a fresh, harder board.
 		_classic_setup_level(1)
-	elif mode == Mode.PICNIC:
-		# Sealed jelly pit: no exits, no death — just a timed run.
-		door_left = false
-		door_right = false
-		picnic_time = PICNIC_TIME
-	elif mode == Mode.ENDLESS:
-		# Consume boosts bought for this run (shop / death-popup chips).
-		for b: String in GameState.take_boosts():
-			match b:
-				"warmup":
-					_build_warmup_stairs()
 	player.respawn(_spawn_point())
 	player.visible = true  # a restart mid-shutter must not leave the cat hidden
 	_spawn_piece()
@@ -217,43 +168,6 @@ func _add_score(n: int) -> void:
 	GameState.score += n
 
 
-func _story() -> bool:
-	return mode == Mode.STORY
-
-
-func _goal_type() -> String:
-	return str(stage.get("goal", {}).get("type", "escape"))
-
-
-## Loads the current stage (level) config: goal, doors, prefilled grid.
-func _apply_stage() -> void:
-	stage = StoryStages.get_stage(level)
-	goal_count = 0
-	survive_time = 0.0
-	goal_done = _goal_type() == "escape"
-	# Stage data is authored on the 14-row pit: shift doors and prefills down
-	# so every height-above-floor (and thus the balance) stays identical.
-	var shift := rows - ROWS
-	door_row = clampi(int(stage.get("door_row", 0)) + shift, 0, rows - 2)
-	_set_doors(goal_done)
-	grid.clear()
-	cracked.clear()
-	var pf: Dictionary = stage.get("prefill_cells", {})
-	for c: Vector2i in pf:
-		grid[c + Vector2i(0, shift)] = pf[c]
-	bag.clear()
-	next_type = ""
-	EventBus.story_stage_started.emit(level)
-	EventBus.story_progress_changed.emit(
-			StoryStages.progress_text(stage, 0, goal_done))
-
-
-func _set_doors(open: bool) -> void:
-	var side := str(stage.get("door", "both"))
-	door_left = open and side != "right"
-	door_right = open and side != "left"
-
-
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
@@ -271,7 +185,7 @@ func _process(delta: float) -> void:
 		_try_rotate(1)
 	if Input.is_action_just_pressed("rotate_ccw"):
 		_try_rotate(-1)
-	if piece_type != "":  # no-piece tutorial stages skip the piece machine
+	if piece_type != "":
 		match piece_state:
 			PieceState.TRACKING:
 				_track(delta)
@@ -285,22 +199,8 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-	if _story() and playing and not goal_done and _goal_type() == "survive":
-		var prev := int(survive_time)
-		survive_time += delta
-		if int(survive_time) != prev:
-			goal_count = int(survive_time)
-			EventBus.story_progress_changed.emit(
-					StoryStages.progress_text(stage, goal_count, false))
-		if survive_time >= float(stage.goal.time):
-			_story_goal_done()
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
-	elif mode == Mode.PICNIC:
-		_update_picnic(delta)
-	elif playing and (player.position.x < -CELL * 0.6
-			or player.position.x > COLS * CELL + CELL * 0.6):
-		_escape()
 	queue_redraw()
 
 
@@ -348,41 +248,6 @@ func _update_endless(delta: float) -> void:
 		EventBus.height_changed.emit(best_height)
 
 
-# --- Jelly picnic (casual) ------------------------------------------------------
-
-
-func _update_picnic(delta: float) -> void:
-	lava_phase += delta
-	picnic_time -= delta
-	if picnic_time <= 0.0:
-		picnic_time = 0.0
-		playing = false
-		Sfx.play("milestone")
-		EventBus.game_over.emit()
-		queue_redraw()
-		return
-
-
-## Picnic never kills: whatever pinned the cat pops like jelly instead. The
-## falling piece bursts, nearby locked cells shatter, and play just continues.
-## big = the stack overflowed the pit: blow the whole thing up.
-func _picnic_rescue(big := false) -> void:
-	var center := Vector2i((player.position / CELL).floor())
-	Sfx.play("break")
-	if big:
-		_blast_all_cells(center)
-	if piece_type != "" and piece_state != PieceState.TRACKING:
-		for c in _cells(piece_type, piece_rot, piece_pos):
-			break_fx.append([c, 0.0])
-	_erase_cells_around(center, 1)
-	if not _shove_player_out_of_grid():
-		_erase_cells_around(center, 2)
-		_shove_player_out_of_grid()
-	_clear_spawn_window()
-	_spawn_piece()
-	queue_redraw()
-
-
 func rect_hits_solid(r: Rect2) -> bool:
 	if _rect_hits_bounds(r):
 		return true
@@ -398,24 +263,14 @@ func rect_hits_solid(r: Rect2) -> bool:
 
 
 ## Walls, floor and (outside endless) ceiling — the pit boundary alone.
-## The side walls open at the top rows (one exit each), but only while that
-## door is unlocked — story goals keep them shut until the goal is met.
 func _rect_hits_bounds(r: Rect2) -> bool:
-	if r.position.x < 0.0 \
-			and not (mode != Mode.ENDLESS and door_left and _rect_in_side_door(r)):
-		return true
-	if r.end.x > COLS * CELL \
-			and not (mode != Mode.ENDLESS and door_right and _rect_in_side_door(r)):
+	if r.position.x < 0.0 or r.end.x > COLS * CELL:
 		return true
 	if r.end.y > rows * CELL:
 		return true
 	if mode != Mode.ENDLESS and r.position.y < 0.0:
 		return true
 	return false
-
-
-func _rect_in_side_door(r: Rect2) -> bool:
-	return r.position.y >= door_row * CELL and r.end.y <= (door_row + 2) * CELL
 
 
 ## What the player collides with: locked grid, walls, and the falling piece.
@@ -656,11 +511,9 @@ func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 		moved = true
 		cells += 1
 		if _resolve_piece_overlap() or not playing:
-			_story_add_progress("shoves", 1)
 			Sfx.play("shove")
 			return true
 	if moved:
-		_story_add_progress("shoves", 1)
 		Sfx.play("shove")
 	return moved
 
@@ -753,10 +606,6 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 			overflow = true
 	if overflow and mode != Mode.ENDLESS:
 		# Stack spilled over the top: the cat is buried.
-		if mode == Mode.PICNIC:
-			# Picnic: the whole overstuffed stack bursts and the hunt goes on.
-			_picnic_rescue(true)
-			return false
 		_kill_player()
 		return false
 	if not _free_player_from_grid():
@@ -774,23 +623,12 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 			_endless_line_reward(cleared)
 		elif mode == Mode.CLASSIC:
 			_classic_line_progress(cleared)
-		_story_add_progress("lines", cleared)
 		EventBus.lines_changed.emit(total_lines)
 		if _shutter_on():
 			return true  # 레벨 클리어 연출 중: 깔림 판정 없이 셔터가 내려온다
 		if not _free_player_from_grid():
 			return false
 	return true
-
-
-## Warmup boost: a staircase against the left wall reaching 5 floors up, so
-## the run starts with a quick climb instead of a bare pit. Columns only —
-## never a full row, so it can't be cashed in as an instant line clear.
-func _build_warmup_stairs() -> void:
-	for i in range(1, 6):
-		var x := 5 - i  # x=4 is 1 tall ... x=0 is 5 tall
-		for d in range(i):
-			grid[Vector2i(x, rows - 1 - d)] = "J"
 
 
 ## Endless: line clears fight the lava — every clear shoves it back down,
@@ -1021,35 +859,8 @@ func rec_export() -> Dictionary:
 	if rec_frames.is_empty():
 		return {}
 	return {"v": 1, "mode": int(mode), "cat": GameState.selected_cat,
-			"rows": rows, "door": door_row, "dl": door_left, "dr": door_right,
-			"level": level,
+			"rows": rows, "level": level,
 			"frames": rec_frames.duplicate(), "events": rec_events.duplicate(true)}
-
-
-# --- Story goals ----------------------------------------------------------------
-
-
-## Counts progress toward the stage goal (lines cleared / pieces shoved).
-func _story_add_progress(kind: String, amount: int) -> void:
-	if not _story() or goal_done or _goal_type() != kind:
-		return
-	goal_count += amount
-	if goal_count >= int(stage.goal.count):
-		_story_goal_done()
-	else:
-		EventBus.story_progress_changed.emit(
-				StoryStages.progress_text(stage, goal_count, false))
-
-
-## Goal met: unlock the stage's doors and tell the HUD.
-func _story_goal_done() -> void:
-	goal_done = true
-	_set_doors(true)
-	Sfx.play("door")
-	EventBus.story_doors_opened.emit()
-	EventBus.story_progress_changed.emit(
-			StoryStages.progress_text(stage, goal_count, true))
-	queue_redraw()
 
 
 func _clear_lines() -> int:
@@ -1138,7 +949,6 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		grid.erase(best)
 		break_fx.append([best, 0.0])
 		_add_score(BREAK_SCORE)
-		_story_add_progress("breaks", 1)
 		Sfx.play("break")
 	else:
 		cracked[best] = true
@@ -1148,12 +958,6 @@ func break_cell_in_rect(r: Rect2) -> bool:
 
 
 func _spawn_piece() -> void:
-	# Movement-tutorial stages: no tetromino at all.
-	if _story() and stage.get("no_pieces", false):
-		piece_type = ""
-		next_type = ""
-		EventBus.next_piece_changed.emit("")
-		return
 	if next_type == "":
 		next_type = _draw_from_bag()
 	piece_type = next_type
@@ -1172,11 +976,7 @@ func _spawn_piece() -> void:
 
 func _draw_from_bag() -> String:
 	if bag.is_empty():
-		# Early story stages restrict the bag to a couple of simple pieces.
-		if _story() and stage.has("pieces"):
-			bag = (stage.pieces as Array).duplicate()
-		else:
-			bag = Board.PIECES.duplicate()
+		bag = Board.PIECES.duplicate()
 		bag.shuffle()
 	return bag.pop_back()
 
@@ -1230,80 +1030,9 @@ func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 	return false
 
 
-func _escape() -> void:
-	Sfx.play("escape")
-	if _story():
-		# A first-time clear keeps its replay (watched from the rankings).
-		if level > GameState.story_stage:
-			Replays.save_replay("story", rec_export())
-		GameState.story_clear(level)
-		_add_score(ESCAPE_SCORE * level)
-		if level >= StoryStages.TOTAL:
-			# Final stage cleared — the story run ends here.
-			playing = false
-			EventBus.story_completed.emit()
-			queue_redraw()
-			return
-		level += 1
-		_apply_stage()
-		_rec_reset()
-		player.respawn(_spawn_point())
-		_spawn_piece()
-		EventBus.level_changed.emit(level)
-		EventBus.player_escaped.emit(level)
-		return
-	level += 1
-	_add_score(ESCAPE_SCORE * (level - 1))
-	grid.clear()
-	cracked.clear()
-	player.respawn(_spawn_point())
-	_spawn_piece()
-	EventBus.level_changed.emit(level)
-	EventBus.player_escaped.emit(level)
-
-
-## Blows the whole stack apart, the burst rippling outward from the cat.
-## Cells beyond the visible radius skip the FX entry.
-func _blast_all_cells(center: Vector2i) -> void:
-	for c: Vector2i in grid:
-		var dist := Vector2(c - center).length()
-		if dist <= BLAST_FX_RADIUS:
-			break_fx.append([c, -dist * BLAST_FX_WAVE])
-	grid.clear()
-	cracked.clear()
-
-
-func _erase_cells_around(center: Vector2i, radius: int) -> void:
-	for y in range(center.y - radius, center.y + radius + 1):
-		for x in range(center.x - radius, center.x + radius + 1):
-			_erase_cell(Vector2i(x, y))
-
-
-## Clears the 4x4 window where the next piece will spawn, so a rescue can
-## never immediately block out again ([_spawn_piece] would kill on collide).
-func _clear_spawn_window() -> void:
-	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
-	var spawn_x := clampi(int(player.position.x / CELL) - 2, 0, COLS - 4)
-	for y in range(spawn_row, spawn_row + 4):
-		for x in range(spawn_x, spawn_x + 4):
-			_erase_cell(Vector2i(x, y))
-
-
-func _erase_cell(c: Vector2i) -> void:
-	if not grid.has(c):
-		return
-	grid.erase(c)
-	cracked.erase(c)
-	break_fx.append([c, 0.0])
-
-
 func _kill_player() -> void:
 	if _shutter_on():
 		return  # 셔터 연출 중엔 아무도 죽지 않는다
-	if mode == Mode.PICNIC:
-		# Nobody dies at a picnic — pop the offending jelly and play on.
-		_picnic_rescue()
-		return
 	Sfx.play("death")
 	player.die()
 	playing = false
@@ -1311,21 +1040,15 @@ func _kill_player() -> void:
 	queue_redraw()
 
 
-## Difficulty driver: story scales with stage, endless with height climbed.
+## Difficulty driver: endless scales with the height climbed.
 func _difficulty() -> int:
-	if mode == Mode.PICNIC:
-		return 1  # picnic never speeds up
-	if mode == Mode.STORY:
-		return level
 	return 1 + best_height / 8
 
 
 ## Extra gravity steps earned purely by staying alive. Classic and endless are
 ## marathons, so a long run keeps tightening even while the level (or the
-## climb) stalls. Story is curated and picnic never speeds up — both opt out.
+## climb) stalls.
 func _speed_creep() -> int:
-	if mode != Mode.CLASSIC and mode != Mode.ENDLESS:
-		return 0
 	return mini(int(run_time / SPEED_CREEP_TIME), SPEED_CREEP_MAX)
 
 
@@ -1336,25 +1059,17 @@ func _fall_difficulty() -> int:
 
 
 func _track_time() -> float:
-	if mode == Mode.PICNIC:
-		return PICNIC_TRACK_TIME
 	if mode == Mode.CLASSIC:
 		# The NES gravity table scales our tracking window: level 1 keeps the
 		# full 5s, the plateaus tighten it, the kill screen pins it at 1s.
 		return clampf(TRACK_TIME_BASE * _classic_frames() / 48.0, 1.0, TRACK_TIME_BASE)
-	if _story() and stage.has("track_time"):
-		return float(stage.track_time)
 	return maxf(TRACK_TIME_BASE - (_fall_difficulty() - 1) * 0.4, TRACK_TIME_MIN)
 
 
 func _fall_interval() -> float:
-	if mode == Mode.PICNIC:
-		return PICNIC_FALL_INTERVAL
 	if mode == Mode.CLASSIC:
 		return clampf(FALL_INTERVAL_BASE * _classic_frames() / 48.0,
 				0.03, FALL_INTERVAL_BASE)
-	if _story() and stage.has("fall_interval"):
-		return float(stage.fall_interval)
 	return maxf(FALL_INTERVAL_BASE - (_fall_difficulty() - 1) * 0.02, FALL_INTERVAL_MIN)
 
 
@@ -1380,8 +1095,6 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _spawn_point() -> Vector2:
 	var col := COLS / 2.0
-	if _story():
-		col = float(stage.get("spawn_col", col))
 	# Classic levels deal a garbage floor — the cat starts on top of it, not in it.
 	var floor_row := rows - (level_garbage if mode == Mode.CLASSIC else 0)
 	return Vector2(col * CELL, floor_row * CELL - Player.SIZE / 2.0)
@@ -1416,32 +1129,18 @@ func _draw() -> void:
 			if cracked.has(c):
 				_draw_crack(c)
 	for fx in break_fx:
-		if fx[1] < 0.0:
-			continue  # blast ripple: it hasn't reached this cell yet
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
-	if mode != Mode.ENDLESS and mode != Mode.PICNIC and mode != Mode.CLASSIC:
-		_draw_doors()  # the arcade well has no exit at all — nothing to draw
 	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
 	# 우물 테두리는 UI 키트와 같은 두꺼운 잉크 선 — 하늘 배경에 "뚫린 구덩이"로 보이게.
 	var border := UiKit.INK
 	var bw := 7.0
-	if mode == Mode.PICNIC or mode == Mode.CLASSIC:
+	if mode != Mode.ENDLESS:
 		# Sealed pit: unbroken walls all around, no exits to draw.
 		draw_rect(Rect2(-bw / 2.0, -bw / 2.0, w + bw, h + bw), border, false, bw)
-	elif mode != Mode.ENDLESS:
-		# Side walls open at the exit rows: draw them with a gap at the doors.
-		var door_top := door_row * CELL
-		var door_bottom := (door_row + 2) * CELL
-		draw_line(Vector2(-2, -2), Vector2(w + 2, -2), border, bw)
-		for wx in [-2.0, w + 2.0]:
-			if door_top > 0.0:
-				draw_line(Vector2(wx, -2), Vector2(wx, door_top), border, bw)
-			draw_line(Vector2(wx, door_bottom), Vector2(wx, h + 2), border, bw)
-		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
 	else:
 		# 벽은 바닥 아래 어둠까지 이어진다 (배경을 그만큼 더 깔았다).
 		var wall_bottom := h + view_below * 2.0
@@ -1489,10 +1188,6 @@ func _draw_shutter(w: float) -> void:
 func _draw_pit_background(w: float, h: float, top: float) -> void:
 	var top_col := Color("2a3040")
 	var bot_col := Color("0b0c12")
-	if mode == Mode.PICNIC:
-		# Picnic daylight: the softest, warmest pit in the game.
-		top_col = Color("3d4258")
-		bot_col = Color("1a1c28")
 	if mode == Mode.ENDLESS:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
@@ -1503,65 +1198,6 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 	draw_polygon(PackedVector2Array([
 		Vector2(0, top), Vector2(w, top), Vector2(w, floor_y), Vector2(0, floor_y),
 	]), PackedColorArray([top_col, top_col, bot_col, bot_col]))
-	if mode == Mode.PICNIC:
-		# A single soft sunbeam straight down the middle of the picnic pit.
-		var beam := Color(1.0, 0.95, 0.82, 0.08)
-		var beam_faded := Color(1.0, 0.95, 0.82, 0.0)
-		draw_polygon(PackedVector2Array([
-			Vector2(w * 0.3, 0.0), Vector2(w * 0.7, 0.0),
-			Vector2(w * 0.8, h), Vector2(w * 0.2, h),
-		]), PackedColorArray([beam, beam, beam_faded, beam_faded]))
-	elif mode != Mode.ENDLESS:
-		# Warm light shafts slanting in — only from doors that are open.
-		var y0 := door_row * CELL
-		var y1 := (door_row + 2) * CELL
-		var yt := minf(y1 + h * 0.45, h)
-		var warm := Color(1.0, 0.95, 0.82, 0.1)
-		var faded := Color(1.0, 0.95, 0.82, 0.0)
-		if door_left:
-			draw_polygon(PackedVector2Array([
-				Vector2(0, y0), Vector2(0, y1), Vector2(w * 0.55, yt),
-			]), PackedColorArray([warm, warm, faded]))
-		if door_right:
-			draw_polygon(PackedVector2Array([
-				Vector2(w, y0), Vector2(w, y1), Vector2(w * 0.45, yt),
-			]), PackedColorArray([warm, warm, faded]))
-
-
-## One exit tunnel in each side wall, at the top rows. Locked doors (story
-## goals not yet met) draw as a dark slab with a padlock instead of the glow.
-func _draw_doors() -> void:
-	var w := COLS * CELL
-	var door_h := 2 * CELL
-	var y := door_row * CELL
-	var glow := Color(1.0, 0.95, 0.82, 0.18)
-	var frame := Color(1.0, 0.95, 0.82, 0.75)
-	var font := ThemeDB.fallback_font
-	var mid_y := y + door_h / 2.0 + 9.0
-	for entry in [[Rect2(-CELL, y, CELL, door_h), door_left],
-			[Rect2(w, y, CELL, door_h), door_right]]:
-		var door: Rect2 = entry[0]
-		if entry[1]:
-			draw_rect(door, glow)
-			draw_rect(door, frame, false, 2.0)
-		else:
-			draw_rect(door, Color(0.09, 0.09, 0.13, 0.95))
-			draw_rect(door, Color(1, 1, 1, 0.22), false, 2.0)
-			_draw_lock(door.get_center())
-	if door_left:
-		draw_string(font, Vector2(CELL * 0.25, mid_y), "← ESC",
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
-	if door_right:
-		draw_string(font, Vector2(w - CELL * 1.55, mid_y), "ESC →",
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.95, 0.82, 0.9))
-
-
-func _draw_lock(at: Vector2) -> void:
-	var col := Color(1.0, 0.9, 0.6, 0.85)
-	draw_rect(Rect2(at + Vector2(-10.0, -3.0), Vector2(20.0, 16.0)), col)
-	draw_arc(at + Vector2(0.0, -4.0), 7.0, PI, TAU, 10, col, 3.5)
-
-
 ## Rising lava: hot glowing surface with a slow wave, cooling to dark below.
 func _draw_lava(w: float) -> void:
 	var bottom := maxf(rows * CELL, lava_y) + CELL * 6.0

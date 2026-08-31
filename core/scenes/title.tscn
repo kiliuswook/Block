@@ -27,24 +27,6 @@ theme_override_colors/font_color = Color(1, 1, 1, 0.6)
 horizontal_alignment = 1
 text = "MENU_TAGLINE"
 
-[node name="EscapeBtn" type="Button" parent="UI"]
-offset_left = 710.0
-offset_top = 304.0
-offset_right = 1210.0
-offset_bottom = 364.0
-theme_override_font_sizes/font_size = 32
-text = "MODE_STORY"
-
-[node name="EscapeDesc" type="Label" parent="UI"]
-offset_left = 710.0
-offset_top = 366.0
-offset_right = 1210.0
-offset_bottom = 390.0
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 1, 1, 0.5)
-horizontal_alignment = 1
-text = "MODE_STORY_DESC"
-
 [node name="EndlessBtn" type="Button" parent="UI"]
 offset_left = 710.0
 offset_top = 394.0
@@ -80,23 +62,4 @@ theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 1, 0.5)
 horizontal_alignment = 1
 text = "MODE_CLASSIC_DESC"
-
-[node name="PicnicBtn" type="Button" parent="UI"]
-offset_left = 710.0
-offset_top = 664.0
-offset_right = 1210.0
-offset_bottom = 724.0
-theme_override_font_sizes/font_size = 32
-theme_override_colors/font_color = Color(0.957, 0.89, 0.784, 1)
-text = "MODE_PICNIC"
-
-[node name="PicnicDesc" type="Label" parent="UI"]
-offset_left = 710.0
-offset_top = 726.0
-offset_right = 1210.0
-offset_bottom = 750.0
-theme_override_font_sizes/font_size = 18
-theme_override_colors/font_color = Color(1, 1, 1, 0.5)
-horizontal_alignment = 1
-text = "MODE_PICNIC_DESC"
 
