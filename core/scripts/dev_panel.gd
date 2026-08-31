@@ -17,9 +17,12 @@ const UiKit := preload("res://core/scripts/ui_kit.gd")
 ## 이 하나로 패널 전체(타이틀 DEV 버튼 · 오버레이)가 켜지고 꺼진다.
 const ENABLED := true
 
-const TAB_NAMES := ["업적 (Achievements)", "리더보드 (Leaderboards)"]
+const TAB_NAMES := ["업적 (Achievements)", "리더보드 (Leaderboards)", "치트 (Cheats)"]
 
-var _tab := 0  # 0 = 업적, 1 = 리더보드
+## 치트 탭의 골드 지급 단위.
+const GOLD_GRANTS := [1000, 10000, 100000, 1000000]
+
+var _tab := 0  # 0 = 업적, 1 = 리더보드, 2 = 치트
 var _fetched := false  # 이번에 연 뒤 보드를 한 번 받아 왔는가
 var _body: VBoxContainer
 var _tabs: Array[Button] = []
@@ -65,7 +68,7 @@ func _ready() -> void:
 	for i in TAB_NAMES.size():
 		var b := Button.new()
 		b.text = TAB_NAMES[i]
-		b.custom_minimum_size = Vector2((pw - 80.0) / 2.0, 48.0)
+		b.custom_minimum_size = Vector2((pw - 80.0) / float(TAB_NAMES.size()), 48.0)
 		var idx := i
 		b.pressed.connect(func() -> void:
 			Sfx.play("click")
@@ -127,8 +130,10 @@ func _rebuild() -> void:
 		c.queue_free()
 	if _tab == 0:
 		_build_achievements()
-	else:
+	elif _tab == 1:
 		_build_boards()
+	else:
+		_build_cheats()
 
 
 # --- 업적 ---------------------------------------------------------------------
@@ -273,6 +278,48 @@ func _cat_max(f: Callable) -> int:
 
 func _frac(cur: int, goal: int) -> String:
 	return "%d / %d" % [mini(cur, goal), goal]
+
+
+# --- 치트 -------------------------------------------------------------------
+
+
+## 개발 중에 상점·뽑기를 마음껏 돌려 보려고 두는 재화 치트.
+func _build_cheats() -> void:
+	_note.text = "지금 골드: %s  ·  누적 획득: %s  —  개발용 치트라 세이브에 그대로 들어간다 (출시 빌드에서는 패널째로 빠진다)" % [_comma(GameState.gold), _comma(GameState.gold_earned)]
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_body.add_child(row)
+	for amount: int in GOLD_GRANTS:
+		var add := amount
+		row.add_child(_tool_btn("+ %s G" % _comma(add), UiKit.GOLD_DEEP, func() -> void:
+			GameState.add_currency(add)  # 누적 획득에도 반영 (골드 업적 확인용)
+			_refresh_wallet()))
+	var row2 := HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 8)
+	_body.add_child(row2)
+	row2.add_child(_tool_btn("골드 0 으로", UiKit.RED_DEEP, func() -> void:
+		GameState.gold = 0
+		GameState.save_game()
+		_refresh_wallet()))
+	_body.add_child(_kv("골드", _comma(GameState.gold)))
+	_body.add_child(_kv("누적 획득 골드", _comma(GameState.gold_earned)))
+
+
+## 치트로 재화를 바꾼 뒤 타이틀의 유저 HUD(지갑)를 다시 그린다.
+func _refresh_wallet() -> void:
+	var scene := get_tree().current_scene
+	if scene and scene.has_method("_refresh_currency"):
+		scene.call("_refresh_currency")
+
+
+func _comma(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	for i in s.length():
+		if i > 0 and (s.length() - i) % 3 == 0:
+			out += ","
+		out += s[i]
+	return ("-" if n < 0 else "") + out
 
 
 # --- 리더보드 ------------------------------------------------------------------

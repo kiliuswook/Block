@@ -114,8 +114,8 @@ const KEYCAP_GACHA_BULK := 10
 const KEYCAP_GACHA_BULK_PRICE := 250
 ## 한 번에 뽑을 수 있는 최대 장수 (상점 개수 스테퍼의 "최대").
 const KEYCAP_GACHA_MAX := 10
-## 이번 바퀴에서 아직 못 채운 글자가 나올 확률 (나머지는 완전 랜덤 = 중복).
-const KEYCAP_FRESH_CHANCE := 0.7
+## 키캡은 중복 소유를 허용하지 않는다 — 뽑기는 늘 이번 바퀴에서 비어 있는
+## 글자만 내주고, A~Z를 다 채운(만렙) 냥이는 아예 캡슐에 들어가지 않는다.
 ## 선택 뽑기: 이만큼의 냥이를 골라 두면 그 냥이들만 캡슐에서 나온다.
 ## 원하는 냥이를 겨냥할 수 있는 값이라 한 장 값이 그만큼 비싸다.
 const KEYCAP_PICK_SIZE := 5
@@ -437,7 +437,7 @@ func keycap_total(cat_id := "") -> int:
 	return total
 
 
-## 키캡 한 장을 그 캐릭터 앞으로 적립한다 (중복은 쌓인다).
+## 키캡 한 장을 그 캐릭터 앞으로 적립한다 (등급 바퀴마다 1씩 쌓인다).
 ## 여러 장을 한꺼번에 뽑을 때는 save=false로 넘기고 마지막에 한 번만 저장한다.
 func add_keycap(cat_id: String, letter: String, save := true) -> void:
 	var d := cat_keycaps(cat_id)
@@ -502,47 +502,99 @@ func has_keycap(cat_id: String, letter: String) -> bool:
 ##  · 랜덤 뽑기 (pick 비움) — 아직 만렙이 아닌 냥이 전체에서 균등 랜덤
 ##    (잠긴 냥이 포함 — 아무나 먼저 완성한 순서대로 합류한다).
 ##  · 선택 뽑기 (pick = 냥이 id 배열) — 그 냥이들만 나온다. 대신 값이 비싸다.
-## 반환: [{"cat": id, "letter": "A", "fresh": bool, "grade_up": bool}, ...]
+## 중복은 나오지 않는다 — 뽑을 때마다 풀에서 만렙 냥이를 걸러 내고, 냥이마다
+## 이번 바퀴에 비어 있는 글자에서만 고른다. 남은 키캡보다 많이 부르면 남은
+## 만큼으로 줄여서(그 장수 값만) 뽑는다.
+## 반환: [{"cat": id, "letter": "A", "fresh": true, "grade_up": bool}, ...]
+##       (중복이 없으니 fresh는 늘 참 — 연출 코드 호환용으로 남겨 둔다)
 ## 골드가 모자라거나 풀이 비면 빈 배열.
 func draw_keycaps(n: int, pick: Array = []) -> Array:
-	n = clampi(n, 1, KEYCAP_GACHA_MAX)
-	var pool := gacha_pool(pick)
-	if pool.is_empty():
+	n = mini(clampi(n, 1, KEYCAP_GACHA_MAX), gacha_capacity(pick))
+	if n <= 0:
 		return []
 	if not spend_gold(keycap_price(n, not pick.is_empty())):
 		return []
 	var out: Array = []
 	for i in n:
+		# 방금 만렙이 된 냥이는 다음 장부터 빠진다 (= 중복 방지).
+		var pool := gacha_pool(pick)
+		if pool.is_empty():
+			break
 		var cat_id := pool[randi() % pool.size()]
 		var before := cat_grade(cat_id)
 		var letter := _roll_letter(cat_id)
-		var fresh := not has_keycap(cat_id, letter)
+		if letter.is_empty():
+			break
 		add_keycap(cat_id, letter, false)
-		out.append({"cat": cat_id, "letter": letter, "fresh": fresh,
+		out.append({"cat": cat_id, "letter": letter, "fresh": true,
 				"grade_up": cat_grade(cat_id) > before})
-	gacha_drawn += n
+	gacha_drawn += out.size()
 	save_game()
 	Achv.check()  # 키캡·등급·누적 뽑기 업적
 	return out
 
 
-## 이번 뽑기에서 캡슐에 들어가는 냥이들. 선택 뽑기는 고른 냥이 그대로,
-## 랜덤 뽑기는 아직 만렙이 아닌 냥이들 (전원 만렙이면 전체 = 중복 수집).
+## 이번 뽑기에서 캡슐에 들어가는 냥이들 — 어느 쪽이든 **아직 만렙이 아닌**
+## 냥이만 들어간다 (중복 키캡은 나오지 않으므로 다 모은 냥이는 뽑을 게 없다).
+## 선택 뽑기는 걸어 둔 냥이 중 그런 냥이만, 랜덤 뽑기는 전체 중 그런 냥이만.
 func gacha_pool(pick: Array = []) -> Array[String]:
 	var pool: Array[String] = []
 	if not pick.is_empty():
 		for cid in pick:
 			var id := str(cid)
-			if not get_cat(id).is_empty() and not is_custom_cat(id) and id not in pool:
+			if get_cat(id).is_empty() or is_custom_cat(id) or id in pool:
+				continue
+			if cat_grade(id) < KEYCAP_GRADE_MAX:
 				pool.append(id)
 		return pool
 	for cat in keycap_cats():
 		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
 			pool.append(str(cat.id))
-	if pool.is_empty():
-		for cat in keycap_cats():
-			pool.append(str(cat.id))
 	return pool
+
+
+## 이 냥이에게서 앞으로 더 뽑을 수 있는 키캡 수 (만렙까지 남은 글자 총합).
+func keycaps_left(id: String) -> int:
+	var grade := cat_grade(id)
+	if grade >= KEYCAP_GRADE_MAX:
+		return 0
+	return keycaps_to_next(id) + 26 * (KEYCAP_GRADE_MAX - grade - 1)
+
+
+## 이번 뽑기 풀에 남아 있는 키캡 총량 — 중복이 없으니 이보다 많이는 못 뽑는다.
+func gacha_capacity(pick: Array = []) -> int:
+	var left := 0
+	for id in gacha_pool(pick):
+		left += keycaps_left(id)
+	return left
+
+
+## 선택 뽑기에 걸 수 있는 냥이인가 — 만렙(A~Z 전부 수집)이면 고를 수 없다.
+func can_pick_gacha(id: String) -> bool:
+	return cat_grade(id) < KEYCAP_GRADE_MAX
+
+
+## 선택 뽑기를 돌리려면 걸어 둬야 하는 냥이 수. 고를 수 있는 냥이가
+## KEYCAP_PICK_SIZE보다 적게 남으면 그만큼만 요구한다.
+func gacha_pick_need() -> int:
+	var pickable := 0
+	for cat in keycap_cats():
+		if can_pick_gacha(str(cat.id)):
+			pickable += 1
+	return mini(KEYCAP_PICK_SIZE, pickable)
+
+
+## 걸어 둔 선택 뽑기 목록에서 만렙이 된 냥이를 걷어 낸다. 바뀌면 참.
+func prune_gacha_pick() -> bool:
+	var kept: Array = []
+	for cid in gacha_pick:
+		if can_pick_gacha(str(cid)):
+			kept.append(str(cid))
+	if kept.size() == gacha_pick.size():
+		return false
+	gacha_pick = kept
+	save_game()
+	return true
 
 
 ## n장 값 — KEYCAP_GACHA_BULK장 묶음은 묶음값으로 계산하고 나머지는 낱장값이다.
@@ -555,26 +607,28 @@ func keycap_price(n: int, pick := false) -> int:
 
 
 ## 지금 골드로 살 수 있는 최대 장수 ("최대" 버튼). 묶음값이 낱장값보다 싸서
-## 값이 장수에 비례하지 않으므로 위에서부터 훑는다. 못 사면 1을 돌려준다.
+## 값이 장수에 비례하지 않으므로 위에서부터 훑는다. 남은 키캡이 그보다 적으면
+## 거기서 멈춘다 (중복이 없으니 그 이상은 뽑히지 않는다). 못 사면 1.
 func keycap_max_draws(pick := false) -> int:
-	for n in range(KEYCAP_GACHA_MAX, 1, -1):
+	var cap := mini(KEYCAP_GACHA_MAX,
+			gacha_capacity(gacha_pick if pick else []))
+	for n in range(cap, 1, -1):
 		if keycap_price(n, pick) <= gold:
 			return n
 	return 1
 
 
-## 이번 바퀴에서 비어 있는 글자를 우선으로 하나 고른다. 확정이 아니라
-## 확률이라 중복도 나온다 (100%면 뽑는 맛 없이 정해진 횟수 노가다가 된다).
+## 이번 바퀴에서 비어 있는 글자 중 하나 — 중복은 절대 나오지 않는다.
+## 빈 글자가 없으면(=만렙) 빈 문자열. 풀이 만렙 냥이를 거르므로 정상 흐름에선
+## 안 나오지만, 부르는 쪽이 그때 뽑기를 멈추게 하는 안전장치다.
 func _roll_letter(cat_id: String) -> String:
-	if randf() > KEYCAP_FRESH_CHANCE:
-		return char(65 + randi() % 26)
 	var missing: Array[String] = []
 	for i in 26:
 		var letter := char(65 + i)
 		if not has_keycap(cat_id, letter):
 			missing.append(letter)
 	if missing.is_empty():
-		return char(65 + randi() % 26)
+		return ""
 	return missing[randi() % missing.size()]
 
 

@@ -15,8 +15,6 @@ const CAT_CUSTOMIZER := preload("res://core/scripts/cat_customizer.gd")
 const DEV_PANEL := preload("res://core/scripts/dev_panel.gd")
 const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
-const STAT_ROWS := [["STAT_SPEED", "speed"], ["STAT_JUMP", "jump"],
-		["STAT_DASH", "dash"], ["STAT_WEIGHT", "weight"], ["STAT_PUSH", "push"]]
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 const KEY_GAP := 8.0
 ## 캐릭터 페이지: 헤더 · 왼쪽 상세 카드 · 오른쪽 캐릭터 격자 카드.
@@ -29,8 +27,11 @@ const CHAR_LEFT_RATIO := 0.46  # 왼쪽 상세 카드가 차지하는 비율
 const CHAR_GRID_COLS := 5
 const CHAR_SCROLL_W := 20.0  # 세로 스크롤바가 먹는 폭
 const CHAR_SLOT_GAP := 16.0  # 격자와 아래 커스텀 슬롯 줄 사이
-## 왼쪽 카드 — 프리뷰 크기, 도감/꾸미기가 시작하는 y, 아래 보상 줄 높이.
-const CHAR_PREVIEW := 168.0
+## 왼쪽 카드 — 프리뷰 무대(냥이가 서는 판) 크기, 도감/꾸미기가 시작하는 y,
+## 아래 보상 줄 높이. 무대 오른쪽은 이름 · 특성 · 소개 · 상태 배지가 채운다.
+const CHAR_STAGE_TOP := 28.0
+const CHAR_STAGE_W := 250.0
+const CHAR_PREVIEW := 172.0
 const CHAR_DEX_TOP := 340.0
 const CHAR_CUSTOM_TOP := 340.0
 const CHAR_REWARD_H := 152.0
@@ -98,7 +99,7 @@ var _seat_btn: Button  # 무대 좌석 아래 "캐릭터 변경" 버튼
 ## 타일을 눌러도 자리 배정을 하지 않는다.
 var _pick_seat := false
 var _char_view := "cream"  # 왼쪽 상세 카드에 펼쳐 놓은 냥이
-var _char_left: Control  # 상세 카드 (프리뷰·능력치·키캡 도감·보상 / 꾸미기)
+var _char_left: Control  # 상세 카드 (프리뷰·키캡 도감·보상 / 꾸미기)
 var _char_grid_card: Control  # 오른쪽 캐릭터 격자 카드
 var _char_scroll: ScrollContainer  # 격자를 담는 세로 스크롤
 var _char_grid: GridContainer  # 디자인 냥이 타일 격자
@@ -545,6 +546,7 @@ func _build_gacha() -> void:
 				Vector2(col_w, board.size.y - 52.0))
 	_build_gacha_pick_ui()
 	_build_gacha_result()
+	_refresh_gacha()  # 다 모은 상태로 시작하면 처음부터 잠긴 모습으로 선다
 
 
 ## 열 하나 = 기계 판 + 개수 스테퍼 + 뽑기 버튼. pick이면 판 아래에 걸어 둔
@@ -601,6 +603,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	var step_y := panel_y + panel_h + 10.0
 	var side := 78.0
 	var arrow := 54.0
+	var steps: Array[Button] = []
 	var min_b := Button.new()
 	min_b.text = tr("SHOP_GACHA_MIN")
 	min_b.position = Vector2(0.0, step_y)
@@ -608,6 +611,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	UiKit.btn_chip(min_b, false, 19)
 	min_b.pressed.connect(func() -> void: _set_gacha_count(idx, 1))
 	col.add_child(min_b)
+	steps.append(min_b)
 	var max_b := Button.new()
 	max_b.text = tr("SHOP_GACHA_MAX")
 	max_b.position = Vector2(size.x - side, step_y)
@@ -616,6 +620,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	max_b.pressed.connect(func() -> void:
 		_set_gacha_count(idx, GameState.keycap_max_draws(pick)))
 	col.add_child(max_b)
+	steps.append(max_b)
 	var dec := Button.new()
 	dec.text = "◀"
 	dec.position = Vector2(side + 10.0, step_y)
@@ -624,6 +629,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	dec.pressed.connect(func() -> void:
 		_set_gacha_count(idx, _gacha_n[idx] - 1))
 	col.add_child(dec)
+	steps.append(dec)
 	var inc := Button.new()
 	inc.text = "▶"
 	inc.position = Vector2(size.x - side - 10.0 - arrow, step_y)
@@ -632,6 +638,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	inc.pressed.connect(func() -> void:
 		_set_gacha_count(idx, _gacha_n[idx] + 1))
 	col.add_child(inc)
+	steps.append(inc)
 	var count := Label.new()
 	count.position = Vector2(side + 10.0 + arrow, step_y)
 	count.size = Vector2(size.x - (side + 10.0 + arrow) * 2.0, step_h)
@@ -654,7 +661,7 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	face.draw.connect(func() -> void: _draw_gacha_draw_btn(face, pick))
 	draw_b.add_child(face)
 	_gacha_cols.append({"pick": pick, "count": count, "face": face,
-			"panel": panel, "machine": machine})
+			"panel": panel, "machine": machine, "draw": draw_b, "steps": steps})
 
 
 ## 열의 기계 판 — 하늘색 상자. 선택 뽑기는 아래에 초록 판을 하나 더 얹어
@@ -694,6 +701,11 @@ func _draw_gacha_draw_btn(ci: Control, pick: bool) -> void:
 	var n: int = _gacha_n[1 if pick else 0]
 	var price: int = GameState.keycap_price(n, pick)
 	var font := ThemeDB.fallback_font
+	if _gacha_sold_out():
+		# 모든 냥이가 A~Z를 다 모았다 — 중복이 없으니 뽑을 것이 남지 않았다.
+		_draw_center_text(ci, font, tr("SHOP_GACHA_SOLD_OUT"),
+				ci.size.y * 0.62, 26, UiKit.WHITE, ci.size.x)
+		return
 	_draw_center_text(ci, font, tr("SHOP_GACHA_DRAW_BTN"), ci.size.y * 0.42,
 			30, UiKit.WHITE, ci.size.x)
 	var pill := Rect2(ci.size.x * 0.2, ci.size.y * 0.5,
@@ -705,9 +717,10 @@ func _draw_gacha_draw_btn(ci: Control, pick: bool) -> void:
 			ci.size.x)
 
 
-## 그 열에서 뽑을 개수. 1 ~ KEYCAP_GACHA_MAX.
+## 그 열에서 뽑을 개수. 1 ~ KEYCAP_GACHA_MAX, 단 그 풀에 남은 키캡까지만
+## (중복이 없으니 남은 것보다 많이 뽑을 수는 없다).
 func _set_gacha_count(idx: int, n: int) -> void:
-	n = clampi(n, 1, GameState.KEYCAP_GACHA_MAX)
+	n = clampi(n, 1, _gacha_cap(idx == 1))
 	if n == _gacha_n[idx]:
 		Sfx.play("error")
 		return
@@ -807,7 +820,10 @@ func _draw_gacha_chip(ci: Control, cat: Dictionary) -> void:
 	var font := ThemeDB.fallback_font
 	_draw_center_text(ci, font, tr(str(cat.name)), ci.size.y - 30.0, 17,
 			INK if unlocked else UiKit.MUTED, ci.size.x)
-	_draw_center_text(ci, font, "▦ %d / 26" % GameState.keycap_ring(id),
+	var done: bool = not GameState.can_pick_gacha(id)
+	_draw_center_text(ci, font,
+			tr("SHOP_GACHA_CHIP_DONE") if done
+			else "▦ %d / 26" % GameState.keycap_ring(id),
 			ci.size.y - 10.0, 14, UiKit.MUTED, ci.size.x)
 	if id in GameState.gacha_pick:
 		# 고른 냥이 — 우상단에 금색 체크 뱃지.
@@ -819,6 +835,12 @@ func _draw_gacha_chip(ci: Control, cat: Dictionary) -> void:
 
 func _toggle_gacha_pick(id: String) -> void:
 	var pick: Array = GameState.gacha_pick.duplicate()
+	if not GameState.can_pick_gacha(id):
+		# 이미 A~Z를 전부 모은 냥이 — 뽑아 줄 키캡이 없다.
+		Sfx.play("error")
+		_show_toast(tr("SHOP_GACHA_DONE_CAT").format(
+				{"name": tr(str(GameState.get_cat(id).name))}), UiKit.MUTED)
+		return
 	if id in pick:
 		pick.erase(id)
 		Sfx.play("click")
@@ -839,11 +861,17 @@ func _toggle_gacha_pick(id: String) -> void:
 ## 결과는 트레이 오버레이에 캡슐로 굴러 나와 열린다.
 func _on_gacha(idx: int) -> void:
 	var pick_mode := idx == 1
+	GameState.prune_gacha_pick()
 	var pick: Array = GameState.gacha_pick if pick_mode else []
-	if pick_mode and pick.size() < GameState.KEYCAP_PICK_SIZE:
+	if pick_mode and pick.size() < GameState.gacha_pick_need():
 		Sfx.play("error")
 		_show_toast(tr("SHOP_GACHA_PICK_NEED").format(
-				{"n": GameState.KEYCAP_PICK_SIZE}), Color(1.0, 0.55, 0.5))
+				{"n": GameState.gacha_pick_need()}), Color(1.0, 0.55, 0.5))
+		return
+	if GameState.gacha_capacity(pick) <= 0:
+		# 이 풀의 냥이가 전부 만렙 — 중복은 나오지 않으므로 뽑을 게 없다.
+		Sfx.play("error")
+		_show_toast(tr("SHOP_GACHA_SOLD_OUT"), Color(1.0, 0.55, 0.5))
 		return
 	var pull := GameState.draw_keycaps(_gacha_n[idx], pick)
 	if pull.is_empty():
@@ -871,10 +899,9 @@ func _on_gacha(idx: int) -> void:
 	if not announced:
 		var last: Dictionary = pull[-1]
 		var cat_name := tr(str(GameState.get_cat(str(last.cat)).name))
-		Sfx.play("buy" if last.fresh else "click")
-		_show_toast(tr("KEYCAP_NEW" if last.fresh else "KEYCAP_DUP").format(
-				{"name": cat_name, "letter": str(last.letter)}),
-				GOLD_COL if last.fresh else UiKit.MUTED)
+		Sfx.play("buy")
+		_show_toast(tr("KEYCAP_NEW").format(
+				{"name": cat_name, "letter": str(last.letter)}), GOLD_COL)
 	_refresh_gacha()
 	_refresh_currency()
 	_refresh_tiles()
@@ -1109,23 +1136,52 @@ func _process(delta: float) -> void:
 		_pull_anim = false
 
 
+## 더 뽑을 키캡이 남았는가 — 전 냥이가 만렙이면 상점 자체가 닫힌다
+## (중복 키캡이 없으므로 골드가 있어도 내줄 것이 없다).
+func _gacha_sold_out() -> bool:
+	return GameState.gacha_capacity([]) <= 0
+
+
+## 그 열에서 지금 뽑을 수 있는 최대 장수 (스테퍼 상한).
+func _gacha_cap(pick: bool) -> int:
+	var left := GameState.gacha_capacity(GameState.gacha_pick if pick else [])
+	return clampi(left, 1, GameState.KEYCAP_GACHA_MAX)
+
+
 func _refresh_gacha() -> void:
+	GameState.prune_gacha_pick()  # 만렙이 된 냥이는 선택 뽑기에서 빠진다
+	var sold_out := _gacha_sold_out()
 	for c: Dictionary in _gacha_cols:
 		var idx := 1 if bool(c.pick) else 0
-		_gacha_n[idx] = clampi(_gacha_n[idx], 1, GameState.KEYCAP_GACHA_MAX)
+		_gacha_n[idx] = clampi(_gacha_n[idx], 1, _gacha_cap(idx == 1))
 		(c.count as Label).text = str(_gacha_n[idx])
+		# 뽑을 키캡이 없으면 버튼도 스테퍼도 눌리지 않게 잠근다.
+		var draw_b: Button = c.draw
+		draw_b.disabled = sold_out
+		if sold_out:
+			UiKit.style_button(draw_b, UiKit.MUTED, Color("6d6a74"),
+					UiKit.WHITE, 30, 22)
+		else:
+			UiKit.btn_primary(draw_b, 30)
+		for b: Button in c.steps:
+			b.disabled = sold_out
 		(c.face as Control).queue_redraw()
 		(c.panel as Control).queue_redraw()
 		(c.machine as Control).queue_redraw()
 	if _gacha_count:
 		_gacha_count.text = tr("SHOP_GACHA_PICK_COUNT").format(
 				{"n": GameState.gacha_pick.size(),
-				"max": GameState.KEYCAP_PICK_SIZE})
+				"max": GameState.gacha_pick_need()})
 	for id: String in _gacha_chips:
 		var b: Button = _gacha_chips[id]
 		var on: bool = id in GameState.gacha_pick
-		UiKit.style_button(b, Color("fff1cf") if on else UiKit.WHITE,
-				UiKit.GOLD_DEEP if on else Color("c9c6d0"), INK, 18, 16)
+		var done: bool = not GameState.can_pick_gacha(id)
+		# 키캡을 전부 모은 냥이는 고를 수 없다 — 회색으로 눕혀 둔다.
+		UiKit.style_button(b, Color("eceaf0") if done
+				else (Color("fff1cf") if on else UiKit.WHITE),
+				Color("c9c6d0") if done
+				else (UiKit.GOLD_DEEP if on else Color("c9c6d0")),
+				UiKit.MUTED if done else INK, 18, 16)
 		(b.get_child(0) as Control).queue_redraw()
 
 
@@ -1572,7 +1628,7 @@ func _rank_row(rank: int, name_text: String, v: int, mine: bool,
 
 ## 캐릭터 메뉴는 팝업이 아니라 전체 화면 페이지다 (UI 컨셉 기준):
 ##   헤더(제목 · 뒤로 — 골드는 좌상단 고정 유저 HUD가 맡는다)
-##   왼쪽 카드 = 펼친 냥이 하나 (프리뷰 · 이름 · 능력치 · 키캡 도감 · 보상 줄,
+##   왼쪽 카드 = 펼친 냥이 하나 (프리뷰 · 이름 · 키캡 도감 · 보상 줄,
 ##     커스텀 슬롯이면 도감·보상 자리에 꾸미기 패널이 들어온다)
 ##   오른쪽 카드 = 캐릭터 격자 (한 줄 5칸 · 세로 스크롤, 30마리까지)
 ##     + 구분선 아래 커스텀 슬롯 줄 ("+"로 슬롯 추가)
@@ -1904,12 +1960,15 @@ func _draw_text_at(ci: Control, font: Font, text: String, cx: float, y: float,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 
-## Maps a stat value onto 1–5 display pips. Multipliers (≈0.7–1.3) center on
-## 3 pips at 1.0; the push stat is already a cell count and maps directly.
-func _stat_pips(key: String, v: float) -> int:
-	if key == "push":
-		return clampi(int(v), 1, 5)
-	return clampi(3 + roundi((v - 1.0) * 15.0), 1, 5)
+## 둥근 알약 배지 하나 (특성 · 상태). 그린 폭을 돌려준다.
+func _draw_pill(ci: Control, font: Font, text: String, at: Vector2, h: float,
+		size: int, fg: Color, bg: Color) -> float:
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	ci.draw_style_box(UiKit.panel_box(bg, int(h / 2.0), 0.0),
+			Rect2(at, Vector2(tw + 28.0, h)))
+	ci.draw_string(font, at + Vector2(14.0, h * 0.5 + size * 0.36), text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, size, fg)
+	return tw + 28.0
 
 
 func _draw_lock(ci: Control, at: Vector2) -> void:
@@ -1946,8 +2005,8 @@ func _draw_char_grid_card(ci: Control) -> void:
 			Color(INK, 0.16), 2.0)
 
 
-# --- 왼쪽 카드: 펼친 냥이 (프리뷰 · 능력치 · 키캡 도감 · 보상) ------------------------
-## 능력치는 캐릭터 데이터(GameState.cat_stats)를 그대로 보여 주는 표시 전용이다.
+# --- 왼쪽 카드: 펼친 냥이 (프리뷰 · 키캡 도감 · 보상) ---------------------------------
+## 능력치(GameState.cat_stats)는 데이터로만 남기고 UI에는 표시하지 않는다.
 
 
 func _draw_char_detail(ci: Control) -> void:
@@ -1958,9 +2017,12 @@ func _draw_char_detail(ci: Control) -> void:
 	ci.draw_style_box(UiKit.panel_box(UiKit.WHITE, 22, 0.0),
 			Rect2(Vector2.ZERO, ci.size))
 	var font := ThemeDB.fallback_font
-	# 위쪽: 왼쪽에 프리뷰 냥이, 오른쪽에 이름 · 특성 · 능력치.
-	var center := Vector2(CHAR_PAD + 26.0 + CHAR_PREVIEW * 0.5,
-			46.0 + CHAR_PREVIEW * 0.6)
+	# 위쪽: 왼쪽에 냥이가 서는 무대 판, 오른쪽에 이름 · 특성 · 소개 · 상태 배지.
+	var stage := Rect2(CHAR_PAD, CHAR_STAGE_TOP, CHAR_STAGE_W, CHAR_STAGE_W)
+	ci.draw_style_box(UiKit.panel_box(Color("eaf3fb"), 22, 0.0), stage)
+	UiKit.paw(ci, stage.position + Vector2(34.0, 210.0), 13.0, Color(INK, 0.06), 0.5)
+	UiKit.paw(ci, stage.position + Vector2(214.0, 46.0), 10.0, Color(INK, 0.05), -0.8)
+	var center := stage.get_center() + Vector2(0.0, CHAR_PREVIEW * 0.02)
 	UiKit.ellipse(ci, center + Vector2(0.0, CHAR_PREVIEW * 0.54),
 			Vector2(CHAR_PREVIEW * 0.42, CHAR_PREVIEW * 0.11),
 			Color(0.2, 0.35, 0.45, 0.14))
@@ -1973,35 +2035,33 @@ func _draw_char_detail(ci: Control) -> void:
 		Player.paint_cat(ci, center, CHAR_PREVIEW, 0.0, true, false,
 				GameState.cat_shadow_skin(id))
 		_draw_lock(ci, center + Vector2(CHAR_PREVIEW * 0.42, CHAR_PREVIEW * 0.34))
-	var ix := CHAR_PAD + CHAR_PREVIEW + 56.0
+	var ix := stage.position.x + stage.size.x + 30.0
 	var iw := maxf(160.0, w - CHAR_PAD - ix)
 	var nm := tr(str(cat.name))
-	ci.draw_string(font, Vector2(ix, 74.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			UiKit.fit_size(font, nm, iw - 76.0, 34),
+	# 이름은 우상단 ★ 버튼(폭 76)을 피해 자른다.
+	ci.draw_string(font, Vector2(ix, 78.0), nm, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			UiKit.fit_size(font, nm, iw - 84.0, 34),
 			INK if unlocked else UiKit.MUTED)
-	ci.draw_string(font, Vector2(ix, 108.0), "「%s」" % tr(str(cat.get("trait", ""))),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 20, GOLD_COL)
-	var stats: Dictionary = GameState.cat_stats(id)
-	var lab_w := minf(112.0, iw * 0.34)
-	var pip_w := (iw - lab_w - 12.0) / 5.0 - 6.0
-	for i in STAT_ROWS.size():
-		var y := 132.0 + i * 34.0
-		ci.draw_string(font, Vector2(ix, y + 15.0), tr(STAT_ROWS[i][0]),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color(INK, 0.85))
-		var pips := _stat_pips(STAT_ROWS[i][1], stats.get(STAT_ROWS[i][1], 1.0))
-		for p in 5:
-			var r := Rect2(ix + lab_w + 12.0 + p * (pip_w + 6.0), y, pip_w, 16.0)
-			ci.draw_rect(r, UiKit.ORANGE if p < pips else Color(INK, 0.12))
-	var note := ""
+	_draw_pill(ci, font, "「%s」" % tr(str(cat.get("trait", ""))),
+			Vector2(ix, 96.0), 36.0, 20, GOLD_COL, Color(UiKit.GOLD, 0.22))
+	# 소개 글 — 폭에 맞춰 접히고 세 줄까지만 그린다 (긴 번역 대응).
+	# 커스텀 슬롯은 이름이 슬롯 번호까지 달고 있어(CAT_MINE_N) 소개는 한 벌로 쓴다.
+	var desc := "CAT_MINE_DESC" if GameState.is_custom_cat(id) \
+			else "%s_DESC" % str(cat.name)
+	ci.draw_multiline_string(font, Vector2(ix, 168.0), tr(desc),
+			HORIZONTAL_ALIGNMENT_LEFT, iw, 18, 3,
+			Color(INK, 0.62) if unlocked else UiKit.MUTED)
+	# 상태 배지 — 대표 > 장착 중 > 잠김 순으로 하나만 띄운다.
 	if GameState.featured_cat() == id:
-		note = tr("CHAR_FEATURE_ON")
+		_draw_pill(ci, font, tr("CHAR_FEATURE_ON"), Vector2(ix, 244.0), 38.0, 19,
+				INK, UiKit.GOLD)
 	elif _is_chosen(id):
-		note = tr("CHAR_EQUIPPED")
-	if note != "":
-		# 특성 줄 오른쪽 끝에 붙인다 — 아래 도감 제목과 겹치지 않게.
-		var nw := font.get_string_size(note, HORIZONTAL_ALIGNMENT_LEFT, -1, 19).x
-		ci.draw_string(font, Vector2(w - CHAR_PAD - nw, 108.0), note,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 19, GOLD_COL)
+		_draw_pill(ci, font, tr("CHAR_EQUIPPED"), Vector2(ix, 244.0), 38.0, 19,
+				INK, UiKit.CYAN)
+	elif not unlocked:
+		# 남은 글자 수는 아래 키캡 진행 바가 말해 주므로 여기선 잠김 표시만.
+		_draw_pill(ci, font, tr("CHAR_REWARD_LOCKED"), Vector2(ix, 244.0), 38.0,
+				19, Color(INK, 0.55), Color(INK, 0.10))
 	if GameState.is_custom_cat(id):
 		# 아래는 꾸미기 패널(부위 목록 + 옵션 격자)이 채운다 — 제목 줄만 그린다.
 		ci.draw_string(font, Vector2(CHAR_PAD, CHAR_CUSTOM_TOP - 16.0),

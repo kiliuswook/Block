@@ -43,3 +43,10 @@ TRAIT_MAGIC,Spellcaster,마법사,[Şþéłłçàşţéř ———————�
 CAT_MINE,My Own Cat,나만의 캐릭터,[Ṁÿ Ôŵń Çàţ ————————]
 TRAIT_MINE,Made By You,직접 만든 냥이,[Ṁàðé Ɓÿ Ÿôü ————————]
 CAT_MINE_N,My Own Cat {n},나만의 캐릭터 {n},[Ṁÿ Ôŵń Çàţ {n} ———————————]
+CAT_CREAM_DESC,"The first cat to fall in. Steady on any ledge, decent at everything.",제일 먼저 구덩이에 빠진 냥이. 뭐든 무난하게 해내는 성실파.,"[Ţĥé ƒïřşţ çàţ ţô ƒàłł ïń. Şţéàðÿ ôń àńÿ łéðğé, ðéçéńţ àţ éṽéřÿţĥïńğ. ——————————————————————————————————————————————————————]"
+CAT_BLACK_DESC,Slips through the dark and gets there before the block lands.,어둠 속을 미끄러지듯 달린다. 블록보다 먼저 도착하는 발.,[Şłïþş ţĥřôüğĥ ţĥé ðàřķ àńð ğéţş ţĥéřé ƀéƒôřé ţĥé ƀłôçķ łàńðş. ————————————————————————————————————————————————]
+CAT_CHEESE_DESC,Well fed and heavy. Lands with a thud and shoves blocks aside.,잘 먹어서 묵직하다. 착지도 쿵,[Ŵéłł ƒéð àńð ĥéàṽÿ. Łàńðş ŵïţĥ à ţĥüð àńð şĥôṽéş ƀłôçķş àşïðé. —————————————————————————————————————————————————]
+CAT_SLEEPY_DESC,"Half asleep all day, but the hops in its dreams are the highest.",하루 종일 졸고 있지만 꿈속 점프는 제일 높다.,"[Ĥàłƒ àşłééþ àłł ðàÿ, ƀüţ ţĥé ĥôþş ïń ïţş ðřéàɱş àřé ţĥé ĥïğĥéşţ. ———————————————————————————————————————————————————]"
+CAT_WIZARD_DESC,Keeps a spellbook in its whiskers. The dash smells faintly of magic.,수염 사이에 마법책을 숨겼다. 대시에서 마법 냄새가 난다.,[Ķééþş à şþéłłƀôôķ ïń ïţş ŵĥïşķéřş. Ţĥé ðàşĥ şɱéłłş ƒàïńţłÿ ôƒ ɱàğïç. ——————————————————————————————————————————————————————]
+CAT_GRAY_DESC,Quiet and dependable. A heavy body with surprisingly light hops.,말수는 적지만 든든하다. 몸은 무거운데 점프는 의외로 가볍다.,[Ɋüïéţ àńð ðéþéńðàƀłé. Å ĥéàṽÿ ƀôðÿ ŵïţĥ şüřþřïşïńğłÿ łïğĥţ ĥôþş. ———————————————————————————————————————————————————]
+CAT_MINE_DESC,"Your own cat, built from the parts your recruited cats brought in.",합류한 냥이들이 가져온 파츠로 직접 만드는 나만의 냥이.,"[Ÿôüř ôŵń çàţ, ƀüïłţ ƒřôɱ ţĥé þàřţş ÿôüř řéçřüïţéð çàţş ƀřôüğĥţ ïń. ————————————————————————————————————————————————————]"

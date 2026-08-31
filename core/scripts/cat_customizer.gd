@@ -1,7 +1,7 @@
 extends Control
 ## 냥이 꾸미기 패널 (UI 문서 21p) — 캐릭터 페이지 가운데 카드 안에 박혀 사는 UI.
 ## 왼쪽 세로 부위 목록 + 오른쪽 옵션 격자 + 아래 액션 바(랜덤 생성 · 초기화 · 저장).
-## 프리뷰는 페이지 왼쪽 능력치 카드가 맡는다 — 고를 때마다 changed로 알려 다시 그린다.
+## 프리뷰는 페이지 왼쪽 상세 카드가 맡는다 — 고를 때마다 changed로 알려 다시 그린다.
 ## 꾸미기는 "나만의 캐릭터"(커스텀 슬롯) 전용이고, 손댄 부위만 그 캐릭터 몫으로
 ## GameState.cat_custom에 **고르는 즉시** 저장된다 (저장 버튼은 확인 표시).
 
@@ -421,7 +421,7 @@ func _preview_locked(key: String, idx: int) -> void:
 		_flavor = "%s  ·  %s" % [tr("CC_PREVIEW"), _lock_text(key, idx)]
 		_flavor_col = PREVIEW_COL
 	_refresh()
-	changed.emit()  # 프리뷰(능력치 카드)도 입혀 본 모습으로 따라온다
+	changed.emit()  # 프리뷰(상세 카드)도 입혀 본 모습으로 따라온다
 
 
 ## 이 옵션을 여는 조건 문구 — 어느 냥이를 어디까지 키우면 되는지.
