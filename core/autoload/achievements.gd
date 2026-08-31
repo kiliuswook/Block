@@ -1,9 +1,11 @@
 extends Node
 ## 업적 정의와 해금 판정.
 ##
-## **게임 안에 업적 목록 UI는 없다.** 표시는 스팀 오버레이가 맡는다 — 이름·설명·
+## **스팀 빌드에는 게임 안 업적 목록 UI가 없다.** 표시는 오버레이가 맡는다 — 이름·설명·
 ## 아이콘·번역이 전부 파트너 사이트에 있으므로 여기엔 id와 조건만 둔다.
-## (모바일을 재개하면 그때 이 DEFS 위에 자체 목록 화면을 얹으면 된다.)
+## **모바일은 오버레이가 없어 자체 목록 화면을 둔다** — `mobile/ui/achievements_panel.gd`가
+## 여기 DEFS를 읽어 그린다. 표시 문자열은 ACHV_<ID>_NAME/_DESC 번역 키다 (/achievements 스킬).
+## 업적을 추가하면 그 두 줄도 shared/locale/ui.csv에 같이 넣을 것.
 ##
 ## 해금 기록은 GameState.achv(save.json)에 남는다. 스팀에 이미 올렸는지와 무관하게
 ## 여기서 한 번 걸러야 매 프레임 setAchievement가 날아가는 걸 막을 수 있고,
@@ -113,3 +115,60 @@ func _check_cats() -> void:
 		unlock_if(GameState.keycap_sets(id) >= 1, KEYCAP_RING)
 		unlock_if(GameState.cat_grade(id) >= GameState.KEYCAP_GRADE_MAX, CAT_MAX_GRADE)
 	unlock_if(not cats.is_empty() and unlocked == cats.size(), CAT_UNLOCK_ALL)
+
+
+## 업적 하나의 진행 상황 — (지금, 목표). 목표가 0이면 진행을 셀 수 없는 것
+## (사건형: 그 순간에만 알 수 있어 세이브에 흔적이 없다).
+##
+## 판정(`check()`)은 이 값을 쓰지 않는다 — 여기 있는 건 **보여 주기 위한 셈**이다.
+## 진행률은 아무도 들고 있지 않으므로 세이브 값에서 그때그때 다시 센다.
+## 쓰는 곳: 모바일 업적 화면(스팀 오버레이가 없는 빌드), 개발용 확인 패널.
+func progress(id: String) -> Vector2i:
+	match id:
+		HEIGHT_25:
+			return Vector2i(GameState.best_height, 25)
+		HEIGHT_50:
+			return Vector2i(GameState.best_height, 50)
+		HEIGHT_100:
+			return Vector2i(GameState.best_height, 100)
+		CLASSIC_LV5:
+			return Vector2i(GameState.classic_level_best, 5)
+		CLASSIC_LV10:
+			return Vector2i(GameState.classic_level_best, 10)
+		CLASSIC_100K:
+			return Vector2i(GameState.classic_best, 100000)
+		GACHA_100:
+			return Vector2i(GameState.gacha_drawn, GACHA_GOAL)
+		GOLD_10K:
+			return Vector2i(GameState.gold_earned, GOLD_GOAL)
+		LEVEL_10:
+			return Vector2i(Account.level(), 10)
+		LEVEL_25:
+			return Vector2i(Account.level(), 25)
+		LEVEL_50:
+			return Vector2i(Account.level(), Account.LEVEL_MAX)
+		KEYCAP_FIRST:
+			return Vector2i(_cat_max(func(c: String) -> int:
+				return GameState.keycap_total(c)), 1)
+		KEYCAP_RING:
+			return Vector2i(_cat_max(func(c: String) -> int:
+				return GameState.keycap_sets(c)), 1)
+		CAT_MAX_GRADE:
+			return Vector2i(_cat_max(func(c: String) -> int:
+				return GameState.cat_grade(c)), GameState.KEYCAP_GRADE_MAX)
+		CAT_UNLOCK_ALL:
+			var cats := GameState.keycap_cats()
+			var n := 0
+			for cat: Dictionary in cats:
+				if GameState.cat_grade(str(cat.id)) >= 1:
+					n += 1
+			return Vector2i(n, cats.size())
+	return Vector2i.ZERO
+
+
+## 키캡을 모으는 냥이(= 디자인 냥이) 중 가장 앞선 값.
+func _cat_max(f: Callable) -> int:
+	var best := 0
+	for cat: Dictionary in GameState.keycap_cats():
+		best = maxi(best, int(f.call(str(cat.id))))
+	return best

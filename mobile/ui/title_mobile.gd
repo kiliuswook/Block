@@ -4,6 +4,10 @@ extends "res://core/scripts/title.gd"
 
 
 const BootScript := preload("res://core/scripts/boot.gd")
+## 업적 화면은 모바일에만 있다 — 스팀은 오버레이가 그 일을 한다.
+const ACHV_PANEL := preload("res://mobile/ui/achievements_panel.gd")
+
+var _achv: Control
 
 
 func _ready() -> void:
@@ -15,8 +19,20 @@ func _ready() -> void:
 	main_scene = "res://mobile/ui/main_mobile.tscn"
 	super()
 	BootScript.dev_platform = "mobile"  # 타이틀 복귀 시에도 모바일 유지
+	_achv = ACHV_PANEL.new()
+	$UI.add_child(_achv)
 	# 터치 전용 화면에는 키보드 번호가 의미 없다 — "1. " 접두사 제거.
 	for b: Button in [classic_btn, endless_btn]:
 		var dot := b.text.find(".")
 		if dot > 0:
 			b.text = b.text.substr(dot + 1).strip_edges()
+
+
+## 모바일 메뉴에만 `업적` 카드를 하나 더 붙인다 (core의 훅).
+func extra_menu_cards() -> Array:
+	return [[tr("MENU_ACHV"), UiKit.CYAN_DEEP, func() -> void: _open_achv()]]
+
+
+func _open_achv() -> void:
+	$UI.move_child(_achv, -1)  # 메뉴 위로
+	_achv.open()

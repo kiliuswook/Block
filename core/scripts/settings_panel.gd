@@ -415,8 +415,11 @@ func _on_back() -> void:
 # --- 값 조작 -------------------------------------------------------------------
 
 
+## 창 해상도를 고를 수 있는 환경인가 (= 해상도 줄을 띄울 것인가).
+## 세로 화면도 제외한다 — 실기 모바일은 피처 태그로 걸러지지만, 데스크톱에서
+## `-- --mobile`로 에뮬레이션할 때도 같은 화면이 나와야 확인이 된다.
 func _desktop() -> bool:
-	return not OS.has_feature("web") and not OS.has_feature("mobile")
+	return not OS.has_feature("web") and not OS.has_feature("mobile") and vw >= vh
 
 
 func _res_options() -> Array[Vector2i]:

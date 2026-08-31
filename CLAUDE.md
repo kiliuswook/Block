@@ -2,14 +2,23 @@
 
 Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테트리스 블록을 밟고 위로 탈출하는 게임.
 
-> ## ⛳ 현재 개발 방향: **PC(스팀) 우선** (2026-08-27~)
+> ## ⛳ 현재 개발 방향: **PC(스팀) + 모바일 동시 개발** (2026-08-31~)
 >
-> **모바일 개발은 당분간 보류.** PC(가로 1920×1080, 키보드) 버전을 먼저 완성한다.
-> - 새 기능·UI·컨텐츠는 **PC 기준으로만** 만든다. 모바일 세로 레이아웃(`mobile/ui/main_mobile.tscn` 오버라이드), 터치 버튼, `title_mobile.gd` 숨김 처리 등은 **하지 않는다**.
-> - 배포도 **PC 빌드만** — 아래 배포 절차의 모바일 단계는 건너뛴다.
-> - `mobile/` 폴더와 기존 모바일 코드·씬은 **지우지 않고 그대로 둔다** (나중에 재개).
-> - 단, `core/`에 화면 크기를 하드코딩하지 않는 원칙은 계속 지킨다 — 재개 비용을 낮추기 위함.
-> - 모바일 작업이 필요하면 사용자가 명시적으로 요청할 때만 ("모바일도", "모바일 빌드").
+> **모바일 개발을 재개했다.** 두 플랫폼을 함께 끌고 간다 — 새 기능은 PC(가로 1920×1080, 키보드)와 모바일(세로 1080×1920, 터치) **양쪽에서 동작해야 완료**다.
+> - UI를 만들면 `mobile/ui/main_mobile.tscn` 세로 오버라이드·터치 버튼까지 같이 갱신하고, 세로 스크린샷(`m_*.png`)으로 확인한다. 자세한 분기 규칙은 `/platform-split` 스킬.
+> - 배포도 **PC·모바일 두 빌드 모두** — 아래 배포 절차의 ⓜ 단계를 다시 수행한다.
+> - 모바일에는 스팀 오버레이가 없으므로 **업적 화면을 타이틀 메뉴에 따로 만든다** (`/achievements` 스킬).
+> - `core/`에 화면 크기 하드코딩 금지 · 참조 방향 철칙(`core/ ──✗▶ steam/, mobile/`)은 그대로다.
+>
+> ### 세로 대응 따라잡기 (2026-08-31 1차 완료)
+> 보류 기간(08-27~08-31)에 PC로만 만든 화면들의 세로 배치를 정리했다:
+> - ✅ **전체 화면 페이지 헤더** — 세로에선 가운데 제목이 좌상단 유저 HUD와 겹쳤다. `title.gd`의 `_page_drop()`(세로만 `PAGE_HUD_DROP`=118)이 캐릭터·상점 헤더와 본문을 HUD 아래에서 시작시킨다
+> - ✅ **캐릭터 페이지** — 세로는 상세 카드 비율을 `CHAR_LEFT_RATIO_V`(0.58)로 키우고, 키캡 자판이 보상 줄을 침범하면 폭을 줄여 맞춘다(`CHAR_DEX_FOOT`)
+> - ✅ **상점 페이지** — 열을 남는 높이만큼 늘리지 않고(`SHOP_COL_H_V`) 판을 **아래로** 붙인다(뽑기 버튼이 엄지 자리). 기계는 세로에서 `SHOP_MACHINE_SCALE_V`만큼 크게, 두 열이 같은 크기
+> - ✅ **인게임 계기판** — 세로도 흰 카드를 깐다(`main.gd._build_hud_cards_portrait()`: 왼쪽 NEXT · 위 큰 숫자 · 오른쪽 기록 세 장). 스테이지 목표 타일 랙은 오른쪽 열에 5칸씩 두 줄로 들어갔다(예전엔 큰 숫자와 겹쳤다)
+> - ✅ **유저 HUD·보상 연출** — 세로 인게임은 플레이 중 숨겨 두고 **결과창이 뜰 때** 띄운다(그때 화면이 딤이라 자리가 비고, 코인이 날아갈 과녁이 필요하다)
+> - ✅ **모바일 업적 화면** — 아래 `/achievements` 항목 참조
+> - 남은 것: **DEV 패널**(타이틀 우상단 🛠) 세로 자리·크기 미검증, 세로 **꾸미기 패널**이 좁아 부위 목록이 잘린다
 
 ## 실행
 
@@ -20,35 +29,31 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 
 ## 배포 (GitHub Pages)
 
-> **PC 우선 기간(현재): "io 배포"/"배포해줘" 요청 시 PC 빌드만 빌드·배포한다.** `gh-pages`의 기존 `m/`(모바일 세로판)은 **손대지 않고 그대로 둔다** — 지난 배포본이 계속 서비스된다.
->
-> <details><summary>모바일 재개 시 되돌릴 원래 규칙 (지금은 적용 안 함)</summary>
->
-> "io 배포"/"배포해줘" 요청 시 항상 PC·모바일 두 빌드를 모두 빌드·배포한다. 한쪽만 배포하는 것은 사용자가 명시적으로 지정한 경우("PC만", "모바일만")뿐.
-> </details>
+> **"io 배포"/"배포해줘" 요청 시 항상 PC·모바일 두 빌드를 모두 빌드·배포한다.** 한쪽만 배포하는 것은 사용자가 명시적으로 지정한 경우("PC만", "모바일만")뿐.
 
-- 라이브 URL: PC https://kiliuswook.github.io/Block/ (`gh-pages` 루트) / 모바일 세로판 https://kiliuswook.github.io/Block/m/ (`gh-pages`의 `m/` — **보류 중, 갱신하지 않음**)
-- 절차 (순서대로 — PC 우선 기간에는 ⓜ 표시 단계를 건너뛴다):
+- 라이브 URL: PC https://kiliuswook.github.io/Block/ (`gh-pages` 루트) / 모바일 세로판 https://kiliuswook.github.io/Block/m/ (`gh-pages`의 `m/`)
+- 절차 (순서대로 — ⓜ = 모바일 전용 단계, 함께 수행한다):
   1. **익스포트**: `& "<godot>" --headless --path E:\Game\Block --export-release "Web" build/web/index.html` / ⓜ `--export-release "WebMobile" build/web_m/index.html`
   2. **캐시 버스터**: `index.html`에서 `index.js` src와 GODOT_CONFIG의 `mainPack`에 버전 쿼리(`?v=<타임스탬프>`)를 붙일 것 — Pages가 10분 캐시(`max-age=600`)라 이걸 안 하면 배포 직후 브라우저에 이전 빌드가 보임 (ⓜ 모바일 `index.html`도 동일)
-  3. **gh-pages 복사**: git worktree로 `gh-pages` 체크아웃 → `build/web/*` → 루트에 복사. **루트의 `m/` 폴더는 절대 삭제·갱신하지 말 것** / ⓜ `build/web_m/*` → `m/` (기존 `m/`을 비우고 복사)
+  3. **gh-pages 복사**: git worktree로 `gh-pages` 체크아웃 → `build/web/*` → 루트에 복사. ⓜ `build/web_m/*` → `m/` (기존 `m/`을 비우고 복사)
   4. **커밋·푸시** 후 worktree 정리, PC URL 안내 (ⓜ 두 URL 모두)
-- PC판 `index.html`에는 터치 기기 → `m/` 리다이렉트가 들어감 (Web 프리셋의 `html/head_include` — 익스포트 시 자동 포함). 모바일 배포를 멈춰도 `m/`이 살아 있으므로 이 리다이렉트는 그대로 유효
+- PC판 `index.html`에는 터치 기기 → `m/` 리다이렉트가 들어감 (Web 프리셋의 `html/head_include` — 익스포트 시 자동 포함)
 
 ## 구조 (스팀/모바일 멀티 플랫폼)
 
-> **컨텐츠·시스템·UI를 수정/추가할 때는 `/platform-split` 스킬(`.claude/skills/platform-split/SKILL.md`)의 분기 규칙을 따를 것** — 단 PC 우선 기간이므로 그 스킬의 **모바일 대응 항목은 보류**(참조 방향 철칙·좌표 하드코딩 금지는 계속 유효).
+> **컨텐츠·시스템·UI를 수정/추가할 때는 `/platform-split` 스킬(`.claude/skills/platform-split/SKILL.md`)의 분기 규칙을 따를 것** — 두 플랫폼 동시 개발 기간이므로 가로·세로 양쪽을 모두 확인해야 완료다.
 >
 > **사용자에게 보이는 텍스트를 추가/수정할 때는 `/i18n` 스킬(`.claude/skills/i18n/SKILL.md`)을 따를 것** — 스팀 출시 목표는 13개국어. 문자열 하드코딩 금지, `_draw()` 텍스트는 `tr()` 수동 적용.
 >
-> **업적을 추가·수정·검토할 때는 `/achievements` 스킬(`.claude/skills/achievements/SKILL.md`)을 따를 것** — 게임 안에 업적 UI는 만들지 않는다(스팀 오버레이가 표시·번역까지 맡는다). 정의·판정은 `Achv`가 소유하고, 상태형(소급 적용)이 기본이다. 개발 완료 시점 최종 검토 체크리스트와 스팀 적용 절차도 거기 있다.
+> **업적을 추가·수정·검토할 때는 `/achievements` 스킬(`.claude/skills/achievements/SKILL.md`)을 따를 것** — 스팀 빌드에는 게임 안 업적 UI를 만들지 않는다(스팀 오버레이가 표시·번역까지 맡는다) — 단 **모바일에는 타이틀 메뉴에 `업적` 화면이 따로 있다**(오버레이가 없어 볼 방법이 없다): `mobile/ui/achievements_panel.gd` + `title_mobile.gd`의 `extra_menu_cards()`, 표시 문구는 `ACHV_<ID>_NAME`/`_DESC` 번역 키, 진행률은 `Achv.progress()`. 정의·판정은 `Achv`가 소유하고, 상태형(소급 적용)이 기본이다. 개발 완료 시점 최종 검토 체크리스트와 스팀 적용 절차도 거기 있다.
 >
-> **랭킹·기록·클라우드 세이브를 건드릴 때는 `/steam-backend` 스킬(`.claude/skills/steam-backend/SKILL.md`)을 따를 것** — 자체 서버 없이 Steamworks가 백엔드다. 비동기 직렬화 규칙·보드 이름 규칙·UGC 핸들 함정이 거기 정리돼 있다. **사용자가 파트너 사이트에서 해야 할 일**(앱 id, Auto-Cloud, 업적 등록, 빌드 업로드)은 `docs/steam_setup.md`에 체크리스트로 있다 — 스팀 계정 세팅 뒤 이어서 진행할 때 여기부터 볼 것.
+> **랭킹·기록·클라우드 세이브를 건드릴 때는 `/steam-backend` 스킬(`.claude/skills/steam-backend/SKILL.md`)을 따를 것** — 자체 서버 없이 Steamworks가 백엔드다. 비동기 직렬화 규칙·보드 이름 규칙·UGC 핸들 함정이 거기 정리돼 있다. **사용자가 파트너 사이트에서 해야 할 일**(앱 id, Auto-Cloud, 업적 등록, 빌드 업로드)은 `docs/steam_setup.md`에 체크리스트로 있다 — 스팀 계정 세팅 뒤 이어서 진행할 때 여기부터 볼 것. **모바일은 다르다** — 스팀이 없으니 자체 서버(Supabase)를 쓴다: `core/autoload/cloud.gd` + `server/supabase/schema.sql`, 사용자 작업은 `docs/cloud_setup.md`.
 
 - `core/` — 두 플랫폼이 공유하는 게임 본체
   - `core/scenes/` — 씬 파일 (.tscn). 메인 씬: `core/scenes/main.tscn`
   - `core/scripts/` — 씬에 붙는 스크립트 (.gd)
-  - `core/autoload/` — 싱글톤 (EventBus, GameState, I18n, Sfx, Replays, Ranks, Achv). 업적은 `achievements.gd`(autoload `Achv`)가 소유한다 — **게임 안에 업적 UI는 없고**(스팀 오버레이가 표시·번역까지 맡는다) id와 조건만 있다. 상태형은 `Achv.check()` 하나가 세이브 값으로 소급 판정하고(판 종료·가챠·타이틀 진입에서 호출), 사건형(리플레이 관전·꾸미기 저장)은 그 지점에서 `Achv.unlock()`을 부른다. 해금 기록은 `GameState.achv`. 등록 목록은 `docs/steam_setup.md` ③. 랭킹 백엔드는 `ranks.gd`의 `backend()`가 **STEAM → HTTP → OFFLINE** 순으로 고른다: 스팀 빌드에서 초기화가 되면 Steamworks 리더보드, 아니면 `BOARD_URL`(jsonblob) HTTP 보드, 그것도 비면 목업 봇 오프라인 모드. 자세한 규칙은 `/steam-backend` 스킬
+  - `core/autoload/cloud.gd` (autoload `Cloud`) — **모바일 서비스 백엔드 (Supabase)**. 익명 로그인 · 클라우드 세이브(save.json 통째로 한 행, `rev`가 큰 쪽이 최신) · 리더보드 제출/조회 · 주간 시상 청구를 맡는다. 설정은 `project.godot`의 `cattris/cloud/url`·`cattris/cloud/anon_key`이고 **비어 있으면 통째로 꺼져** 예전 백엔드로 떨어진다. 스팀 빌드에서는 Steamworks가 대신하므로 `enabled()`가 거짓이다. 서버 스키마는 `server/supabase/schema.sql`, 대시보드 절차·사용자 작업은 `docs/cloud_setup.md`. 회귀 테스트: `res://tests/test_cloud.tscn` → `ALL TESTS PASSED`
+  - `core/autoload/` — 싱글톤 (EventBus, GameState, I18n, Sfx, Replays, Ranks, Achv). 업적은 `achievements.gd`(autoload `Achv`)가 소유한다 — **게임 안에 업적 UI는 없고**(스팀 오버레이가 표시·번역까지 맡는다) id와 조건만 있다. 상태형은 `Achv.check()` 하나가 세이브 값으로 소급 판정하고(판 종료·가챠·타이틀 진입에서 호출), 사건형(리플레이 관전·꾸미기 저장)은 그 지점에서 `Achv.unlock()`을 부른다. 해금 기록은 `GameState.achv`. 등록 목록은 `docs/steam_setup.md` ③. 랭킹 백엔드는 `ranks.gd`의 `backend()`가 **STEAM → SERVER → HTTP → OFFLINE** 순으로 고른다: 스팀 빌드에서 초기화가 되면 Steamworks 리더보드, 모바일처럼 스팀이 아니고 `Cloud`가 설정돼 있으면 자체 서버(Supabase), 아니면 `BOARD_URL`(jsonblob) HTTP 보드, 그것도 비면 목업 봇 오프라인 모드. 자세한 규칙은 `/steam-backend` 스킬
 - `shared/assets/` — 공용 리소스 (이미지, 사운드, 폰트 — 기본 폰트는 `fonts/ui_font.tres`, 다국어 폴백 체인 포함)
 - `shared/locale/` — 번역 CSV (`ui`/`content`/`flavor`). 손댄 뒤에는 `--script res://tools/locale_tool.gd` → `--import` 순서로 갱신
 - `tools/` — 개발용 스크립트 (`locale_tool.gd`: 빈 로케일 열 정리 + `en_XA` 의사 로케일 생성)
@@ -58,6 +63,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - 모바일은 **세로 화면 1080×1920** (`project.godot`의 `.mobile` 피처 오버라이드 + `handheld/orientation=1`), 터치 컨트롤 항상 표시. 게임 씬은 `mobile/ui/main_mobile.tscn`(main.tscn 상속, 세로 오프셋 오버라이드), 타이틀 스크립트가 `main_scene` 변수로 로드할 씬을 정함. 데스크톱에서 `-- --mobile` 인자로 세로 창 포함 에뮬레이션 가능
 - `steam/` / `mobile/` — 플랫폼 전용 코드·UI·컨텐츠. **`core/`에서 이쪽을 `preload`/씬 하드 참조 금지** — 익스포트 필터로 반대 플랫폼 빌드에서 제외되므로, 반드시 `OS.has_feature("steam"/"mobile")` 가드 + `load()` 사용. 구현체에 `class_name` 금지
 - **[개발용 · 출시 전 제거] 업적/리더보드 확인 패널 (`core/scripts/dev_panel.gd`, class_name 없음 — preload)**: 업적 목록 UI는 스팀 오버레이가, 리더보드는 랭킹 화면이 맡기로 해서 게임 안에 확인 수단이 없다. 스팀 없이 개발하는 동안만 쓰는 임시 패널이다 — 타이틀 **우상단 `🛠 DEV` 버튼**으로만 연다(단축키 없음 — 웹 빌드에서 브라우저가 키를 가로채는 경우가 있어 버튼 하나로 통일). 탭 둘: **업적**(id · 조건 · 진행 "지금/목표" · 해금 여부 + 행마다 해금/잠그기 토글, 상단에 `Achv.check()` 다시 판정 · 전부 해금 · 해금 기록 비우기) / **리더보드**(백엔드 STEAM·HTTP·OFFLINE, 플랫폼, 내 id·이름, 주차·리셋까지, `LIVE_MODES` × 누적/주간 보드마다 이름·엔트리 수·내 순위·내 기록 + 상위 5줄, 다시 받기·전부 제출). 진행률은 Achv가 들고 있지 않아 패널이 세이브 값을 다시 센다. **출시(스팀) 빌드에서는 뺀다** — `dev_panel.gd`의 `ENABLED := false` 한 줄이면 DEV 버튼과 패널이 사라지고, 완전히 지우려면 파일 + `title.gd`의 `DEV_PANEL` preload · `_dev` · `_build_dev_panel()` · `_unhandled_input`의 Esc 처리 · `tests/visual_capture.gd`의 `title_dev_*` 캡처를 제거하면 된다. 임시 UI라 문구는 한국어 하드코딩(번역 CSV에 넣지 않음)
+- `server/supabase/schema.sql` — 모바일 백엔드 서버 스키마 (테이블 · RLS · 주간 정산 함수 · cron). **신뢰 모델은 A안**: 골드·키캡·레벨의 주인은 계속 로컬 save.json이고, 서버는 ① 랭킹 보드(내 행만 쓰기) ② **주간 정산** ③ 세이브 백업만 맡는다. **주간 시상은 서버 cron이 지난 주 상위 3을 뽑아 `rewards` 행을 만들고 클라이언트는 `Cloud.claim_rewards()`로 받기만 한다** — 클라가 순위를 스스로 읽던 `_roll_week()`/`_claim_rewards()` 경로는 HTTP·STEAM 백엔드에만 남아 있다. 보드 하나 = (모드, 주차) 한 쌍이라 서버 백엔드에는 **주간 롤오버가 없다**(누적 보드는 `week_id = -1`). 주차 기준(`week_id()` SQL의 313200/604800)은 클라의 `Ranks.WEEK_ANCHOR`/`WEEK_LEN`과, 상금은 `settle_week()`의 `[500,300,200]`과 `Ranks.WEEKLY_REWARDS`가 **같은 값이어야 한다**
 - `docs/` — 기획/설계 문서
 - `tests/` — 테스트. 캐릭터 시트 캡처: `res://tests/cat_sheet.tscn` → `.tmp_shots/cat_sheet.png`. 실행: `& "<godot>" --headless --path E:\Game\Block res://tests/test_board.tscn` (탈출 모드: `res://tests/test_escape.tscn`)
 
@@ -91,8 +97,8 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
   - 배경: `paint_backdrop(ci, size)` (하늘 + 발바닥), `paw()`, `ellipse()`
   - 블록 타이포: `block()` / `block_text()` / `block_text_width()` — 3×5 블록 폰트(`GLYPHS`), 타이틀 로고가 이걸로 그려짐
   - `apply_theme(canvas_layer_or_control)`로 기본 Label/Button/LineEdit 톤을 깐다. **단 `replay_viewer`는 의도적으로 어두운 무대 연출이라 테마 제외**(`theme = null`)
-- **인게임 화면도 타이틀과 같은 톤이다** (`main.gd`의 `_build_backdrop()`/`_tone_hud()`/`_build_hud_cards()`): 우물 **바깥**은 타이틀과 같은 하늘색 배경 + 발바닥 무늬(`UiKit.paint_backdrop`, `layer = -1` 캔버스라 보드 뒤에 깔린다), 우물 **안**은 지금까지처럼 어두운 구덩이고 테두리만 두꺼운 잉크 선(`escape_board.gd`)이다. 계기판(NEXT·LEVEL·SCORE·TOP·LINES + 타일 랙)은 **타이틀 카드와 같은 흰 카드 한 장** 위에 서고 글자는 잉크/골드다 — 카드는 `hud_groups`(묶음마다 노드 목록 + 고정 폭)를 감싸 `_draw_hud_cards()`가 그린다. **가로 화면 계기판 열의 y좌표는 `main.gd._layout_stat_column()` 한 곳에서만 정한다** — 씬(`main.tscn`)의 offset은 초기값일 뿐이고, 모드마다 켜지는 줄이 달라(무한=HEIGHT · 스테이지=LEVEL) 씬 좌표를 그대로 두면 서로 겹친다. 보이는 줄만 **NEXT → 큰 숫자 슬롯 → BEST/TOP → SCORE → LEVEL → LINES(+타일 랙) → 기록 갱신 → 안내문** 순서로 위에서부터 쌓아 두 모드가 같은 모양이 되게 한다 — 새 계기판 줄을 붙일 때도 **씬이나 모드 분기에 y를 박지 말고 이 함수의 목록에 한 줄 넣을 것**(세로 화면은 여전히 예외 — 모바일 재개 때 정한다). 어두운 우물 위에 뜨는 배너(마일스톤·일시정지)만 외곽선을 두르고, 나머지 검은 외곽선은 걷었다(`_ink_label()`). 사망 팝업(`death_popup.gd`)도 흰 카드 + `UiKit.btn_primary`/`btn_ghost`다. **인게임 UI를 새로 만들 때도 UiKit을 쓰고, 어두운 배경용 크림색 글자 + 검은 외곽선을 다시 들이지 말 것**. 무한의 계단은 우물 바닥 아래까지 카메라에 들어오므로 배경을 `VIEW_BELOW * 2`만큼 더 아래까지 깐다 — 안 그러면 하늘이 비쳐 용암이 떠 보인다
-- **상단 고정 유저 HUD (`core/scripts/user_hud.gd`, class_name 없음 — preload)**: 이름(스팀 페르소나 → 없으면 `GameState.nickname`) · 계정 레벨 + 칭호 · 경험치 바 · 골드를 흰 카드 한 장에 담아 **좌상단(24, 16 / 520×96) 고정**으로 띄운다. 자기 `CanvasLayer`(layer 5)를 들고 다녀서 오버레이·설정 페이지·꾸미기 무대 위에도 같은 자리에 그대로 뜬다 — 그래서 **지갑·레벨은 이 카드 하나뿐**이다(타이틀 우상단 지갑/레벨 알약, 설정 헤더 지갑, 뽑기 카드 안 지갑을 전부 여기로 합쳤다). 타이틀은 `title.gd._build_user_hud()` + `_refresh_currency()`(골드·경험치·이름·아바타 갱신을 겸한다), 인게임은 `main.gd._build_user_hud()`(판이 끝나 보상을 받은 뒤 `refresh()`). **세로 화면 인게임**(좌상단이 터치 메뉴 버튼 자리 — 모바일 재개 때 배치를 정한다)에서는 띄우지 않는다. 겹침을 피하려고 타이틀 로고(`_compute_layout()`)와 냥이 크리에이터 헤더(`cat_customizer.gd`의 `HEAD_TOP`)가 이 카드 아래에서 시작한다. 아바타는 **대표 캐릭터**(`GameState.featured_cat()`)를 키캡과 같은 얼굴 컷(`CatSprite.FACE`)으로 그린 것이고, 시트 그림이 없는 냥이(나만의 캐릭터)는 코드 렌더로 떨어진다
+- **인게임 화면도 타이틀과 같은 톤이다** (`main.gd`의 `_build_backdrop()`/`_tone_hud()`/`_build_hud_cards()`): 우물 **바깥**은 타이틀과 같은 하늘색 배경 + 발바닥 무늬(`UiKit.paint_backdrop`, `layer = -1` 캔버스라 보드 뒤에 깔린다), 우물 **안**은 지금까지처럼 어두운 구덩이고 테두리만 두꺼운 잉크 선(`escape_board.gd`)이다. 계기판(NEXT·LEVEL·SCORE·TOP·LINES + 타일 랙)은 **타이틀 카드와 같은 흰 카드 한 장** 위에 서고 글자는 잉크/골드다 — 카드는 `hud_groups`(묶음마다 노드 목록 + 고정 폭)를 감싸 `_draw_hud_cards()`가 그린다. **가로 화면 계기판 열의 y좌표는 `main.gd._layout_stat_column()` 한 곳에서만 정한다** — 씬(`main.tscn`)의 offset은 초기값일 뿐이고, 모드마다 켜지는 줄이 달라(무한=HEIGHT · 스테이지=LEVEL) 씬 좌표를 그대로 두면 서로 겹친다. 보이는 줄만 **NEXT → 큰 숫자 슬롯 → BEST/TOP → SCORE → LEVEL → LINES(+타일 랙) → 기록 갱신 → 안내문** 순서로 위에서부터 쌓아 두 모드가 같은 모양이 되게 한다 — 새 계기판 줄을 붙일 때도 **씬이나 모드 분기에 y를 박지 말고 이 함수의 목록에 한 줄 넣을 것**(세로 화면은 씬 `main_mobile.tscn`의 offset이 자리를 정하고, 카드는 `_build_hud_cards_portrait()`가 세 장으로 나눠 깐다). 어두운 우물 위에 뜨는 배너(마일스톤·일시정지)만 외곽선을 두르고, 나머지 검은 외곽선은 걷었다(`_ink_label()`). 사망 팝업(`death_popup.gd`)도 흰 카드 + `UiKit.btn_primary`/`btn_ghost`다. **인게임 UI를 새로 만들 때도 UiKit을 쓰고, 어두운 배경용 크림색 글자 + 검은 외곽선을 다시 들이지 말 것**. 무한의 계단은 우물 바닥 아래까지 카메라에 들어오므로 배경을 `VIEW_BELOW * 2`만큼 더 아래까지 깐다 — 안 그러면 하늘이 비쳐 용암이 떠 보인다
+- **상단 고정 유저 HUD (`core/scripts/user_hud.gd`, class_name 없음 — preload)**: 이름(스팀 페르소나 → 없으면 `GameState.nickname`) · 계정 레벨 + 칭호 · 경험치 바 · 골드를 흰 카드 한 장에 담아 **좌상단(24, 16 / 520×96) 고정**으로 띄운다. 자기 `CanvasLayer`(layer 5)를 들고 다녀서 오버레이·설정 페이지·꾸미기 무대 위에도 같은 자리에 그대로 뜬다 — 그래서 **지갑·레벨은 이 카드 하나뿐**이다(타이틀 우상단 지갑/레벨 알약, 설정 헤더 지갑, 뽑기 카드 안 지갑을 전부 여기로 합쳤다). 타이틀은 `title.gd._build_user_hud()` + `_refresh_currency()`(골드·경험치·이름·아바타 갱신을 겸한다), 인게임은 `main.gd._build_user_hud()`(판이 끝나 보상을 받은 뒤 `refresh()`). **세로 화면 인게임**(좌상단이 터치 메뉴 버튼 자리)에서는 플레이 중 숨겨 두고 판이 끝나 결과창이 뜰 때 띄운다 — 그때는 화면이 딤이라 자리가 비고, 보상 연출의 코인이 날아갈 과녁이 필요하다. 겹침을 피하려고 타이틀 로고(`_compute_layout()`)와 냥이 크리에이터 헤더(`cat_customizer.gd`의 `HEAD_TOP`)가 이 카드 아래에서 시작한다. 아바타는 **대표 캐릭터**(`GameState.featured_cat()`)를 키캡과 같은 얼굴 컷(`CatSprite.FACE`)으로 그린 것이고, 시트 그림이 없는 냥이(나만의 캐릭터)는 코드 렌더로 떨어진다
 - **결과 화면 보상 연출 (`core/scripts/death_popup.gd` + `user_hud.gd`)**: 판이 끝나면 보상은 그 자리에서 세이브에 들어가지만, 화면은 **두 단계로 나눠** 보여 준다 — ① **골드**: 코인 몇 닢이 결과창의 획득 줄에서 좌상단 유저 HUD의 골드로 날아가고(`UserHud.fly_coin()`), 닿을 때마다 숫자가 올라가며 `+87 G`가 뜬다(`pop_gain()`) ② **경험치**: 결과창의 게이지(`_draw_xp_gauge()`)가 이 판이 준 만큼 차오르고, 레벨에 닿는 순간 레벨업 줄 + `record` 효과음 + 그 레벨의 보상 골드가 지갑에 얹힌다 ③ 정산이 끝나면 HUD가 실제 값으로 돌아온다. 그동안 HUD는 `hold(gold, xp)`로 **표시값만** 판 전 값에 붙들려 있고 `release()`로 놓는다(`_gold_shown`/`_xp_shown`, -1 = 실제 값). **화면을 누르면 그 단계가 즉시 끝나고 다음 단계로**(`skip()`), 다시하기·타이틀로 버튼은 남은 연출을 통째로 건너뛰고 바로 동작한다(`_finish_all()`). `main.gd`가 `death_popup.hud = user_hud`를 물려 주고 `open(..., reward)`에 `{gold, gold_from, xp, xp_from}`을 넘긴다 — **골드 칸에는 이 판이 번 골드만** 담는다(레벨업 보상 골드는 경험치 단계가 얹으므로 두 번 세지 않게). `reward`가 비면 연출 없이 줄만 뜨는 예전 동작이다(캡처·테스트). 보상 지급 함수(`main.gd`의 `_award_run_rewards()`/`_award_run_xp()`)는 표시 줄 대신 `{gold/xp, levels, line}` 딕셔너리를 돌려준다. 타이밍 상수는 `death_popup.gd` 머리의 `OPEN_HOLD`/`COIN_*`/`PHASE_GAP`/`XP_FILL`. 회귀 테스트: `res://tests/test_reward_fx.tscn` → `ALL TESTS PASSED`
 - 타이틀 구조(컨셉 반영): 로고·배경·무대 좌석(이번 판에 나갈 냥이)은 `title.gd._draw()`가 직접 그림. 메뉴는 `PLAY` + 카드 4장(캐릭터/뽑기/랭킹/설정) + 키캡 알약. 모드 선택은 `_build_mode_select()`가 만드는 **오버레이**(`_make_overlay()` 공용 껍데기, `"body"` 메타에 내용 배치)이고, 캐릭터는 오버레이가 아니라 **전체 화면 페이지**다(아래 항목). 레이아웃은 `_compute_layout()`/`_menu_rect()`가 화면 비율로 계산해 가로·세로 화면을 한 코드로 처리 — 모바일 타이틀은 `max_tiles_per_row`만 지정. 오버레이는 열 때 `_raise()`로 메뉴 위로 올린다
 - **캐릭터 페이지 (`title.gd._build_character_page()`, UI 문서 `리소스/캣트리스 UI 플로우 및 레이아웃.pdf` 19~23p + 컨셉 이미지)** — 팝업이 아니라 타이틀과 같은 하늘 배경을 깐 **전체 화면 페이지**이고, 헤더(제목 · `뒤로` — 골드·레벨은 그 위에 뜨는 상단 고정 유저 HUD가 맡는다) 아래에 **흰 카드 두 장**이 선다(가로 화면은 좌우, 세로 화면은 위아래 — `_char_body_rect()`/`_char_left_rect()`/`_char_grid_rect()`가 비율로 계산한다).

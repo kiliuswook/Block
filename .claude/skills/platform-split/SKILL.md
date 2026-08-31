@@ -1,34 +1,20 @@
 ---
 name: platform-split
-description: 스팀(PC)/모바일 분기 규칙. 현재는 PC 우선 개발 기간이라 모바일 대응은 보류 — 참조 방향 철칙·좌표 하드코딩 금지·플랫폼 서비스 추상화만 적용. 게임 기능 추가, UI 변경, 새 모드/컨텐츠 작업 시 참조.
+description: 스팀(PC 가로)/모바일(세로) 동시 개발 분기 규칙 — 참조 방향 철칙, 세로 레이아웃 오버라이드, 터치 입력, 플랫폼 서비스 추상화, 양쪽 검증 체크리스트. 게임 기능 추가, UI 변경, 새 모드/컨텐츠 작업 시 참조.
 ---
 
 # 스팀/모바일 플랫폼 분기 작업 규칙
 
 Cat-Tris는 저장소·Godot 프로젝트 하나에서 스팀(가로)과 모바일(세로) 두 버전을 빌드한다.
 
-## 🚧 현재 상태: PC(스팀) 우선, 모바일 보류 (2026-08-27~)
+## 🚦 현재 상태: PC + 모바일 **동시 개발** (2026-08-31 재개)
 
-**모바일 개발은 당분간 하지 않는다.** 이 문서에서 지금 적용되는 것과 보류되는 것:
+**모든 게임플레이·UI 수정은 두 플랫폼에서 동작을 확인해야 완료다.** 이 문서 전체가 적용된다.
 
-| 적용 (계속 지킬 것) | 보류 (지금은 하지 말 것) |
-|---|---|
-| 참조 방향 철칙 (`core/ ──✗▶ steam/, mobile/`) | 세로 레이아웃 오버라이드 (`main_mobile.tscn`) |
-| 화면 좌표 하드코딩 금지 (뷰포트 기준 계산) | 터치 버튼 추가·배치 |
-| 플랫폼 폴더 스크립트에 `class_name` 금지 | `title_mobile.gd` 모드 숨김·재배치 |
-| 플랫폼 서비스는 `PlatformBase` no-op → 구현체 오버라이드 | 세로 스크린샷(`m_*.png`) 확인 |
-| 익스포트 필터 관리 | 모바일 빌드·배포 |
-
-- `mobile/` 폴더와 기존 씬·스크립트는 **지우지 않는다** (나중에 재개).
-- 새 기능은 PC(가로 1920×1080, 키보드) 기준으로만 완성하면 **완료**다. 모바일 미대응은 결함이 아니다.
-- 다만 좌표 하드코딩 금지 원칙은 계속 지킨다 — 재개 비용을 낮추기 위함.
-- 모바일 작업은 사용자가 명시적으로 요청할 때만 ("모바일도", "모바일 빌드").
-
-아래 내용은 **모바일 재개 시점의 참조 문서**로 그대로 보존한다.
-
----
-
-**(모바일 재개 시) 모든 게임플레이 수정은 두 플랫폼에서 동작을 확인해야 완료다.**
+> 2026-08-27~08-31 사이 PC로만 만든 화면들의 세로 대응은 **1차 정리가 끝났다** — 무엇을 어떻게
+> 맞췄는지는 `CLAUDE.md` 머리의 ⛳ 블록에 있다(페이지 헤더 드롭, 캐릭터·상점 세로 비율,
+> 인게임 계기판 카드 3장, 결과창에서만 뜨는 유저 HUD, 모바일 업적 화면).
+> 남은 것도 거기 적혀 있다(DEV 패널 세로 검증). 새로 손보면 그 줄을 갱신할 것.
 
 ## 버전 정의
 
@@ -41,7 +27,7 @@ Cat-Tris는 저장소·Godot 프로젝트 하나에서 스팀(가로)과 모바�
 | 게임 씬 | `core/scenes/main.tscn` | `mobile/ui/main_mobile.tscn` (main.tscn 상속) |
 | 프리셋 | `Steam` (Windows, 태그 `steam`) | `Mobile` (Android, 태그 `mobile`) |
 
-웹(GitHub Pages)은 제3의 타깃: 가로 + no-op Platform. 스팀과 같은 레이아웃을 쓴다.
+웹(GitHub Pages)은 제3·제4의 타깃: `Web`(가로, 스팀과 같은 레이아웃) / `WebMobile`(세로, 모바일과 같은 레이아웃 → `Block/m/`). 둘 다 no-op Platform이다.
 
 ## 철칙: 참조 방향
 
@@ -74,7 +60,7 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 - 먼저 결정: 두 플랫폼 공통인가?
   - 공통 → `core/`에 추가 + 두 타이틀에 진입점. **모바일은 세로 화면·터치 조작으로 플레이 가능한지 먼저 검토**.
   - 스팀 전용(예: 도전과제 연계) → `steam/content/`, 모바일 전용(예: 광고 보상) → `mobile/content/`. 진입점도 해당 플랫폼 타이틀에만.
-- 모드 선택 흐름: 타이틀 `_start()` → `GameState.mode` → `main_scene` 로드. 모바일 제외 모드는 `title_mobile.gd`의 숨김 목록에 추가.
+- 모드 선택 흐름: 타이틀 `_start()` → `GameState.mode` → `main_scene` 로드. 지금 모드는 스테이지·무한 둘뿐이고 양쪽 공통이라 `title_mobile.gd`에 숨김 목록은 없다 — 한쪽 전용 모드를 다시 만들면 그때 되살린다.
 
 ### 5. 새 입력/조작 추가
 - 액션을 `project.godot` [input]에 등록하고, **모바일용 터치 버튼을 함께 추가**: `main.tscn`의 `TouchControls`에 TouchButton 노드(가로 위치) + `main_mobile.tscn`에 세로 위치 오버라이드.
@@ -93,9 +79,8 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 # 2) 레이아웃 스크린샷
 & "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn
 ```
-- **PC 우선 기간**: `.tmp_shots/`의 가로 샷(title, escape, endless…)만 확인하면 된다. 세로 `m_*.png`가 깨져 있어도 지금은 무시. 새 UI가 생겼으면 visual_capture.gd에 가로 캡처만 추가.
-- (모바일 재개 시) 가로와 세로(m_title, m_escape, m_endless) **양쪽을 눈으로 확인**.
-- 수동 확인: 스팀 = 그냥 실행. (모바일 재개 시) `& "<godot>" --path E:\Game\Block -- --mobile` — 세로 창 에뮬레이션.
+- `.tmp_shots/`의 가로 샷과 세로 샷(`m_title`, `m_escape`, `m_endless`…) **양쪽을 눈으로 확인**. 새 UI가 생겼으면 `tests/visual_capture.gd`에 가로·세로 캡처를 **둘 다** 추가.
+- 수동 확인: 스팀 = 그냥 실행 / 모바일 = `& "<godot>" --path E:\Game\Block -- --mobile` (세로 창 에뮬레이션) 또는 에디터에서 `tests/run_mobile.tscn` **F6**.
 - 플랫폼 폴더에 리소스를 추가/이동했으면 Web 익스포트 로그로 필터 동작 확인: `--export-release "Web"` 후 로그에 `steam/`·`mobile/` 파일이 없어야 함.
 - 새 `class_name`을 만들었으면 헤드리스 실행 전 `--import` 필수.
 
@@ -105,4 +90,4 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 - `main.tscn`에 노드만 추가하고 `main_mobile.tscn` 오버라이드를 빼먹음 → 모바일에서 화면 밖/겹침.
 - 새 UI에 1920/1080 좌표 하드코딩 → 세로에서 깨짐. 뷰포트 기준으로.
 - autoload를 플랫폼 폴더에 두기 → 익스포트 필터로 제외되면 모든 빌드가 죽는다. autoload는 `core/`·`platform/`에만.
-- 익스포트 필터 갱신 누락: 새 최상위 플랫폼 폴더를 만들면 `export_presets.cfg`의 exclude_filter 세 프리셋 모두 확인.
+- 익스포트 필터 갱신 누락: 새 최상위 플랫폼 폴더를 만들면 `export_presets.cfg`의 exclude_filter를 네 프리셋(Web / WebMobile / Steam / Mobile) 모두 확인.

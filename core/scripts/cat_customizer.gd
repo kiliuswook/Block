@@ -99,7 +99,10 @@ func set_area(rect: Rect2) -> void:
 	size = rect.size
 	var grid_h := rect.size.y - BAR_H - 34.0
 	_list_scroll.position = Vector2.ZERO
-	_list_scroll.size = Vector2(LIST_W, grid_h)
+	# 부위 목록은 줄 단위로 끊는다 — 반쯤 잘린 줄이 보이면 고장 난 것처럼 보인다.
+	var step := ROW_H + 8.0  # 줄 + VBox separation
+	_list_scroll.size = Vector2(LIST_W,
+			maxf(step, floorf((grid_h + 8.0) / step) * step - 8.0))
 	var gx := LIST_W + 22.0
 	_grid_w = rect.size.x - gx
 	_grid_scroll.position = Vector2(gx, 0.0)

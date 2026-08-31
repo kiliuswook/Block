@@ -64,6 +64,9 @@ func _ready() -> void:
 					inst._dev._tab = 1
 					inst._dev._rebuild())
 	var saved_caps: Dictionary = GameState.keycaps.duplicate()
+	# 업적 화면은 모바일에만 있다 (스팀은 오버레이가 대신한다).
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_achv.png",
+			func(inst: Node) -> void: inst._open_achv())
 	GameState.keycaps = _demo_keycaps()
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_keycaps.png",
 			func(inst: Node) -> void: inst._open_keycap_dex("cheese"))
@@ -166,6 +169,20 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	# 결과 화면 — 세로에서는 유저 HUD가 여기서 처음 뜬다 (코인이 날아갈 과녁).
+	GameState.mode = GameState.MODE_ENDLESS
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_death_popup.png",
+			func(inst: Node) -> void:
+				inst.get_node("Board")._kill_player()
+				if inst.user_hud:
+					inst.user_hud.visible = true
+				inst.get_node("PopupLayer/DeathPopup").open(
+						"도달 높이 23층      최고 기록 41층", true,
+						"획득   +87 G", "",
+						"경험치   +56
+레벨 업!   Lv.7   +220 G",
+						{"gold": 87, "gold_from": GameState.gold - 87,
+						"xp": 56, "xp_from": maxi(GameState.xp - 56, 0)}))
 	get_tree().quit()
 
 

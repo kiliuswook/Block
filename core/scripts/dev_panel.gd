@@ -221,59 +221,12 @@ func _achv_row(d: Dictionary) -> Control:
 	return row
 
 
-## 상태형 업적의 현재 진행 — 세이브 값을 그대로 읽어 "지금 / 목표"로 보여 준다.
-## (Achv 는 판정만 하고 진행률을 들고 있지 않으므로 여기서 다시 센다.)
+## 상태형 업적의 현재 진행 — 세는 것은 Achv.progress()가 하고, 여기선 표시만 한다.
 func _progress(id: String, ev: bool) -> String:
 	if ev or id == Achv.FIRST_ESCAPE:
 		return "사건형"
-	match id:
-		Achv.HEIGHT_25:
-			return _frac(GameState.best_height, 25)
-		Achv.HEIGHT_50:
-			return _frac(GameState.best_height, 50)
-		Achv.HEIGHT_100:
-			return _frac(GameState.best_height, 100)
-		Achv.CLASSIC_LV5:
-			return _frac(GameState.classic_level_best, 5)
-		Achv.CLASSIC_LV10:
-			return _frac(GameState.classic_level_best, 10)
-		Achv.CLASSIC_100K:
-			return _frac(GameState.classic_best, 100000)
-		Achv.GACHA_100:
-			return _frac(GameState.gacha_drawn, Achv.GACHA_GOAL)
-		Achv.GOLD_10K:
-			return _frac(GameState.gold_earned, Achv.GOLD_GOAL)
-		Achv.LEVEL_10:
-			return _frac(Account.level(), 10)
-		Achv.LEVEL_25:
-			return _frac(Account.level(), 25)
-		Achv.LEVEL_50:
-			return _frac(Account.level(), Account.LEVEL_MAX)
-		Achv.KEYCAP_FIRST:
-			return _frac(_cat_max(func(c: String) -> int:
-				return GameState.keycap_total(c)), 1)
-		Achv.KEYCAP_RING:
-			return _frac(_cat_max(func(c: String) -> int:
-				return GameState.keycap_sets(c)), 1)
-		Achv.CAT_MAX_GRADE:
-			return _frac(_cat_max(func(c: String) -> int:
-				return GameState.cat_grade(c)), GameState.KEYCAP_GRADE_MAX)
-		Achv.CAT_UNLOCK_ALL:
-			var cats := GameState.keycap_cats()
-			var n := 0
-			for cat: Dictionary in cats:
-				if GameState.cat_grade(str(cat.id)) >= 1:
-					n += 1
-			return _frac(n, cats.size())
-	return ""
-
-
-## 키캡을 모으는 냥이(= 디자인 냥이) 중 가장 앞선 값.
-func _cat_max(f: Callable) -> int:
-	var best := 0
-	for cat: Dictionary in GameState.keycap_cats():
-		best = maxi(best, int(f.call(str(cat.id))))
-	return best
+	var p := Achv.progress(id)
+	return "" if p.y <= 0 else _frac(p.x, p.y)
 
 
 func _frac(cur: int, goal: int) -> String:
@@ -331,7 +284,8 @@ func _build_boards() -> void:
 	if not _fetched and Ranks.online():
 		_fetched = true
 		_fetch_all()
-	var names := ["OFFLINE (봇 크루 + 내 기록)", "HTTP (jsonblob)", "STEAM"]
+	var names := ["OFFLINE (봇 크루 + 내 기록)", "HTTP (jsonblob)", "STEAM",
+			"SERVER (Supabase)"]
 	_note.text = "백엔드: %s  ·  플랫폼: %s  ·  %d주차 (리셋까지 %s)" % [
 			names[Ranks.backend()], Platform.platform_name(), Ranks.week_id(),
 			Ranks.week_remaining_text()]

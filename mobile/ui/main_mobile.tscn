@@ -21,39 +21,39 @@ offset_right = 192.0
 offset_bottom = 272.0
 
 [node name="ScoreTitle" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 340.0
-offset_right = 1060.0
+offset_right = 1046.0
 offset_bottom = 368.0
 
 [node name="ScoreLabel" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 368.0
-offset_right = 1070.0
+offset_right = 1056.0
 offset_bottom = 416.0
 
 [node name="LevelTitle" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 440.0
-offset_right = 1060.0
+offset_right = 1046.0
 offset_bottom = 468.0
 
 [node name="LevelLabel" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 468.0
-offset_right = 1070.0
+offset_right = 1056.0
 offset_bottom = 516.0
 
 [node name="LinesTitle" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 540.0
-offset_right = 1060.0
+offset_right = 1046.0
 offset_bottom = 568.0
 
 [node name="LinesLabel" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 568.0
-offset_right = 1070.0
+offset_right = 1056.0
 offset_bottom = 616.0
 
 [node name="HeightTitle" parent="UI"]
@@ -71,21 +71,21 @@ offset_bottom = 150.0
 horizontal_alignment = 1
 
 [node name="BestTitle" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 40.0
-offset_right = 1060.0
+offset_right = 1046.0
 offset_bottom = 68.0
 
 [node name="BestLabel" parent="UI"]
-offset_left = 912.0
+offset_left = 898.0
 offset_top = 68.0
-offset_right = 1060.0
+offset_right = 1046.0
 offset_bottom = 120.0
 
 [node name="RecordLabel" parent="UI"]
-offset_left = 830.0
+offset_left = 816.0
 offset_top = 130.0
-offset_right = 1070.0
+offset_right = 1056.0
 offset_bottom = 166.0
 
 [node name="GoalLabel" parent="UI"]

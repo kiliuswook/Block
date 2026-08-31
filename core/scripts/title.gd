@@ -17,12 +17,19 @@ const TILE_SIZE := Vector2(128.0, 178.0)
 const TILE_GAP := 14.0
 const KEY_ROWS: Array[String] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
 const KEY_GAP := 8.0
+## 전체 화면 페이지(캐릭터·상점)의 헤더는 화면 가운데에 제목을 놓는데, 세로 화면은
+## 가운데가 좌상단 유저 HUD(24,16 / 520×96)의 오른쪽 끝과 겹친다 — 그래서 세로에서는
+## 헤더 전체를 HUD 아래에서 시작한다. 가로는 0 (지금 자리 그대로).
+const PAGE_HUD_DROP := 118.0
 ## 캐릭터 페이지: 헤더 · 왼쪽 상세 카드 · 오른쪽 캐릭터 격자 카드.
 const CHAR_HEAD_H := 112.0
 const CHAR_MARGIN := 28.0
 const CHAR_COL_GAP := 20.0
 const CHAR_PAD := 26.0  # 카드 안쪽 여백
-const CHAR_LEFT_RATIO := 0.46  # 왼쪽 상세 카드가 차지하는 비율
+const CHAR_LEFT_RATIO := 0.46  # 가로: 왼쪽 상세 카드가 차지하는 폭 비율
+## 세로 화면은 상세 카드가 위에 눕는다. 카드 안(무대 + 도감 + 보상 줄)이 세로로
+## 800px 남짓 필요한데 격자는 한 줄 5칸이라 남으므로, 상세 쪽에 더 준다.
+const CHAR_LEFT_RATIO_V := 0.58
 ## 캐릭터 격자 — 한 줄 5칸, 넘치면 세로로 스크롤한다 (30마리 = 6줄).
 const CHAR_GRID_COLS := 5
 const CHAR_SCROLL_W := 20.0  # 세로 스크롤바가 먹는 폭
@@ -35,6 +42,8 @@ const CHAR_PREVIEW := 172.0
 const CHAR_DEX_TOP := 340.0
 const CHAR_CUSTOM_TOP := 340.0
 const CHAR_REWARD_H := 152.0
+## 자판 아래에 붙는 것들: 안내 한 줄(+32) → 진행 바 묶음(제목·바·남은 장수) + 여백.
+const CHAR_DEX_FOOT := 132.0
 ## 타이틀 무대의 좌석 버튼 (캐릭터 변경) 높이.
 const SEAT_BTN_H := 56.0
 ## 뽑기 화면 — 열마다 서는 캡슐 기계 크기.
@@ -45,6 +54,11 @@ const SHOP_HEAD_H := 132.0
 const SHOP_COL_W := 470.0
 const SHOP_COL_GAP := 80.0
 const SHOP_PICK_H := 210.0
+## 열 한 벌(제목 + 기계 + 초록 판 + 스테퍼 + 뽑기 버튼)이 필요로 하는 높이.
+## 세로 화면은 남는 높이가 많아 열을 키우고 기계도 그만큼 크게 그린다.
+const SHOP_COL_H := 940.0
+const SHOP_COL_H_V := 1180.0
+const SHOP_MACHINE_SCALE_V := 1.35
 ## 기계 돔 안에 채워 둔 캡슐 자리 (돔 반지름 70 기준 오프셋).
 const DOME_CAPSULES: Array[Vector2] = [
 	Vector2(-52.0, 22.0), Vector2(-16.0, 40.0), Vector2(22.0, 30.0),
@@ -230,6 +244,13 @@ func _menu_rect() -> Rect2:
 	return Rect2(vw * 0.30 - lw / 2.0, vh * 0.42, lw, vh * 0.46)
 
 
+## 플랫폼 타이틀이 메뉴 카드를 더 붙일 자리 (`[라벨, 베벨색, 누르면 할 일]`).
+## 코어는 비워 두고, 예컨대 모바일은 여기에 `업적`을 넣는다 — 스팀은 오버레이가
+## 업적을 보여 주므로 필요 없다. (core → steam/mobile 참조 금지 규칙을 지키는 통로)
+func extra_menu_cards() -> Array:
+	return []
+
+
 func _build_menu() -> void:
 	var area := _menu_rect()
 	var gap := 16.0
@@ -252,13 +273,16 @@ func _build_menu() -> void:
 		[tr("MENU_RANKING"), UiKit.GOLD_DEEP, func() -> void: _open_ranks()],
 		[tr("MENU_SETTINGS"), UiKit.PURPLE_DEEP, func() -> void: _settings.open()],
 	]
+	cards.append_array(extra_menu_cards())
 	for i in cards.size():
 		var entry: Array = cards[i]
 		var b := Button.new()
 		b.text = str(entry[0])
 		b.position = area.position + Vector2((i % 2) * (card_w + gap),
 				seat_y + (i / 2) * (card_h + gap))
-		b.size = Vector2(card_w, card_h)
+		# 홀수로 남은 마지막 한 장은 줄을 통째로 쓴다 (반쪽짜리로 서지 않게).
+		var lone := i == cards.size() - 1 and i % 2 == 0
+		b.size = Vector2(area.size.x if lone else card_w, card_h)
 		UiKit.btn_card(b, entry[1], int(card_h * 0.3))
 		var act: Callable = entry[2]
 		b.pressed.connect(func() -> void:
@@ -509,7 +533,7 @@ func _build_gacha() -> void:
 	# 지갑은 상단 유저 HUD 하나뿐 — 여기 또 그리지 않는다.
 	var head := Label.new()
 	head.text = tr("SHOP_TITLE")
-	head.position = Vector2(0.0, 28.0)
+	head.position = Vector2(0.0, 28.0 + _page_drop())
 	head.size = Vector2(vw, 62.0)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 46)
@@ -519,7 +543,7 @@ func _build_gacha() -> void:
 	var back := Button.new()
 	back.text = tr("SET_BACK")
 	back.size = Vector2(150.0, 62.0)
-	back.position = Vector2(vw - 150.0 - CHAR_MARGIN, 24.0)
+	back.position = Vector2(vw - 150.0 - CHAR_MARGIN, 24.0 + _page_drop())
 	UiKit.btn_ghost(back, 24)
 	back.pressed.connect(func() -> void:
 		Sfx.play("click")
@@ -527,17 +551,27 @@ func _build_gacha() -> void:
 	_gacha.add_child(back)
 	# 본문 — 흰 판 위에 두 열이 나란히.
 	var board := Panel.new()
-	board.position = Vector2(0.0, SHOP_HEAD_H)
-	board.size = Vector2(vw, vh - SHOP_HEAD_H - 40.0)
+	var board_y := SHOP_HEAD_H + _page_drop()
+	# 흰 판은 열 한 벌 높이면 충분하다. 세로 화면처럼 남으면 늘리지 말고 **아래로**
+	# 붙인다 — 뽑기 버튼이 엄지 닿는 자리에 오게.
+	var avail := vh - board_y - 40.0
+	var board_h := minf(avail,
+			(SHOP_COL_H_V if vh > vw else SHOP_COL_H) + 52.0)
+	board.position = Vector2(0.0, board_y + avail - board_h)
+	board.size = Vector2(vw, board_h)
 	board.add_theme_stylebox_override("panel", UiKit.panel_box(UiKit.WHITE, 0, 0.0))
 	_gacha.add_child(board)
 	var col_w := minf(SHOP_COL_W,
 			(vw - SHOP_COL_GAP - CHAR_MARGIN * 2.0) / 2.0)
 	var x0 := (vw - col_w * 2.0 - SHOP_COL_GAP) / 2.0
+	# 열은 제목 · 기계 · 스테퍼 · 뽑기 버튼 한 벌이라 필요한 높이가 정해져 있다.
+	# 세로 화면처럼 판이 길면 늘리지 말고 가운데에 세운다 (기계만 둥둥 뜨지 않게).
+	var col_h := minf(board.size.y - 52.0, SHOP_COL_H_V if vh > vw else SHOP_COL_H)
+	var y0 := (board.size.y - col_h) / 2.0
 	for i in 2:
 		_build_gacha_col(board, i == 1,
-				Vector2(x0 + i * (col_w + SHOP_COL_GAP), 26.0),
-				Vector2(col_w, board.size.y - 52.0))
+				Vector2(x0 + i * (col_w + SHOP_COL_GAP), y0),
+				Vector2(col_w, col_h))
 	_build_gacha_pick_ui()
 	_build_gacha_result()
 	_refresh_gacha()  # 다 모은 상태로 시작하면 처음부터 잠긴 모습으로 선다
@@ -571,10 +605,16 @@ func _build_gacha_col(parent: Control, pick: bool, at: Vector2,
 	panel.draw.connect(func() -> void: _draw_gacha_panel(panel, pick))
 	col.add_child(panel)
 	var mach_area := panel_h - (SHOP_PICK_H + 12.0 if pick else 0.0)
-	var mach_h := maxf(160.0, minf(GACHA_MACHINE_H, mach_area - 24.0))
+	# 기계 크기는 두 열이 같아야 나란히 서 보인다 — 좁은 쪽(선택 열: 초록 판이
+	# 자리를 먹는다)을 기준으로 크기를 정하고, 배율은 화면 방향으로만 준다.
+	var scale := SHOP_MACHINE_SCALE_V if vh > vw else 1.0
+	var mach_w := minf(GACHA_MACHINE_W * scale, size.x - 40.0)
+	var mach_h := maxf(160.0, minf(GACHA_MACHINE_H * scale,
+			panel_h - SHOP_PICK_H - 36.0))
+	mach_w = minf(mach_w, GACHA_MACHINE_W * mach_h / GACHA_MACHINE_H)
 	var machine := Control.new()
-	machine.size = Vector2(GACHA_MACHINE_W, mach_h)
-	machine.position = Vector2((size.x - GACHA_MACHINE_W) / 2.0,
+	machine.size = Vector2(mach_w, mach_h)
+	machine.position = Vector2((size.x - mach_w) / 2.0,
 			12.0 + maxf(0.0, (mach_area - 24.0 - mach_h) / 2.0))
 	machine.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	machine.draw.connect(func() -> void: _draw_machine(machine, pick))
@@ -1641,7 +1681,7 @@ func _build_character_page() -> void:
 	_chars.add_child(bg)
 	var head := Label.new()
 	head.text = tr("CHAR_SELECT")
-	head.position = Vector2(0.0, 24.0)
+	head.position = Vector2(0.0, 24.0 + _page_drop())
 	head.size = Vector2(vw, 62.0)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 46)
@@ -1651,7 +1691,7 @@ func _build_character_page() -> void:
 	var back := Button.new()
 	back.text = tr("SET_BACK")
 	back.size = Vector2(150.0, 62.0)
-	back.position = Vector2(vw - 150.0 - CHAR_MARGIN, 22.0)
+	back.position = Vector2(vw - 150.0 - CHAR_MARGIN, 22.0 + _page_drop())
 	UiKit.btn_ghost(back, 24)
 	back.pressed.connect(func() -> void:
 		Sfx.play("click")
@@ -1687,8 +1727,14 @@ func _build_character_page() -> void:
 	var tile := _char_tile_size()
 	_char_scroll = ScrollContainer.new()
 	_char_scroll.position = Vector2(CHAR_PAD, CHAR_PAD)
-	_char_scroll.size = Vector2(grid_rect.size.x - CHAR_PAD * 2.0,
-			grid_rect.size.y - CHAR_PAD * 2.0 - tile.y - CHAR_SLOT_GAP * 2.0)
+	# 스크롤 높이: 다음 줄이 살짝 보이면 "더 있다"는 신호라 그대로 두고,
+	# 줄 높이에 거의 맞아떨어질 때만(끝동이 얇을 때) 딱 떨어지게 잘라 준다.
+	var scroll_h := grid_rect.size.y - CHAR_PAD * 2.0 - tile.y - CHAR_SLOT_GAP * 2.0
+	var row_h := tile.y + TILE_GAP
+	var rows := (scroll_h + TILE_GAP) / row_h
+	if rows - floorf(rows) < 0.35 and rows >= 1.0:
+		scroll_h = floorf(rows) * row_h - TILE_GAP
+	_char_scroll.size = Vector2(grid_rect.size.x - CHAR_PAD * 2.0, scroll_h)
 	_char_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_char_grid_card.add_child(_char_scroll)
 	_char_grid = GridContainer.new()
@@ -1711,9 +1757,15 @@ func _build_character_page() -> void:
 # --- 페이지 자리 계산 (가로·세로 화면을 한 코드로) ------------------------------------
 
 
+## 세로 화면에서 헤더가 유저 HUD 아래로 내려가는 양 (가로는 0).
+func _page_drop() -> float:
+	return PAGE_HUD_DROP if vh > vw else 0.0
+
+
 func _char_body_rect() -> Rect2:
-	return Rect2(Vector2(CHAR_MARGIN, CHAR_HEAD_H),
-			Vector2(vw - CHAR_MARGIN * 2.0, vh - CHAR_HEAD_H - CHAR_MARGIN))
+	var top := CHAR_HEAD_H + _page_drop()
+	return Rect2(Vector2(CHAR_MARGIN, top),
+			Vector2(vw - CHAR_MARGIN * 2.0, vh - top - CHAR_MARGIN))
 
 
 ## 가로 화면은 왼쪽, 세로 화면은 위쪽이 상세 카드다.
@@ -1721,7 +1773,7 @@ func _char_left_rect() -> Rect2:
 	var b := _char_body_rect()
 	if vh > vw:
 		return Rect2(b.position,
-				Vector2(b.size.x, (b.size.y - CHAR_COL_GAP) * CHAR_LEFT_RATIO))
+				Vector2(b.size.x, (b.size.y - CHAR_COL_GAP) * CHAR_LEFT_RATIO_V))
 	return Rect2(b.position,
 			Vector2((b.size.x - CHAR_COL_GAP) * CHAR_LEFT_RATIO, b.size.y))
 
@@ -2077,9 +2129,14 @@ func _draw_char_keycaps(ci: Control, w: float) -> void:
 	var font := ThemeDB.fallback_font
 	_draw_center_text(ci, font, tr("CHAR_DEX_COLLECTED").format(
 			{"ring": GameState.keycap_ring(_char_view)}), CHAR_DEX_TOP, 27, INK, w)
-	var plate_w := w - CHAR_PAD * 2.0
-	var key := (plate_w - KEY_GAP * 9.0) / 10.0
-	var plate := Rect2(CHAR_PAD, CHAR_DEX_TOP + 20.0, plate_w,
+	# 자판은 카드 폭을 다 쓰되, 아래 보상 줄을 침범할 만큼 높아지면 폭을 줄여 맞춘다
+	# (세로 화면처럼 카드가 넓고 낮을 때 — 안 그러면 도감과 보상 줄이 겹친다).
+	var top := CHAR_DEX_TOP + 20.0
+	var room := ci.size.y - CHAR_REWARD_H - 24.0 - top - CHAR_DEX_FOOT
+	var key := minf((w - CHAR_PAD * 2.0 - KEY_GAP * 9.0) / 10.0,
+			(room - KEY_GAP * 2.0 - 44.0) / 3.0)
+	var plate_w := key * 10.0 + KEY_GAP * 9.0
+	var plate := Rect2((w - plate_w) / 2.0, top, plate_w,
 			key * 3.0 + KEY_GAP * 2.0 + 44.0)
 	_draw_keycap_plate(ci, plate, _char_view)
 	var below := plate.position.y + plate.size.y + 32.0
