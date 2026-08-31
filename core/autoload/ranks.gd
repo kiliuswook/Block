@@ -6,15 +6,19 @@ extends Node
 ##   STEAM — 스팀 빌드 + 스팀 클라이언트가 살아 있을 때. Steamworks 리더보드를
 ##           쓴다. 보드 하나 = 모드 하나(주간은 주마다 새 이름), 제출·조회는
 ##           `Platform`을 통해 나간다. 서버가 필요 없다.
+##   SERVER — 스팀이 아니고 `Cloud`가 설정돼 있을 때 (모바일 서비스 빌드).
+##           Supabase 한 테이블이 보드고, 보드 하나 = (모드, 주차) 한 쌍이라
+##           주간 롤오버가 없다. **주간 시상은 서버 cron이 정산하고 클라이언트는
+##           `Cloud.claim_rewards()`로 받기만 한다** — 순위를 스스로 읽지 않는다.
 ##   HTTP  — 그 외에 BOARD_URL이 채워져 있을 때. 공유 JSON blob 하나를 통째로
-##           읽고 쓰는 프로토타입용 백엔드 (웹 빌드가 이걸 쓴다).
-##   OFFLINE — 둘 다 아닐 때. 봇 크루 + 내 로컬 기록만 보여 준다.
+##           읽고 쓰는 프로토타입용 백엔드 (임시 웹 테스트 빌드가 이걸 쓴다).
+##   OFFLINE — 셋 다 아닐 때. 봇 크루 + 내 로컬 기록만 보여 준다.
 ## 어느 쪽이든 UI는 `entries()` / `my_rank()`만 보면 된다.
 
 signal board_loaded(ok: bool)
 signal weekly_reward(gold: int)  # last week's top-3 payout landed
 
-enum Backend { OFFLINE, HTTP, STEAM }
+enum Backend { OFFLINE, HTTP, STEAM, SERVER }
 
 ## The shared board: a jsonblob.com blob (anonymous, CORS-enabled, extended
 ## on every access). Point this at any GET/PUT JSON endpoint to migrate.
@@ -59,6 +63,8 @@ func _ready() -> void:
 func backend() -> int:
 	if Platform.has_leaderboards():
 		return Backend.STEAM
+	if Cloud.enabled():
+		return Backend.SERVER
 	return Backend.HTTP if BOARD_URL != "" else Backend.OFFLINE
 
 
@@ -66,9 +72,15 @@ func online() -> bool:
 	return backend() != Backend.OFFLINE
 
 
-## 보드에서 나를 가리키는 id. 스팀에서는 SteamID라 기기를 옮겨도 같은 사람이다.
+## 보드에서 나를 가리키는 id. 스팀에서는 SteamID, 서버 백엔드에서는 계정 id라
+## 기기를 옮겨도 같은 사람이다 (오프라인/HTTP는 세이브의 player_id).
 func my_id() -> String:
-	var uid := Platform.user_id() if backend() == Backend.STEAM else ""
+	var uid := ""
+	match backend():
+		Backend.STEAM:
+			uid = Platform.user_id()
+		Backend.SERVER:
+			uid = Cloud.uid
 	return uid if uid != "" else GameState.player_id
 
 
@@ -141,6 +153,9 @@ func submit(mode_key: String, value: int) -> void:
 	if backend() == Backend.STEAM:
 		await _submit_steam(mode_key, value)
 		return
+	if backend() == Backend.SERVER:
+		await _submit_server(mode_key, value)
+		return
 	while _submitting:
 		await get_tree().process_frame
 	_submitting = true
@@ -173,11 +188,28 @@ func _submit_steam(mode_key: String, value: int) -> void:
 		await Platform.submit_score(board_name(mode_key, true), wv, details)
 
 
+## 서버 제출: 누적 보드(week_id = -1) + 이번 주 보드에 각각 upsert 한다.
+## 리플레이는 누적 보드 행에만 붙인다 (주간 행은 매주 늘어나므로 무겁게 두지 않는다).
+## 낮은 기록으로 덮어쓰는 일은 서버 트리거가 막는다.
+func _submit_server(mode_key: String, value: int) -> void:
+	if not LIVE_MODES.has(mode_key):
+		return
+	await Cloud.submit_score(mode_key, Cloud.ALL_TIME,
+			maxi(value, local_value(mode_key)), true)
+	var wv: int = GameState.weekly_value(mode_key)
+	if wv > 0:
+		await Cloud.submit_score(mode_key, week_id(), wv)
+
+
 ## Removes every entry of mine (all modes: all-time / weekly / last-week)
 ## from the shared board. Used by 설정 > 게임 초기화.
 ## 스팀 리더보드는 클라이언트가 자기 엔트리를 지울 수 없어서 그냥 넘어간다 —
 ## 로컬 기록만 지워지고 보드의 기록은 다음 플레이 때 덮어써진다.
 func wipe_mine() -> void:
+	if backend() == Backend.SERVER:
+		await Cloud.wipe_scores()
+		board = {}
+		return
 	if not online() or backend() == Backend.STEAM:
 		return
 	while _submitting:
@@ -255,6 +287,9 @@ func _claim_rewards() -> void:
 ## 오므로 그냥 refresh()와 같고, 스팀은 보드마다 따로 받아야 해서 탭을 옮길 때마다
 ## 이게 불린다. 끝나면 board_loaded(ok).
 func view(mode_key: String, weekly := false) -> void:
+	if backend() == Backend.SERVER:
+		await _view_server(mode_key, weekly)
+		return
 	if backend() != Backend.STEAM:
 		await refresh()
 		return
@@ -269,6 +304,46 @@ func view(mode_key: String, weekly := false) -> void:
 	busy = false
 	board_loaded.emit(true)
 	await _claim_rewards_steam()
+
+
+## 서버 보드는 (모드, 주차) 한 쌍이 보드 하나라 탭을 옮길 때마다 그 하나만 받는다.
+func _view_server(mode_key: String, weekly: bool) -> void:
+	if busy:
+		return
+	busy = true
+	var key := ("wk_" if weekly else "") + mode_key
+	if LIVE_MODES.has(mode_key):
+		board[key] = await Cloud.fetch_board(mode_key,
+				week_id() if weekly else Cloud.ALL_TIME, STEAM_FETCH)
+	else:
+		board[key] = []
+	busy = false
+	board_loaded.emit(true)
+	await _claim_rewards_server()
+
+
+## 서버 백엔드의 전체 새로고침 — 살아 있는 모드의 누적·주간 보드를 모두 받는다.
+func _refresh_server() -> void:
+	if busy:
+		board_loaded.emit(not board.is_empty())
+		return
+	busy = true
+	for m: String in LIVE_MODES:
+		board[m] = await Cloud.fetch_board(m, Cloud.ALL_TIME, STEAM_FETCH)
+		board["wk_" + m] = await Cloud.fetch_board(m, week_id(), STEAM_FETCH)
+	busy = false
+	board_loaded.emit(true)
+	await _claim_rewards_server()
+
+
+## 서버 주간 시상: 정산(지난 주 상위 3 뽑기)은 서버 cron이 이미 끝냈고, 여기서는
+## 미청구 상금을 받아 지갑에 넣기만 한다 — 클라이언트가 순위를 읽지 않으므로
+## 주차를 넘기거나 순위를 지어내서 상금을 타낼 자리가 없다.
+func _claim_rewards_server() -> void:
+	var gold := await Cloud.claim_rewards()
+	if gold > 0:
+		GameState.add_currency(gold)
+		weekly_reward.emit(gold)
 
 
 ## 스팀 주간 시상: 지난주 보드의 상위 3명 안에 내가 있으면 보상을 준다.
@@ -295,6 +370,9 @@ func _claim_rewards_steam() -> void:
 ## performs the weekly rollover (so boards reset even if nobody submits) and
 ## collects any pending last-week prize. HTTP 백엔드 전용.
 func refresh() -> void:
+	if backend() == Backend.SERVER:
+		await _refresh_server()
+		return
 	if not online() or busy or backend() == Backend.STEAM:
 		board_loaded.emit(online() and not board.is_empty())
 		return

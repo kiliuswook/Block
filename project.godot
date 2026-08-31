@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 EventBus="*res://core/autoload/event_bus.gd"
+Cloud="*res://core/autoload/cloud.gd"
 GameState="*res://core/autoload/game_state.gd"
 I18n="*res://core/autoload/i18n.gd"
 Sfx="*res://core/autoload/sfx.gd"
@@ -33,6 +34,11 @@ Account="*res://core/autoload/account.gd"
 ; 스팀 앱 id. 480 = Valve 공개 테스트 앱 "Spacewar" (리더보드 실험용).
 ; 스팀 출시 id를 받으면 이 값만 바꾸면 된다 — steam_platform.gd가 여기서 읽는다.
 steam/app_id=480
+
+; 모바일 서비스 백엔드 (Supabase). 비워 두면 서버 기능이 통째로 꺼지고
+; 랭킹은 예전 HTTP/오프라인 백엔드로 떨어진다 — 절차는 docs/cloud_setup.md.
+cloud/url=""
+cloud/anon_key=""
 
 [display]
 

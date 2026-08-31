@@ -21,7 +21,7 @@ func _ready() -> void:
 		return
 	_line("SteamID", Platform.user_id())
 	_line("이름", Platform.user_name())
-	_line("백엔드", ["OFFLINE", "HTTP", "STEAM"][Ranks.backend()])
+	_line("백엔드", ["OFFLINE", "HTTP", "STEAM", "SERVER"][Ranks.backend()])
 
 	var board := Ranks.board_name(PROBE_MODE)
 	var score := 40 + randi() % 20

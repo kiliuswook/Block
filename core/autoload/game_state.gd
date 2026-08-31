@@ -93,6 +93,9 @@ var nick_custom: bool = false
 var player_id: String = ""  # stable random id identifying this save on boards
 var weekly: Dictionary = {}  # this week's bests: {"week": id, "endless": n, ...}
 var weekly_claimed: int = 0  # last finished week whose prize was checked
+## 클라우드 세이브 판 번호 — 올릴 때마다 1씩 오르고, 서버 쪽이 더 크면 서버가
+## 이긴다(다른 기기에서 더 논 것). `Cloud` 참고. 서버를 안 쓰면 늘 0.
+var cloud_rev: int = 0
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
 ## 선택 뽑기에 걸어 둔 냥이 id들 (최대 KEYCAP_PICK_SIZE) — 뽑기 화면에서 유지된다.
 var gacha_pick: Array = []
@@ -811,7 +814,16 @@ var save_enabled := true
 func save_game() -> void:
 	if not save_enabled:
 		return
-	var data := {
+	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(save_dict()))
+	# 클라우드 백업은 몇 초 뒤 한 번만 올라간다 (Cloud가 디바운스한다).
+	Cloud.mark_dirty()
+
+
+## 세이브 한 벌 — 파일에도 이대로 들어가고 클라우드에도 이대로 올라간다.
+func save_dict() -> Dictionary:
+	return {
 		"score": score,
 		"best_height": best_height,
 		"classic_best": classic_best,
@@ -843,10 +855,8 @@ func save_game() -> void:
 		"resolution": resolution,
 		"keybinds": keybinds,
 		"padbinds": padbinds,
+		"cloud_rev": cloud_rev,
 	}
-	var file := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(data))
 
 
 func load_game() -> void:
@@ -880,6 +890,7 @@ func load_game() -> void:
 			for k in wkly:
 				weekly[str(k)] = int(wkly[k])
 		weekly_claimed = int(data.get("weekly_claimed", 0))
+		cloud_rev = int(data.get("cloud_rev", 0))
 		var caps: Variant = data.get("keycaps", {})
 		if caps is Dictionary:
 			keycaps = {}
