@@ -399,7 +399,6 @@ func _ready() -> void:
 
 	# --- Classic mode: arcade rules, cat controls ------------------------------
 	GameState.mode = GameState.MODE_CLASSIC
-	GameState.split = false
 	var cl: Node2D = load("res://core/scripts/escape_board.gd").new()
 	var clp: Node2D = load("res://core/scripts/player.gd").new()
 	clp.name = "Player"

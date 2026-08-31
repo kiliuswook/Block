@@ -4,7 +4,7 @@ extends Control
 ## 하늘색 헤더(지갑 · 제목 · 뒤로) + 흰 본문, 본문은 세 페이지가 갈아 끼워진다:
 ##   기본 (해상도 / 언어 / 음량 3종 / 컨트롤러 진동 / 컨트롤러 · 키보드 진입)
 ##   컨트롤러 (액션별 패드 버튼 재설정)
-##   키보드 (싱글 · 1P vs 2P 탭, 액션별 키 재설정)
+##   키보드 (액션별 키 재설정)
 ##
 ## 타이틀(SET_TITLE)과 인게임 일시정지(SET_PAUSE_TITLE)가 같은 컨트롤을 공유한다 —
 ## 해상도·언어·게임 초기화는 씬을 새로 여는 동작이라 타이틀에서만 노출한다.
@@ -65,9 +65,6 @@ var _reset_armed := false  # 첫 탭 = 확인 문구, 둘째 탭 = 실제 초기
 var _chips := {}
 var _cap_btn: Button = null  # 지금 입력을 기다리는 칩
 
-var _keys_tab := 0  # 0 = 싱글, 1 = 1P vs 2P
-var _keys_tab_btns: Array[Button] = []
-var _keys_views: Array[Control] = []
 
 
 func _ready() -> void:
@@ -321,42 +318,13 @@ func _build_keys_page() -> Control:
 	var page := Control.new()
 	page.size = _body_rect.size
 	page.add_child(_section_head("SET_KEYBOARD", 0.0, _body_rect.size.x, 26.0))
-	var tab_w := 380.0
-	var tabs := [["SET_TAB_SINGLE", 0], ["SET_TAB_VERSUS", 1]]
-	for i in tabs.size():
-		var b := Button.new()
-		b.text = tr(str(tabs[i][0]))
-		b.size = Vector2(tab_w, 56.0)
-		b.position = Vector2((_body_rect.size.x - tab_w * 2.0 - 24.0) / 2.0
-				+ i * (tab_w + 24.0), 96.0)
-		var idx := int(tabs[i][1])
-		b.pressed.connect(func() -> void:
-			Sfx.play("click")
-			_set_keys_tab(idx))
-		page.add_child(b)
-		_keys_tab_btns.append(b)
-	# 싱글 — 가운데 한 줄.
 	var single := Control.new()
-	single.position = Vector2(0.0, 178.0)
-	single.size = Vector2(_body_rect.size.x, _body_rect.size.y - 178.0)
+	single.position = Vector2(0.0, 116.0)
+	single.size = Vector2(_body_rect.size.x, _body_rect.size.y - 116.0)
 	page.add_child(single)
 	var gw := 520.0
 	_build_bind_column(single, (_body_rect.size.x - gw) / 2.0, 0.0, gw, "",
 			KeyBinds.SINGLE, "single")
-	# 1P vs 2P — 두 칸.
-	var versus := Control.new()
-	versus.position = Vector2(0.0, 178.0)
-	versus.size = Vector2(_body_rect.size.x, _body_rect.size.y - 178.0)
-	page.add_child(versus)
-	var cw := 460.0
-	var half := _body_rect.size.x / 2.0
-	_build_bind_column(versus, half - cw - 30.0, 0.0, cw, "SET_SEAT_1P",
-			KeyBinds.P1, "p1")
-	_build_bind_column(versus, half + 30.0, 0.0, cw, "SET_SEAT_2P",
-			KeyBinds.P2, "p2")
-	_keys_views.append(single)
-	_keys_views.append(versus)
-	_set_keys_tab(0)
 	return page
 
 
@@ -369,8 +337,7 @@ func _build_bind_column(parent: Control, gx: float, gy: float, gw: float,
 		head.position = Vector2(gx, y)
 		head.size = Vector2(gw, 40.0)
 		head.add_theme_font_size_override("font_size", 28)
-		head.add_theme_color_override("font_color",
-				UiKit.RED_DEEP if group == "p1" else UiKit.CYAN_DEEP)
+		head.add_theme_color_override("font_color", UiKit.CYAN_DEEP)
 		parent.add_child(head)
 		y += 50.0
 	for row: Dictionary in rows:
@@ -435,15 +402,6 @@ func _show_page(page: int) -> void:
 	_title_label.text = tr("SET_TITLE") if _on_title else tr("SET_PAUSE_TITLE")
 	queue_redraw()
 	_refresh()
-
-
-func _set_keys_tab(tab: int) -> void:
-	_cancel_capture()
-	_keys_tab = tab
-	for i in _keys_views.size():
-		_keys_views[i].visible = i == tab
-	for i in _keys_tab_btns.size():
-		UiKit.btn_chip(_keys_tab_btns[i], i == tab, 24)
 
 
 func _on_back() -> void:

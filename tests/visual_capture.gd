@@ -14,23 +14,11 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_modes())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_chars.png",
 			func(inst: Node) -> void: inst._open_chars())
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes_2p.png",
-			func(inst: Node) -> void:
-				inst._set_players(2)
-				inst._open_modes())
-	# 타이틀 무대 = 좌석. 1인이면 오른쪽이 빈 자리, 2인이면 냥이 둘이 선다.
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_seats_1p.png",
-			func(inst: Node) -> void: inst._set_players(1))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_seats_2p.png",
-			func(inst: Node) -> void: inst._set_players(2))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_1p.png",
-			func(inst: Node) -> void:
-				inst._set_players(1)
-				inst._open_chars(1))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick_2p.png",
-			func(inst: Node) -> void:
-				inst._set_players(2)
-				inst._open_chars(2))
+	# 타이틀 무대 = 좌석. 이번 판에 나갈 냥이가 여기 선다.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_seat.png",
+			func(inst: Node) -> void: inst._refresh_seats())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick.png",
+			func(inst: Node) -> void: inst._open_chars(true))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_pad.png",
@@ -41,11 +29,6 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst._settings.open()
 				inst._settings._show_page(inst._settings.PAGE_KEYS))
-	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_keys_2p.png",
-			func(inst: Node) -> void:
-				inst._settings.open()
-				inst._settings._show_page(inst._settings.PAGE_KEYS)
-				inst._settings._set_keys_tab(1))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha.png",
 			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_pick.png",
@@ -166,20 +149,6 @@ func _ready() -> void:
 	await _capture("res://core/scenes/main.tscn", OUT + "/pause_settings.png",
 			func(inst: Node) -> void:
 				inst.settings_panel.open(false))
-	GameState.split = true
-	# 2P는 자기 자리(slot 2)의 냥이로 나온다 — 자리별 선택/커스터마이징 확인용.
-	var saved_cat2: String = GameState.selected_cat2
-	GameState.selected_cat2 = "black"
-	GameState.mode = GameState.MODE_STORY
-	await _capture("res://core/scenes/main.tscn", OUT + "/split_escape.png")
-	GameState.mode = GameState.MODE_ENDLESS
-	await _capture("res://core/scenes/main.tscn", OUT + "/split_endless.png")
-	GameState.selected_cat2 = saved_cat2
-	GameState.split = false
-	GameState.mode = GameState.MODE_VERSUS
-	await _capture("res://core/scenes/main.tscn", OUT + "/versus.png")
-	await _capture("res://core/scenes/main.tscn", OUT + "/versus_round.png",
-			func(inst: Node) -> void: inst.get_node("Board")._versus_over(1))
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/death_popup.png",
 			func(inst: Node) -> void:
@@ -199,7 +168,6 @@ func _ready() -> void:
 	# --- 모바일(세로 1080×1920) 레이아웃 ---
 	get_window().size = Vector2i(540, 960)
 	get_window().content_scale_size = Vector2i(1080, 1920)
-	GameState.split = false
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())

@@ -17,10 +17,6 @@ SET_VIBRATION,Controller Rumble,컨트롤러 진동,[Çôńţřôłłéř Řüɱ
 SET_VIBRATION_OFF,Off,끄기,[Ôƒƒ ——]
 SET_CONTROLLER,Controller,컨트롤러,[Çôńţřôłłéř ————————]
 SET_KEYBOARD,Keyboard,키보드,[Ķéÿƀôàřð ——————]
-SET_TAB_SINGLE,Single,싱글,[Şïńğłé ————]
-SET_TAB_VERSUS,1P vs 2P,1P vs 2P,[1Þ ṽş 2Þ ——————]
-SET_SEAT_1P,1P,1P,[1Þ]
-SET_SEAT_2P,2P,2P,[2Þ]
 SET_RESET_BINDS,Reset to defaults,기본값으로 재설정,[Řéşéţ ţô ðéƒàüłţş —————————————]
 SET_PRESS_KEY,Press a key...,키를 누르세요...,[Þřéşş à ķéÿ... ———————————]
 SET_PRESS_BUTTON,Press a button...,버튼을 누르세요...,[Þřéşş à ƀüţţôń... —————————————]
@@ -135,64 +131,28 @@ to collect the floating jelly fish
 [Şţàçķ ƀłôçķş, şţéþ üþ àńð çłïɱƀ ————————————————————————]
 [ţô çôłłéçţ ţĥé ƒłôàţïńğ ĵéłłÿ ƒïşĥ ———————————————————————————]
 [100 þôïńţş à ƒïşĥ · łïńé çłéàř ƀôńüş ————————————————————————————]"
-TUT_VERSUS,"2P Versus  —  first to {target} wins
-P1 cat: escape through the exit to win
-P2 blocks: crush the cat to win
-Stack all the way to the top and P2 loses!","2P 대전  —  {target}선승
-P1 고양이: 출구로 탈출하면 승리
-P2 블록: 고양이를 깔아뭉개면 승리
-꼭대기까지 쌓아버리면 P2 패배!","[2Þ Ṽéřşüş  —  ƒïřşţ ţô {target} ŵïńş ————————————————————————————]
-[Þ1 çàţ: éşçàþé ţĥřôüğĥ ţĥé éẋïţ ţô ŵïń ——————————————————————————————]
-[Þ2 ƀłôçķş: çřüşĥ ţĥé çàţ ţô ŵïń ————————————————————————]
-[Şţàçķ àłł ţĥé ŵàÿ ţô ţĥé ţôþ àńð Þ2 łôşéş! —————————————————————————————————]"
-TUT_KEYS_VERSUS,"P1 (cat)  < > Move (double tap: dash)   ^ Jump   v Fast fall        P2 (blocks)  A/D Move   Q/E Rotate   S Drop (double tap: slam, after landing: lock)        R New match   ESC Title","P1(고양이)  < > 이동 (더블탭: 대시)   ^ 점프   v 빠른 낙하        P2(블록)  A/D 이동   Q/E 회전   S 낙하 (더블탭: 슬램, 착지 후: 고정)        R 새 대결   ESC 타이틀","[Þ1 (çàţ)  < > Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)   ^ Ĵüɱþ   ṽ Ƒàşţ ƒàłł        Þ2 (ƀłôçķş)  Å/Ð Ṁôṽé   Ɋ/É Řôţàţé   Ş Ðřôþ (ðôüƀłé ţàþ: şłàɱ, àƒţéř łàńðïńğ: łôçķ)        Ř Ńéŵ ɱàţçĥ   ÉŞÇ Ţïţłé —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]"
-TUT_KEYS_SPLIT,"P1 (left)  A/D Move (double tap: dash)   W Jump   S Fall   Q/E Rotate   Ctrl Dash        P2 (right)  < > Move   ^ Jump   v Fall   , . Rotate   Shift Dash        R New match   ESC Title","P1(왼쪽)  A/D 이동 (더블탭: 대시)   W 점프   S 낙하   Q/E 회전   Ctrl 대시        P2(오른쪽)  < > 이동   ^ 점프   v 낙하   , . 회전   Shift 대시        R 새 대결   ESC 타이틀","[Þ1 (łéƒţ)  Å/Ð Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)   Ŵ Ĵüɱþ   Ş Ƒàłł   Ɋ/É Řôţàţé   Çţřł Ðàşĥ        Þ2 (řïğĥţ)  < > Ṁôṽé   ^ Ĵüɱþ   ṽ Ƒàłł   , . Řôţàţé   Şĥïƒţ Ðàşĥ        Ř Ńéŵ ɱàţçĥ   ÉŞÇ Ţïţłé ———————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]"
 TOUCH_TITLE,Title,타이틀,[Ţïţłé ————]
 TOUCH_ROT_CCW,◀ Rotate,◀ 회전,[◀ Řôţàţé ——————]
 TOUCH_ROT_CW,Rotate ▶,회전 ▶,[Řôţàţé ▶ ——————]
 TOUCH_JUMP,Jump,점프,[Ĵüɱþ ———]
-VS_TALLY,P1 Cat  {p1} : {p2}  Blocks P2,P1 고양이  {p1} : {p2}  블록 P2,[Þ1 Çàţ  {p1} : {p2}  Ɓłôçķş Þ2 ————————————————————————]
-VS_CAT,Cat (P1),고양이 (P1),[Çàţ (Þ1) ——————]
-VS_BLOCKS,Blocks (P2),블록 (P2),[Ɓłôçķş (Þ2) ————————]
-VS_ROUND_WIN,{who} wins the round!,{who} 라운드 승리!,[{who} ŵïńş ţĥé řôüńð! ————————————————]
-VS_MATCH_WIN,"{who} wins the match!
-{p1} : {p2}
-
-R New match  ·  ESC Title","{who} 최종 승리!
-{p1} : {p2}
-
-R 새 대결  ·  ESC 타이틀","[{who} ŵïńş ţĥé ɱàţçĥ! ————————————————]
-[{p1} : {p2} ————————]
-[]
-[Ř Ńéŵ ɱàţçĥ  ·  ÉŞÇ Ţïţłé ————————————————————]"
-SPLIT_SCORE,P{n}   {floors} F,P{n}   {floors}층,[Þ{n}   {floors} Ƒ —————————————]
-SPLIT_STAGE_OVER,P{n}   GAME OVER,P{n}   게임 오버,[Þ{n}   ĞÅṀÉ ÔṼÉŘ ————————————]
-SPLIT_STAGE_WIN,P{n} WINS!   {score},P{n} 승리!   {score}점,[Þ{n} ŴÏŃŞ!   {score} ————————————————]
 MENU_TAGLINE,A cube cat's great escape from the pit,구덩이에 빠진 큐브 고양이의 탈출극,[Å çüƀé çàţ'ş ğřéàţ éşçàþé ƒřôɱ ţĥé þïţ ——————————————————————————————]
 MENU_MODE_SELECT,Select Mode,모드 선택,[Şéłéçţ Ṁôðé ————————]
-MENU_MODE_SOLO_ONLY,Solo only,1인 전용,[Şôłô ôńłÿ ———————]
 MENU_CHARACTER,🐱  Character,🐱  캐릭터,[🐱  Çĥàřàçţéř —————————]
 MENU_GACHA,🎰  Gacha,🎰  뽑기,[🎰  Ğàçĥà ——————]
 MENU_RANKING,🏆  Ranking,🏆  랭킹,[🏆  Řàńķïńğ ————————]
 MENU_SETTINGS,⚙  Settings,⚙  설정,[⚙  Şéţţïńğş ————————]
 MENU_KEYCAP_DEX,▦  Keycap Dex,▦  키캡 도감,[▦  Ķéÿçàþ Ðéẋ ——————————]
 MENU_WEEKLY_PRIZE,Last week's ranking prize!  +{gold} G,지난주 랭킹 보상!  +{gold} G,[Łàşţ ŵééķ'ş řàńķïńğ þřïżé!  +{gold} Ğ —————————————————————————————]
-MENU_HINT,Click / tap a button  or press 1 ~ 7   (6 · 7 = split-screen 2P),버튼 클릭 / 터치  또는  1 ~ 7 키로 선택   (6 · 7 = 화면 분할 2인),[Çłïçķ / ţàþ à ƀüţţôń  ôř þřéşş 1 ~ 7   (6 · 7 = şþłïţ-şçřééń 2Þ) ———————————————————————————————————————————————————]
 MODE_STORY,Story Mode,스토리 모드,[Şţôřÿ Ṁôðé ————————]
 MODE_STORY_DESC,Learn the cat's escape story stage by stage — starting from the tutorial!,스테이지를 깨며 배우는 고양이의 탈출 이야기 — 튜토리얼부터 차근차근!,[Łéàřń ţĥé çàţ'ş éşçàþé şţôřÿ şţàğé ƀÿ şţàğé — şţàřţïńğ ƒřôɱ ţĥé ţüţôřïàł! ——————————————————————————————————————————————————————————]
 MODE_ENDLESS,Endless Stairs,무한의 계단,[Éńðłéşş Şţàïřş ———————————]
 MODE_ENDLESS_DESC,Stack blocks forever and climb as high as you can!,끝없이 블록을 쌓으며 최대한 높이 올라가자!,[Şţàçķ ƀłôçķş ƒôřéṽéř àńð çłïɱƀ àş ĥïğĥ àş ÿôü çàń! ————————————————————————————————————————]
-MODE_VERSUS,2P Versus,2P 대전 모드,[2Þ Ṽéřşüş ———————]
-MODE_VERSUS_DESC,"P1 the cat escapes, P2 the blocks crush — one keyboard duel!","P1 고양이는 탈출, P2 블록은 뭉개기 — 한 키보드 대결!","[Þ1 ţĥé çàţ éşçàþéş, Þ2 ţĥé ƀłôçķş çřüşĥ — ôńé ķéÿƀôàřð ðüéł! ————————————————————————————————————————————————]"
 MODE_CLASSIC,Stage Mode,스테이지 모드,[Şţàğé Ṁôðé ————————]
 MODE_CLASSIC_DESC,Clear the goal lines and the shutter drops for the next board — one LEVEL is one stage!,목표 줄을 지우면 셔터가 내려오고 다음 판 — LEVEL 하나가 스테이지 하나!,[Çłéàř ţĥé ğôàł łïńéş àńð ţĥé şĥüţţéř ðřôþş ƒôř ţĥé ńéẋţ ƀôàřð — ôńé ŁÉṼÉŁ ïş ôńé şţàğé! —————————————————————————————————————————————————————————————————————]
 MODE_CLASSIC_DESC_BEST,One LEVEL is one board — best score  {best} pts,LEVEL 하나가 판 하나 — 최고 기록  {best}점,[Ôńé ŁÉṼÉŁ ïş ôńé ƀôàřð — ƀéşţ şçôřé  {best} þţş —————————————————————————————————————]
 MODE_PICNIC,Jelly Picnic  ♥ Cozy,젤리 피크닉  ♥ 편안함,[Ĵéłłÿ Þïçńïç  ♥ Çôżÿ ————————————————]
 MODE_PICNIC_DESC,A healing mode where nobody dies — nom up jelly fish for 2 minutes!,아무도 죽지 않는 힐링 모드 — 2분 동안 젤리 생선을 냠냠 모으자!,[Å ĥéàłïńğ ɱôðé ŵĥéřé ńôƀôðÿ ðïéş — ńôɱ üþ ĵéłłÿ ƒïşĥ ƒôř 2 ɱïńüţéş! —————————————————————————————————————————————————————]
-MODE_SPLIT_6,Split-screen 2P,2인 분할,[Şþłïţ-şçřééń 2Þ ————————————]
-MODE_SPLIT_7,Split-screen 2P,2인 분할,[Şþłïţ-şçřééń 2Þ ————————————]
 CHAR_SELECT,Select Character,캐릭터 선택,[Şéłéçţ Çĥàřàçţéř ————————————]
-CHAR_SEAT_PICK,{n}P — Select Character,{n}P 캐릭터 선택,[{n}Þ — Şéłéçţ Çĥàřàçţéř ——————————————————]
 CHAR_EQUIPPED,Equipped,장착 중,[Éɋüïþþéð ——————]
 CHAR_SELECT_BTN,Select,선택하기,[Şéłéçţ ————]
 CHAR_DONE,Done,확인,[Ðôńé ———]
@@ -282,14 +242,9 @@ CC_RANDOM,🎲 Randomize,🎲 랜덤 생성,[🎲 Řàńðôɱïżé ———�
 CC_PRESET,Original Cats,원본 냥이,[Ôřïğïńàł Çàţş ——————————]
 CC_FLAVOR_PRESET,Genome transplanted! Now make it yours.,유전자 이식 완료! 이제 마음대로 주무르세요.,[Ğéńôɱé ţřàńşþłàńţéð! Ńôŵ ɱàķé ïţ ÿôüřş. ———————————————————————————————]
 MENU_PLAYERS,Players,인원 선택,[Þłàÿéřş —————]
-MENU_PLAYERS_1,1 Player,1인 플레이,[1 Þłàÿéř ——————]
 MENU_PLAYERS_1_DESC,Play solo and chase your own record,혼자서 기록에 도전한다,[Þłàÿ şôłô àńð çĥàşé ÿôüř ôŵń řéçôřð ————————————————————————————]
-MENU_PLAYERS_2,2 Players,2인 플레이,[2 Þłàÿéřş ———————]
 MENU_PLAYERS_2_DESC,Split screen — two cats race on one keyboard,화면 분할 — 키보드 하나로 두 냥이가 겨룬다,[Şþłïţ şçřééń — ţŵô çàţş řàçé ôń ôńé ķéÿƀôàřð ———————————————————————————————————]
 MENU_SEAT_CHANGE,🐾 Change Cat,🐾 캐릭터 변경,[🐾 Çĥàńğé Çàţ —————————]
-MENU_SEAT_JOIN,＋ Join as 2P,＋ 2인 플레이 참가,[＋ Ĵôïń àş 2Þ —————————]
-MENU_SEAT_LEAVE,✕ Leave,✕ 자리 비우기,[✕ Łéàṽé —————]
-MENU_SEAT_EMPTY,Empty seat,빈 자리,[Éɱþţÿ şéàţ ————————]
 MENU_START,Start Game,게임 시작,[Şţàřţ Ğàɱé ————————]
 MENU_QUIT,Quit,종료,[Ɋüïţ ———]
 CHAR_PICK,Pick Your Cat,참가 냥이 고르기,[Þïçķ Ÿôüř Çàţ ——————————]

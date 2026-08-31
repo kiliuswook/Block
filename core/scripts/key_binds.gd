@@ -6,13 +6,11 @@ extends RefCounted
 ##
 ## 저장은 GameState.keybinds / GameState.padbinds (save.json).
 ## 키는 `<액션>#<슬롯>` 문자열 — 슬롯은 그 액션에 달린 **키 이벤트 중 몇 번째**인가다.
-## 한 액션이 두 좌석을 겸하는 자리가 있어서(예: rotate_cw = X(싱글) + .(2P))
-## 슬롯까지 있어야 행을 구분할 수 있다.
 
 # --- 행 정의 ------------------------------------------------------------------
 # {"act": 액션 이름, "slot": 키 이벤트 인덱스, "label": 번역 키}
 
-## 싱글 플레이 조작 (기본 액션 세트).
+## 키보드 조작 (기본 액션 세트).
 const SINGLE := [
 	{"act": "move_left", "slot": 0, "label": "SET_ACT_MOVE_LEFT"},
 	{"act": "move_right", "slot": 0, "label": "SET_ACT_MOVE_RIGHT"},
@@ -22,29 +20,6 @@ const SINGLE := [
 	{"act": "rotate_ccw", "slot": 0, "label": "SET_ACT_ROT_CCW"},
 	{"act": "rotate_cw", "slot": 0, "label": "SET_ACT_ROT_CW"},
 	{"act": "pause", "slot": 0, "label": "SET_ACT_PAUSE"},
-]
-
-## 분할 화면 왼쪽 좌석(1P) — 좌석 배치가 곧 키보드 배치라 `p2_*` 액션이 왼쪽이다.
-const P1 := [
-	{"act": "p2_left", "slot": 0, "label": "SET_ACT_MOVE_LEFT"},
-	{"act": "p2_right", "slot": 0, "label": "SET_ACT_MOVE_RIGHT"},
-	{"act": "p2_jump", "slot": 0, "label": "SET_ACT_JUMP"},
-	{"act": "p2_dash", "slot": 0, "label": "SET_ACT_DASH"},
-	{"act": "p2_drop", "slot": 0, "label": "SET_ACT_SOFT_DROP"},
-	{"act": "p2_rot_ccw", "slot": 0, "label": "SET_ACT_ROT_CCW"},
-	{"act": "p2_rot_cw", "slot": 0, "label": "SET_ACT_ROT_CW"},
-]
-
-## 분할 화면 오른쪽 좌석(2P) — 기본 액션의 두 번째 키 자리를 쓴다.
-## 이동·대시·낙하는 키가 하나뿐이라 싱글과 같은 자리를 공유한다 (기획서도 동일).
-const P2 := [
-	{"act": "move_left", "slot": 0, "label": "SET_ACT_MOVE_LEFT"},
-	{"act": "move_right", "slot": 0, "label": "SET_ACT_MOVE_RIGHT"},
-	{"act": "jump", "slot": 0, "label": "SET_ACT_JUMP"},
-	{"act": "dash", "slot": 0, "label": "SET_ACT_DASH"},
-	{"act": "soft_drop", "slot": 0, "label": "SET_ACT_SOFT_DROP"},
-	{"act": "rotate_ccw", "slot": 1, "label": "SET_ACT_ROT_CCW"},
-	{"act": "rotate_cw", "slot": 1, "label": "SET_ACT_ROT_CW"},
 ]
 
 ## 게임패드 행. `fixed`는 재설정 불가(스틱·D-pad 이동).
@@ -93,7 +68,7 @@ static func slot_key(row: Dictionary) -> String:
 ## 모든 행의 기본 키코드 {슬롯 키: physical_keycode}.
 static func defaults() -> Dictionary:
 	if _defaults.is_empty():
-		for row: Dictionary in SINGLE + P1 + P2:
+		for row: Dictionary in SINGLE:
 			var k := slot_key(row)
 			if not _defaults.has(k):
 				_defaults[k] = _read_key(str(row.act), int(row.slot))

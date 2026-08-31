@@ -35,7 +35,7 @@ Cat-Tris는 저장소·Godot 프로젝트 하나에서 스팀(가로)과 모바�
 | | 스팀 (기준 구현) | 모바일 |
 |---|---|---|
 | 해상도 | 가로 1920×1080 | **세로 1080×1920** (`.mobile` 오버라이드) |
-| 모드 | 탈출, 무한, 2P 대전, 2인 분할 | 탈출, 무한만 — **2P 계열 없음** |
+| 모드 | 스테이지, 무한 | 스테이지, 무한 |
 | 입력 | 키보드/패드 (+Esc 종료) | 터치 컨트롤 항상 표시 |
 | 타이틀 | `steam/ui/title_steam.tscn` | `mobile/ui/title_mobile.tscn` |
 | 게임 씬 | `core/scenes/main.tscn` | `mobile/ui/main_mobile.tscn` (main.tscn 상속) |
@@ -59,7 +59,6 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 ### 1. 게임 로직/시스템 수정 (보드, 플레이어, 스탯, 경제 등)
 - `core/`에서 수정. 두 플랫폼이 자동 공유하므로 분기 불필요.
 - 단, **화면 좌표를 하드코딩하지 말 것** — 뷰포트 크기(`get_viewport_rect().size`) 기준으로 계산. 1920/1080 리터럴이 새로 들어가면 모바일(1080×1920)에서 깨진다.
-- 2P(대전·분할) 전용 로직은 모바일에서 실행될 일이 없지만, 코드가 모바일 빌드에 포함되는 건 정상 (main.gd 공유).
 
 ### 2. HUD/인게임 UI 변경
 - `core/scenes/main.tscn`에 노드 추가/변경 후, **`mobile/ui/main_mobile.tscn`에서 세로 배치 오버라이드를 함께 갱신**할 것. 상속 씬이므로 새 노드는 자동 등장하지만 위치는 가로 기준이라 세로에서 어긋난다.
@@ -68,12 +67,12 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 
 ### 3. 타이틀/메뉴 UI 변경
 - 공용 요소(캐릭터 선택, 상점, 재화)는 `core/scripts/title.gd` — 이미 해상도 인지형. `vw`/`vh`/`tile_y` 변수를 쓰고 1920/1080 리터럴 금지.
-- 플랫폼 요소는 각 타이틀 스크립트에: `steam/ui/title_steam.gd`(종료 버튼, Esc), `mobile/ui/title_mobile.gd`(세로 재배치, 2P 숨김, `max_tiles_per_row`, `main_scene` 교체).
+- 플랫폼 요소는 각 타이틀 스크립트에: `steam/ui/title_steam.gd`(종료 버튼, Esc), `mobile/ui/title_mobile.gd`(세로 재배치, `max_tiles_per_row`, `main_scene` 교체).
 - core 타이틀에 노드를 추가하면 **두 플랫폼 타이틀 스크린샷을 모두 확인**할 것.
 
 ### 4. 새 모드/컨텐츠 추가
 - 먼저 결정: 두 플랫폼 공통인가?
-  - 공통 → `core/`에 추가 + 두 타이틀에 진입점. **모바일은 세로 화면·터치 조작으로 플레이 가능한지 먼저 검토** (키보드 2인 전제면 모바일 제외).
+  - 공통 → `core/`에 추가 + 두 타이틀에 진입점. **모바일은 세로 화면·터치 조작으로 플레이 가능한지 먼저 검토**.
   - 스팀 전용(예: 도전과제 연계) → `steam/content/`, 모바일 전용(예: 광고 보상) → `mobile/content/`. 진입점도 해당 플랫폼 타이틀에만.
 - 모드 선택 흐름: 타이틀 `_start()` → `GameState.mode` → `main_scene` 로드. 모바일 제외 모드는 `title_mobile.gd`의 숨김 목록에 추가.
 

@@ -1,6 +1,5 @@
 extends "res://core/scripts/title.gd"
 ## 모바일 타이틀 — core 타이틀을 상속, 세로 화면(1080×1920) 레이아웃.
-## 한 키보드가 필요한 2P 모드(대전·화면 분할)는 모바일에 없다.
 ## 로고·메뉴·오버레이 배치는 core가 화면 비율로 알아서 계산한다.
 
 
@@ -13,7 +12,6 @@ func _ready() -> void:
 			and get_window().content_scale_size.x > get_window().content_scale_size.y:
 		BootScript.apply_mobile_dev_window(get_window())
 	max_tiles_per_row = 5  # 캐릭터 타일을 5+4 두 줄로
-	allow_2p = false  # 한 키보드가 필요한 2인 플레이는 모바일에 없다 → 인원 선택 생략
 	main_scene = "res://mobile/ui/main_mobile.tscn"
 	super()
 	BootScript.dev_platform = "mobile"  # 타이틀 복귀 시에도 모바일 유지

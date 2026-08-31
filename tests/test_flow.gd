@@ -1,5 +1,5 @@
 extends Node
-## 타이틀 흐름 회귀 테스트 — 인원·캐릭터는 타이틀 무대의 좌석에서 세팅하고,
+## 타이틀 흐름 회귀 테스트 — 캐릭터는 타이틀 무대의 좌석에서 세팅하고,
 ## PLAY는 모드만 고르면 바로 시작한다. 캐릭터 메뉴는 자리를 건드리지 않는다.
 
 func _ready() -> void:
@@ -7,31 +7,18 @@ func _ready() -> void:
 	var t: Node2D = load("res://core/scenes/title.tscn").instantiate()
 	add_child(t)
 	await tree.process_frame
-	assert(t._seat_btns.size() == 2, "타이틀 무대에 좌석 둘이 안 섰음")
-	# --- 인원 세팅: 빈 2P 자리를 채우면 2인, 비우면 1인 ---
-	assert(GameState.players == 1 or GameState.players == 2)
-	t._set_players(1)
-	assert(not t._seat_leave.visible, "1인인데 자리 비우기 버튼이 떠 있음")
-	t._on_seat_btn(1)  # 빈 자리 = "2인 플레이 참가"
-	assert(GameState.players == 2, "빈 자리로 2인 참가가 안 됨")
-	assert(t._seat_leave.visible, "2인인데 자리 비우기 버튼이 없음")
+	assert(t._seat_btn != null, "타이틀 무대에 좌석이 안 섰음")
 	# --- 좌석의 "캐릭터 변경"이 그 자리 몫으로 캐릭터 페이지를 연다 ---
 	var first: String = t._first_unlocked(GameState.selected_cat)
-	t._on_seat_btn(1)
-	assert(t._chars.visible and t._pick_seat == 2, "2P 자리로 캐릭터 페이지가 안 열림")
+	t._seat_btn.pressed.emit()
+	assert(t._chars.visible and t._pick_seat, "좌석으로 캐릭터 페이지가 안 열림")
 	print("chars head: ", (t._chars.get_meta("head") as Label).text)
 	t._assign_pick(first)
-	assert(GameState.selected_cat2 == first, "2P 선택이 즉시 저장 안 됨")
-	assert(t._pick_seat == 2, "자리가 멋대로 넘어감")
-	t._close_chars()
-	t._on_seat_btn(0)
-	assert(t._pick_seat == 1, "1P 자리로 캐릭터 페이지가 안 열림")
-	t._assign_pick(first)
-	assert(GameState.selected_cat == first, "1P 선택이 즉시 저장 안 됨")
+	assert(GameState.selected_cat == first, "좌석 선택이 즉시 저장 안 됨")
 	# --- 메뉴에서 연 캐릭터 페이지는 둘러보기 — 자리를 건드리지 않는다 ---
 	t._close_chars()
 	t._open_chars()
-	assert(t._pick_seat == 0, "메뉴에서 연 페이지가 자리 배정 모드임")
+	assert(not t._pick_seat, "메뉴에서 연 페이지가 자리 배정 모드임")
 	var other := ""
 	for cat in GameState.all_cats():
 		if cat.id != first and GameState.is_unlocked(cat.id):
@@ -61,20 +48,12 @@ func _ready() -> void:
 	t._close_chars()
 	assert(not t._chars.visible)
 	# --- PLAY: 모드를 고르면 캐릭터를 다시 묻지 않고 바로 시작 ---
-	t._set_players(2)
 	t._open_modes()
-	assert(t._pick_count == 2)
-	for row in t._mode_rows:
-		var ok: bool = t._max_players(int(row["mode"])) >= 2
-		assert((row["btn"] as Button).disabled == not ok, "잠금 상태 불일치")
+	assert(t._modes.visible, "모드 선택이 안 열림")
 	GameState.mode = -1
-	t._on_mode_picked(GameState.MODE_STORY)  # 1인 전용 → 거절
-	assert(GameState.mode == -1 and t._modes.visible, "1인 전용 모드가 2인에서 통과됨")
 	# 씬 전환은 deferred라 이 프레임에는 아직 일어나지 않는다 — 세팅만 확인한다.
-	assert(t._max_players(GameState.MODE_CLASSIC) == 2, "스테이지 모드가 2인을 못 받음")
 	t._on_mode_picked(GameState.MODE_ENDLESS)
 	assert(not t._chars.visible, "플레이 입장에서 캐릭터를 또 물어봄")
-	assert(GameState.mode == GameState.MODE_ENDLESS and GameState.split,
-			"모드 선택 → 바로 시작 실패")
+	assert(GameState.mode == GameState.MODE_ENDLESS, "모드 선택 → 바로 시작 실패")
 	print("PASS")
 	tree.quit()

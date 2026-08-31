@@ -2,9 +2,8 @@ extends Control
 ## 냥이 꾸미기 패널 (UI 문서 21p) — 캐릭터 페이지 가운데 카드 안에 박혀 사는 UI.
 ## 왼쪽 세로 부위 목록 + 오른쪽 옵션 격자 + 아래 액션 바(랜덤 생성 · 초기화 · 저장).
 ## 프리뷰는 페이지 왼쪽 능력치 카드가 맡는다 — 고를 때마다 changed로 알려 다시 그린다.
-## 꾸미기는 "나만의 캐릭터"(커스텀 슬롯) 전용이고, 손댄 부위만 그 캐릭터(+자리) 몫으로
+## 꾸미기는 "나만의 캐릭터"(커스텀 슬롯) 전용이고, 손댄 부위만 그 캐릭터 몫으로
 ## GameState.cat_custom에 **고르는 즉시** 저장된다 (저장 버튼은 확인 표시).
-## player는 1P/2P 자리 — 2인 플레이에서 같은 냥이를 골라도 꾸민 건 따로 남는다.
 
 signal changed  # 선택이 바뀔 때마다 — 페이지가 프리뷰·타일을 다시 그린다
 signal saved  # 저장 버튼 — 페이지가 토스트를 띄운다
@@ -26,7 +25,6 @@ const RARITY_INK: Array[Color] = [
 const PREVIEW_COL := Color("2f9cc4")  # 잠긴 파츠 "입혀 보는 중" 표시
 
 var _cat_id := "mycat"  # 지금 꾸미는 중인 캐릭터
-var _player := 1  # 꾸미는 자리 (1 = P1, 2 = P2)
 var _cur := 0  # 현재 부위 줄 인덱스
 var _groups: Array[Dictionary] = []  # 이 캐릭터에 적용되는 부위 묶음
 var _preset_tab := false  # 0번 "원본 냥이" 프리셋 줄을 쓰는가
@@ -114,16 +112,15 @@ func set_area(rect: Rect2) -> void:
 	_rebuild_panel()
 
 
-## 이 냥이(자리)를 패널에 펼친다. 같은 대상이면 다시 짓지 않고 새로 그리기만 한다.
-func open(cat_id: String, player := 1) -> void:
+## 이 냥이를 패널에 펼친다. 같은 대상이면 다시 짓지 않고 새로 그리기만 한다.
+func open(cat_id: String) -> void:
 	# 꾸미기는 "나만의 캐릭터" 슬롯 전용 — 디자인 냥이는 컨셉 시트 원본 그대로.
 	if not GameState.is_custom_cat(cat_id):
 		return
-	if cat_id == _cat_id and player == _player and not _rows.is_empty():
+	if cat_id == _cat_id and not _rows.is_empty():
 		_refresh()
 		return
 	_cat_id = cat_id
-	_player = player
 	_cur = 0
 	_preview_sel.clear()
 	_build_rows()
@@ -132,10 +129,6 @@ func open(cat_id: String, player := 1) -> void:
 
 func target() -> String:
 	return _cat_id
-
-
-func target_player() -> int:
-	return _player
 
 
 func _char_id() -> String:
@@ -237,7 +230,7 @@ func _restyle_rows() -> void:
 
 ## 현재 캐릭터의 파츠 + 저장된 커스터마이징(+ 미리보기용 임시 선택 하나).
 func _skin(extra_key := "", extra_idx := 0) -> Dictionary:
-	var sel: Dictionary = GameState.custom_sel(_cat_id, _player).duplicate()
+	var sel: Dictionary = GameState.custom_sel(_cat_id).duplicate()
 	for key: Variant in _preview_sel:
 		sel[str(key)] = int(_preview_sel[key])
 	if extra_key != "":
@@ -290,7 +283,7 @@ func _randomize_all() -> void:
 		if pool.is_empty():
 			continue
 		sel[key] = pool[randi() % pool.size()]
-	GameState.set_custom_all(_cat_id, sel, _player)
+	GameState.set_custom_all(_cat_id, sel)
 	Achv.unlock(Achv.CUSTOM_CAT)
 	_flavor = tr("CC_FLAVOR_RANDOM")
 	_flavor_col = UiKit.GOLD_DEEP
@@ -301,7 +294,7 @@ func _randomize_all() -> void:
 func _reset_all() -> void:
 	_preview_sel.clear()
 	Sfx.play("click")
-	GameState.set_custom_all(_cat_id, {}, _player)
+	GameState.set_custom_all(_cat_id, {})
 	_flavor = tr("CC_FLAVOR_RESET")
 	_flavor_col = UiKit.MUTED
 	_refresh()
@@ -348,7 +341,7 @@ func _rebuild_panel() -> void:
 		var part := CustomCat.get_part(key)
 		if part.is_empty():
 			continue
-		var picked: int = GameState.custom_idx(_cat_id, key, _player)
+		var picked: int = GameState.custom_idx(_cat_id, key)
 		# 잠긴 파츠를 입혀 보는 중이면 그쪽이 지금 모습이다.
 		if _preview_sel.has(key):
 			picked = int(_preview_sel[key])
@@ -408,7 +401,7 @@ func _pick(key: String, idx: int) -> void:
 		_flavor = "[%s] %s — %s" % [tr(CustomCat.RARITY_NAMES[r]), opt.name,
 				str(opt.get("d", ""))]
 		_flavor_col = RARITY_INK[r]
-	GameState.set_custom_part(_cat_id, key, idx, _player)
+	GameState.set_custom_part(_cat_id, key, idx)
 	Achv.unlock(Achv.CUSTOM_CAT)  # 업적: 부위를 하나라도 바꿔 저장
 	_refresh()
 	changed.emit()
@@ -533,7 +526,7 @@ func _load_preset(char_id: String) -> void:
 	Sfx.play("record")
 	_preview_sel.clear()
 	GameState.set_custom_all(_cat_id,
-			CustomCat.char_selection(char_id, _preset_tier(char_id)), _player)
+			CustomCat.char_selection(char_id, _preset_tier(char_id)))
 	_flavor = tr("CC_FLAVOR_PRESET")
 	_flavor_col = UiKit.GOLD_DEEP
 	_refresh()

@@ -47,12 +47,6 @@ var squash_timer := 0.0
 var wall_jumps_left := 1
 var facing := 1
 var last_tap := {-1: -1e9, 1: -1e9}
-# Split screen: P2's cat reads its own action set and wears a distinct skin.
-var act_left := "move_left"
-var act_right := "move_right"
-var act_jump := "jump"
-var act_drop := "soft_drop"
-var act_dash := "dash"
 var skin_override := ""
 # Per-cat stat multipliers, refreshed from GameState on respawn.
 var stat_speed := 1.0
@@ -60,10 +54,6 @@ var stat_jump := 1.0
 var stat_dash := 1.0
 var stat_weight := 1.0
 var stat_push := 2  # dash shove power, in cells
-## 화면 분할 2인에서 이 고양이가 앉은 자리 (1 = P1, 2 = P2).
-## 자리마다 고른 냥이와 커스터마이징이 따로 저장된다.
-var player_slot := 1
-
 @onready var board: EscapeBoard = get_parent()
 
 
@@ -75,7 +65,7 @@ func _ready() -> void:
 func _refresh_stats() -> void:
 	var skin_id := skin_override
 	if skin_id == "":
-		skin_id = GameState.cat_for(player_slot)
+		skin_id = GameState.selected_cat
 	var stats: Dictionary = GameState.cat_stats(skin_id)
 	stat_speed = stats.get("speed", 1.0)
 	stat_jump = stats.get("jump", 1.0)
@@ -123,7 +113,7 @@ func _handle_input(delta: float) -> void:
 	dash_cooldown = maxf(dash_cooldown - delta, 0.0)
 	var now := Time.get_ticks_msec() / 1000.0
 	for dir in [-1, 1]:
-		var action := act_left if dir == -1 else act_right
+		var action := "move_left" if dir == -1 else "move_right"
 		if Input.is_action_just_pressed(action):
 			if now - last_tap[dir] <= DOUBLE_TAP and dash_cooldown <= 0.0:
 				dash_timer = DASH_TIME
@@ -131,11 +121,11 @@ func _handle_input(delta: float) -> void:
 				dash_cooldown = DASH_COOLDOWN / stat_dash
 				Sfx.play("dash")
 			last_tap[dir] = now
-	var axis := Input.get_axis(act_left, act_right)
+	var axis := Input.get_axis("move_left", "move_right")
 	if axis != 0.0:
 		facing = int(signf(axis))
 	# Shift dash: dashes toward the held direction, or the way we last faced.
-	if Input.is_action_just_pressed(act_dash) and dash_cooldown <= 0.0:
+	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0.0:
 		dash_timer = DASH_TIME
 		dash_dir = int(signf(axis)) if axis != 0.0 else facing
 		dash_cooldown = DASH_COOLDOWN / stat_dash
@@ -148,7 +138,7 @@ func _handle_input(delta: float) -> void:
 		velocity.x = dash_dir * DASH_SPEED * stat_dash
 	else:
 		velocity.x = axis * RUN_SPEED * stat_speed
-	if Input.is_action_just_pressed(act_jump):
+	if Input.is_action_just_pressed("jump"):
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
@@ -170,7 +160,7 @@ func _handle_input(delta: float) -> void:
 		dash_timer = 0.0
 		Sfx.play("walljump")
 	var g := GRAVITY
-	var fast_fall := Input.is_action_pressed(act_drop)
+	var fast_fall := Input.is_action_pressed("soft_drop")
 	if velocity.y > 0.0 and fast_fall:
 		g *= FAST_FALL_FACTOR * stat_weight
 	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
@@ -256,8 +246,8 @@ func _draw() -> void:
 	var look := signf(velocity.x) * 4.0
 	var skin_id := skin_override
 	if skin_id == "":
-		skin_id = GameState.cat_for(player_slot)
-	var skin: Dictionary = GameState.cat_skin(skin_id, player_slot)
+		skin_id = GameState.selected_cat
+	var skin: Dictionary = GameState.cat_skin(skin_id)
 	var trail: Color = skin.get("body", BODY_COLOR)
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color(trail, 0.22))

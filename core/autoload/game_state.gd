@@ -4,9 +4,9 @@ extends Node
 const SAVE_PATH := "user://save.json"
 const KeyBinds := preload("res://core/scripts/key_binds.gd")
 
+# 2번은 제거된 2P 대전 자리라 비워 둔다 (escape_board.Mode 와 값이 1:1).
 const MODE_STORY := 0
 const MODE_ENDLESS := 1
-const MODE_VERSUS := 2
 const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
 const MODE_PICNIC := 4  # casual jelly picnic: no death, collect snacks on a timer
 
@@ -125,7 +125,6 @@ const MYCAT_ID := "mycat"
 const MYCAT_SLOT_MAX := 3
 
 var mode: int = MODE_CLASSIC
-var split: bool = false  # 2-player split screen (escape race/endless only), not saved
 var best_height: int = 0
 var classic_best: int = 0  # classic mode all-time high score
 var picnic_best: int = 0  # jelly picnic all-time high score
@@ -141,8 +140,6 @@ var gacha_drawn: int = 0  # 키캡 가챠로 뽑은 누적 장수 (업적용)
 var achv: Array = []  # 이미 해금한 업적 id — Achv가 소유, 재해금 방지용
 var gold: int = 0
 var selected_cat: String = "cream"
-## 2P(화면 분할) 몫으로 고른 냥이 — 1P와 같은 냥이여도 커스터마이징은 따로 간다.
-var selected_cat2: String = "cream"
 var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
 ## 사용자가 랭킹 화면에서 직접 정한 이름인가. 거짓이면 플랫폼 계정 이름
 ## (스팀 페르소나)이 생길 때 그쪽으로 갈아탄다 — adopt_platform_name() 참고.
@@ -158,7 +155,7 @@ var skipped_stages: Array = []  # story stages passed with a skip ticket
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
 ## 선택 뽑기에 걸어 둔 냥이 id들 (최대 KEYCAP_PICK_SIZE) — 뽑기 화면에서 유지된다.
 var gacha_pick: Array = []
-# 캐릭터별 커스터마이징: 저장 키(custom_key) -> {부위 key: 옵션 index}
+# 캐릭터별 커스터마이징: 냥이 id -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
 ## 지금까지 연 커스텀 슬롯 수 (1 ~ MYCAT_SLOT_MAX).
 var custom_slots: int = 1
@@ -174,8 +171,6 @@ var vol_sfx: float = 1.0
 var vibration: int = 2
 ## 창 해상도 "1920x1080" ("" = project.godot 기본값 그대로).
 var resolution: String = ""
-## 타이틀에서 미리 정해 두는 참가 인원 (1 또는 2) — 모드를 고를 때마다 묻지 않는다.
-var players: int = 1
 ## 사용자가 바꾼 키 바인딩 {"<액션>#<슬롯>": physical_keycode}. 빈 값 = 기본.
 var keybinds: Dictionary = {}
 ## 사용자가 바꾼 패드 바인딩 {"<액션>": {"t": "b"/"a", "i": 인덱스}}.
@@ -286,7 +281,6 @@ func reset_all() -> void:
 	gold_earned = 0
 	gacha_drawn = 0
 	selected_cat = "cream"
-	selected_cat2 = "cream"
 	weekly = {}
 	weekly_claimed = 0
 	acc_owned = []
@@ -657,33 +651,28 @@ func take_boosts() -> Array:
 ## 나머지는 그 캐릭터의 디자인 파츠가 그대로 남는다 (빈 sel = 완전 기본 상태).
 
 
-## 커스터마이징 저장 키. 2P는 같은 냥이를 골라도 자기 몫으로 따로 꾸민다.
-func custom_key(id: String, player: int) -> String:
-	return id if player <= 1 else "%s|%d" % [id, player]
-
-
-func custom_sel(id: String, player := 1) -> Dictionary:
-	var sel: Variant = cat_custom.get(custom_key(id, player), {})
+func custom_sel(id: String) -> Dictionary:
+	var sel: Variant = cat_custom.get(id, {})
 	return sel if sel is Dictionary else {}
 
 
-func custom_idx(id: String, key: String, player := 1) -> int:
-	return CustomCat.pick(custom_sel(id, player), key)
+func custom_idx(id: String, key: String) -> int:
+	return CustomCat.pick(custom_sel(id), key)
 
 
-func set_custom_part(id: String, key: String, idx: int, player := 1) -> void:
-	var sel := custom_sel(id, player).duplicate()
+func set_custom_part(id: String, key: String, idx: int) -> void:
+	var sel := custom_sel(id).duplicate()
 	sel[key] = idx
-	cat_custom[custom_key(id, player)] = sel
+	cat_custom[id] = sel
 	save_game()
 
 
 ## Replaces the whole selection at once (프리셋/랜덤/초기화 buttons).
-func set_custom_all(id: String, sel: Dictionary, player := 1) -> void:
+func set_custom_all(id: String, sel: Dictionary) -> void:
 	if sel.is_empty():
-		cat_custom.erase(custom_key(id, player))
+		cat_custom.erase(id)
 	else:
-		cat_custom[custom_key(id, player)] = sel
+		cat_custom[id] = sel
 	save_game()
 
 
@@ -867,11 +856,11 @@ func cat_stats(id: String) -> Dictionary:
 ## Skin dictionary consumed by Player.paint_cat. The selected cat also
 ## carries its equipped accessory defs under "acc".
 ## tier_override >= 0 이면 그 파츠 단계로 그린다 (보상 열의 "이 등급에서 받는 모습").
-func cat_skin(id: String, player := 1, tier_override := -1) -> Dictionary:
+func cat_skin(id: String, tier_override := -1) -> Dictionary:
 	var cat := get_cat(id)
 	var char_id := str(cat.get("char", "char01"))
 	var tier := cat_tier(id) if tier_override < 0 			else clampi(tier_override, 0, CustomCat.TIER_MAX)
-	var sel := custom_sel(id, player)
+	var sel := custom_sel(id)
 	var skin := CustomCat.build_skin(char_id, tier, sel)
 	# 컨셉 시트 그림으로 그릴 수 있으면 그쪽을 쓴다. 색만 바꾼 경우엔
 	# 파츠 레이어에 틴트로 얹고, 모양까지 바꿨으면 코드 렌더로 남긴다.
@@ -880,8 +869,7 @@ func cat_skin(id: String, player := 1, tier_override := -1) -> Dictionary:
 		skin["sprite"] = char_id
 		skin["tier"] = tier
 		skin["tints"] = CustomCat.sprite_tints(sel)
-	# 액세서리는 지갑이 하나라 1P(=저장된 선택 냥이) 몫으로만 붙는다.
-	var accs: Array = equipped_accs(id) if player <= 1 else []
+	var accs: Array = equipped_accs(id)
 	if not accs.is_empty():
 		skin["acc"] = accs
 	return skin
@@ -890,7 +878,7 @@ func cat_skin(id: String, player := 1, tier_override := -1) -> Dictionary:
 ## 잠긴 냥이용 실루엣 — 실루엣(모양)은 유지하고 색·소품만 지운다.
 ## tier_override >= 0 이면 그 파츠 단계의 실루엣 (보상 열의 잠긴 칩).
 func cat_shadow_skin(id: String, tier_override := -1) -> Dictionary:
-	var full := cat_skin(id, 1, tier_override)
+	var full := cat_skin(id, tier_override)
 	if full.has("sprite"):
 		return {"body": Color("cdd4dd"), "ear": Color("b3bcc9"), "gray": true,
 				"sprite": full["sprite"], "tier": full["tier"],
@@ -915,19 +903,11 @@ func is_unlocked(id: String) -> bool:
 	return cat_grade(id) >= 1
 
 
-func select_cat(id: String, player := 1) -> void:
+func select_cat(id: String) -> void:
 	if not is_unlocked(id):
 		return
-	if player <= 1:
-		selected_cat = id
-	else:
-		selected_cat2 = id
+	selected_cat = id
 	save_game()
-
-
-## 플레이어 자리(1/2)가 지금 쓰는 냥이 id.
-func cat_for(player: int) -> String:
-	return selected_cat if player <= 1 else selected_cat2
 
 
 ## 테스트가 실제 세이브를 덮어쓰지 못하게 막는 스위치. 헤드리스 테스트는
@@ -954,7 +934,6 @@ func save_game() -> void:
 		"achv": achv,
 		"gold": gold,
 		"selected_cat": selected_cat,
-		"selected_cat2": selected_cat2,
 		"nickname": nickname,
 		"nick_custom": nick_custom,
 		"player_id": player_id,
@@ -977,7 +956,6 @@ func save_game() -> void:
 		"vol_sfx": vol_sfx,
 		"vibration": vibration,
 		"resolution": resolution,
-		"players": players,
 		"keybinds": keybinds,
 		"padbinds": padbinds,
 	}
@@ -1010,7 +988,6 @@ func load_game() -> void:
 			achv = got
 		gold = int(data.get("gold", 0))
 		selected_cat = str(data.get("selected_cat", "cream"))
-		selected_cat2 = str(data.get("selected_cat2", "cream"))
 		nickname = str(data.get("nickname", ""))
 		nick_custom = bool(data.get("nick_custom", false))
 		player_id = str(data.get("player_id", ""))
@@ -1092,7 +1069,6 @@ func load_game() -> void:
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
 		vibration = clampi(int(data.get("vibration", 2)), 0, 3)
 		resolution = str(data.get("resolution", ""))
-		players = clampi(int(data.get("players", 1)), 1, 2)
 		var kb: Variant = data.get("keybinds", {})
 		if kb is Dictionary:
 			keybinds = {}
@@ -1112,8 +1088,3 @@ func load_game() -> void:
 			known = known or cat.id == selected_cat
 		if not known or not is_unlocked(selected_cat):
 			selected_cat = "cream"
-		var known2 := false
-		for cat in CATS:
-			known2 = known2 or cat.id == selected_cat2
-		if not known2 or not is_unlocked(selected_cat2):
-			selected_cat2 = "cream"

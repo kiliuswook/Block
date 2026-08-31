@@ -4,20 +4,11 @@ extends Node2D
 
 const CREAM := Color(0.956863, 0.890196, 0.784314)
 const GOLD := Color(1.0, 0.85, 0.35)
-const VERSUS_TARGET := 3  # first to this many round wins takes the match
 
 const UiKit := preload("res://core/scripts/ui_kit.gd")
-const BOARD_SCENE := preload("res://core/scenes/board.tscn")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const GOAL_METER := preload("res://core/scripts/goal_meter.gd")
 const USER_HUD := preload("res://core/scripts/user_hud.gd")
-const HALF_W := 960.0  # split screen: width of each player's viewport
-const NEXT_PREVIEW := preload("res://core/scripts/next_preview.gd")
-## 분할 스테이지 모드의 좌석별 계기판: 화면 바깥쪽 여백에 세우는 열의 자리와 폭.
-const SEAT_HUD_W := 200.0
-const SEAT_HUD_MARGIN := 40.0
-## 좌석 계기판이 설 자리를 벌기 위해 우물을 분할선 쪽으로 밀어 넣는 폭.
-const SEAT_PIT_SHIFT := 56.0
 ## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
 const HUD_COL_W := 300.0
 const HUD_CARD_PAD := Vector2(22.0, 18.0)
@@ -59,18 +50,6 @@ var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
 # Gold already paid out this run.
 var gold_awarded := 0
 var xp_awarded := 0  # 이 판이 이미 지급한 계정 경험치 (중복 지급 방지)
-var p1_wins := 0
-var p2_wins := 0
-var versus_tally: Label
-var match_over := false
-var boards: Array = []  # every active board: [board] normally, two in split
-var split_labels: Array = []
-## 분할 스테이지 모드: 좌석별로 판이 끝났는지 (끝난 쪽은 그 자리에 멈춰 있고
-## 남은 쪽은 계속 논다). 다 끝나면 승자의 기록만 랭킹에 올라간다.
-var stage_split_over := [false, false]
-## 좌석별 계기판 노드 {score, best, level, lines, meter, next} × 2 (스테이지 분할).
-var seat_hud: Array = []
-var round_active := true
 var settings_panel: Control  # doubles as the pause menu (volume sliders)
 var user_hud: CanvasLayer  # 타이틀과 같은 자리·같은 카드의 유저 정보 HUD
 ## 계기판 뒤에 깔리는 흰 카드(들)를 그리는 레이어와, 카드가 감쌀 노드 묶음.
@@ -90,25 +69,22 @@ func _ready() -> void:
 	death_popup.restart_pressed.connect(_restart)
 	death_popup.title_pressed.connect(_to_title)
 	EventBus.story_reward.connect(_on_story_reward)
-	EventBus.versus_round_over.connect(_on_versus_round)
 	var endless := GameState.mode == GameState.MODE_ENDLESS
-	var versus := GameState.mode == GameState.MODE_VERSUS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
 	var picnic := GameState.mode == GameState.MODE_PICNIC
-	level_title.visible = not endless and not versus and not picnic and not classic
-	level_label.visible = not endless and not versus and not picnic and not classic
-	score_title.visible = not endless and not versus
-	score_label.visible = not endless and not versus
-	lines_title.visible = not endless and not versus and not picnic
-	lines_label.visible = not endless and not versus and not picnic
+	level_title.visible = not endless and not picnic and not classic
+	level_label.visible = not endless and not picnic and not classic
+	score_title.visible = true
+	score_label.visible = true
+	lines_title.visible = not picnic
+	lines_label.visible = not picnic
 	height_title.visible = endless or picnic or classic
 	height_label.visible = endless or picnic or classic
 	best_title.visible = endless or picnic or classic
 	best_label.visible = endless or picnic or classic
-	if classic and not GameState.split:
+	if classic:
 		# Arcade cabinet HUD: LEVEL is the board you're on, TOP is the high score,
 		# and LINES is a rack of tiles rather than a number.
-		# 분할 화면은 이 HUD를 통째로 숨기고 좌석 라벨로 대신한다 (_build_split).
 		height_title.text = "LEVEL"
 		best_title.text = "TOP"
 		lines_title.text = "LINES"
@@ -132,11 +108,7 @@ func _ready() -> void:
 	if endless:
 		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
 		goal_label.visible = false
-	elif versus:
-		goal_label.text = tr("TUT_VERSUS").format({"target": VERSUS_TARGET})
-		help_label.text = tr("TUT_KEYS_VERSUS")
-		_build_versus_tally()
-	if GameState.mode == GameState.MODE_STORY and not GameState.split:
+	if GameState.mode == GameState.MODE_STORY:
 		EventBus.story_stage_started.connect(_on_story_stage)
 		EventBus.story_progress_changed.connect(_on_story_progress)
 		EventBus.story_doors_opened.connect(_on_story_doors_opened)
@@ -154,14 +126,10 @@ func _ready() -> void:
 	settings_panel.closed.connect(_on_settings_closed)
 	$PopupLayer.add_child(settings_panel)
 	Sfx.play_bgm("game")
-	boards = [board]
-	if GameState.split:
-		_build_split()
-	else:
-		board.start_game()
-		if not endless:  # endless is camera-driven; fixed pits get scaled to fit
-			_fit_board()
-	# 톤앤매너는 마지막에 한 번에 입힌다 — 모드·분할별 배치가 다 끝난 뒤라야
+	board.start_game()
+	if not endless:  # endless is camera-driven; fixed pits get scaled to fit
+		_fit_board()
+	# 톤앤매너는 마지막에 한 번에 입힌다 — 모드별 배치가 다 끝난 뒤라야
 	# 계기판을 감싸는 카드의 자리를 알 수 있다.
 	_tone_hud()
 	_build_hud_cards()
@@ -332,11 +300,10 @@ func _on_game_over() -> void:
 	if user_hud:  # 방금 받은 골드·경험치를 상단 HUD에 반영
 		user_hud.refresh()
 	# 업적: 무한 첫 완주는 판이 끝난 그 순간에만 알 수 있고, 나머지(기록·골드)는
-	# 위에서 갱신된 세이브 값으로 판정된다. 분할 화면은 지갑·기록이 없어 제외.
-	if not GameState.split:
-		if endless:
-			Achv.unlock(Achv.FIRST_ESCAPE)
-		Achv.check()
+	# 위에서 갱신된 세이브 값으로 판정된다.
+	if endless:
+		Achv.unlock(Achv.FIRST_ESCAPE)
+	Achv.check()
 	# Let the death sink in for a beat before the popup slides up.
 	# Picnic ends on the clock, not in defeat: a cheerier title.
 	var tw := create_tween()
@@ -348,12 +315,11 @@ func _on_game_over() -> void:
 
 
 ## 유저 정보 HUD — 타이틀과 같은 스크립트·같은 자리(좌상단).
-## 지갑이 없는 분할 화면 대전에서는 띄우지 않는다. 세로 화면(모바일 인게임)은
-## 좌상단이 터치 메뉴 버튼, 우상단이 기록 슬롯이라 아직 자리가 없다 —
-## 모바일 레이아웃을 재개할 때 배치를 정한다 (PC 우선 기간).
+## 세로 화면(모바일 인게임)은 좌상단이 터치 메뉴 버튼, 우상단이 기록 슬롯이라
+## 아직 자리가 없다 — 모바일 레이아웃을 재개할 때 배치를 정한다 (PC 우선 기간).
 func _build_user_hud() -> void:
 	var vp := get_viewport_rect().size
-	if GameState.split or vp.y > vp.x:
+	if vp.y > vp.x:
 		return
 	user_hud = USER_HUD.new()
 	add_child(user_hud)
@@ -364,7 +330,6 @@ func _build_user_hud() -> void:
 
 ## 우물 바깥은 "구덩이 밖의 낮" — 타이틀과 같은 하늘색 배경 + 발바닥 무늬를 깐다.
 ## 우물 안(어두운 구덩이)은 escape_board가 계속 자기 배경을 그리므로 그대로다.
-## 분할 화면의 SubViewport는 transparent_bg라 이 배경이 그대로 비친다.
 func _build_backdrop() -> void:
 	var sky := CanvasLayer.new()
 	sky.layer = -1  # 보드(기본 캔버스)보다 뒤
@@ -415,19 +380,11 @@ func _build_hud_cards() -> void:
 	if vp.y > vp.x:
 		return
 	hud_groups = []
-	if GameState.split:
-		for i in seat_hud.size():
-			var hud: Dictionary = seat_hud[i]
-			var nodes: Array = [split_labels[i], hud["next"], hud["level"],
-					hud["score"], hud["best"], hud["lines"], hud["meter"]]
-			nodes.append_array(hud["titles"] as Array)
-			hud_groups.append({"nodes": nodes, "w": SEAT_HUD_W})
-	else:
-		var col: Array = [$UI/NextTitle, $UI/NextPreview, score_title, score_label,
-				level_title, level_label, lines_title, lines_label, height_title,
-				height_label, best_title, best_label, goal_label, goal_meter]
-		# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
-		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
+	var col: Array = [$UI/NextTitle, $UI/NextPreview, score_title, score_label,
+			level_title, level_label, lines_title, lines_label, height_title,
+			height_label, best_title, best_label, goal_label, goal_meter]
+	# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
+	hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
 	if help_label.visible and help_label.text != "":
 		hud_groups.append({"nodes": [help_label], "w": 0.0, "pill": true})
 	hud_cards = Control.new()
@@ -512,10 +469,7 @@ func _award_run_rewards() -> String:
 
 ## 이 판의 계정 경험치를 지급한다 — 골드와 달리 소비할 수 없는 축이라
 ## 성적이 나빠도 참가비만큼은 들어온다. 오른 레벨이 있으면 그 줄까지 붙여 준다.
-## 분할 화면(2인)은 지갑도 기록도 없는 대전이라 제외.
 func _award_run_xp(record: bool) -> String:
-	if GameState.split:
-		return ""
 	var run_xp := Account.run_xp(GameState.mode, GameState.score, height,
 			board.level if is_instance_valid(board) else 0, record)
 	var earn_xp := maxi(run_xp - xp_awarded, 0)
@@ -532,339 +486,11 @@ func _award_run_xp(record: bool) -> String:
 	return line
 
 
-# --- Split screen (local 2P, escape/endless) ----------------------------------
-
-
-## Replaces the single board with two SubViewports side by side, one board
-## each: P1 (left, default keys) vs P2 (right, WASD + Q/E + Ctrl).
-func _build_split() -> void:
-	for n in [score_title, score_label, level_title, level_label, lines_title,
-			lines_label, height_title, height_label, best_title, best_label,
-			goal_label, $UI/NextTitle, $UI/NextPreview]:
-		n.visible = false
-	$TouchControls.visible = false
-	help_label.text = tr("TUT_KEYS_SPLIT")
-	board.queue_free()
-	boards = []
-	for i in range(2):
-		var svc := SubViewportContainer.new()
-		svc.stretch = true
-		svc.position = Vector2(i * HALF_W, 0.0)
-		svc.size = Vector2(HALF_W, 1080.0)
-		add_child(svc)
-		var sv := SubViewport.new()
-		sv.size = Vector2i(int(HALF_W), 1080)
-		sv.transparent_bg = true
-		svc.add_child(sv)
-		var b: EscapeBoard = BOARD_SCENE.instantiate()
-		if GameState.mode != GameState.MODE_ENDLESS:
-			# Fixed 20-row pit (escape race / stage duel) — scale to the half
-			# viewport. Endless is camera-driven and keeps its own framing.
-			var bs := (1080.0 - 80.0) / (EscapeBoard.PIT_ROWS * EscapeBoard.CELL)
-			b.scale = Vector2(bs, bs)
-			# 스테이지 모드는 바깥 여백에 좌석 계기판이 서므로 우물을 안쪽으로 민다.
-			var shift := 0.0
-			if GameState.mode == GameState.MODE_CLASSIC:
-				shift = SEAT_PIT_SHIFT if i == 0 else -SEAT_PIT_SHIFT
-			b.position = Vector2(
-					(HALF_W - EscapeBoard.COLS * EscapeBoard.CELL * bs) / 2.0 + shift,
-					40.0)
-		else:
-			b.position = Vector2((HALF_W - EscapeBoard.COLS * EscapeBoard.CELL) / 2.0, 92.0)
-		sv.add_child(b)
-		b.finished.connect(_on_split_finished.bind(i))
-		boards.append(b)
-	board = boards[0]
-	# Seating matches the keyboard: P1 (left half) = WASD side,
-	# P2 (right half) = arrow keys side (default action set).
-	var b1: EscapeBoard = boards[0]
-	b1.act_rot_cw = "p2_rot_cw"
-	b1.act_rot_ccw = "p2_rot_ccw"
-	b1.act_drop = "p2_drop"
-	var p1: Player = b1.get_node("Player")
-	p1.act_left = "p2_left"
-	p1.act_right = "p2_right"
-	p1.act_jump = "p2_jump"
-	p1.act_drop = "p2_drop"
-	p1.act_dash = "p2_dash"
-	p1.player_slot = 1
-	# 오른쪽 절반(기본 키 배치)이 2P — 자기 냥이와 커스터마이징을 쓴다.
-	var p2: Player = (boards[1] as EscapeBoard).get_node("Player")
-	p2.player_slot = 2
-	var divider := ColorRect.new()
-	divider.position = Vector2(HALF_W - 2.0, 0.0)
-	divider.size = Vector2(4.0, 1080.0)
-	divider.color = Color(UiKit.INK, 0.30)  # 하늘 배경 위 경계선
-	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	$UI.add_child(divider)
-	if GameState.mode != GameState.MODE_CLASSIC:
-		# 스테이지 분할은 좌석 계기판이 점수를 다 보여 준다 — 가운데 집계는 없다.
-		_build_versus_tally()
-	for i in range(2):
-		var l := Label.new()
-		# Outer corners, clear of the centered score tally.
-		l.position = Vector2(28.0 if i == 0 else 1920.0 - 428.0, 30.0)
-		l.size = Vector2(400.0, 56.0)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if i == 0 \
-				else HORIZONTAL_ALIGNMENT_RIGHT
-		l.add_theme_font_size_override("font_size", 38)
-		# 이름표는 하늘 배경과 어두운 우물 양쪽에 걸친다 — 잉크 글자에 흰 테두리를
-		# 둘러 두 바탕 어디에서도 읽히게 한다. (스테이지 분할은 카드 안으로 들어가
-		# 흰 배경 글자가 되고, 그건 _build_seat_huds가 다시 칠한다.)
-		l.add_theme_color_override("font_color", UiKit.INK)
-		l.add_theme_color_override("font_outline_color", UiKit.WHITE)
-		l.add_theme_constant_override("outline_size", 10)
-		$UI.add_child(l)
-		split_labels.append(l)
-	if GameState.mode == GameState.MODE_CLASSIC:
-		_build_seat_huds()
-	_start_boards()
-
-
-## 분할 스테이지 모드: 1인 플레이와 같은 계기판(NEXT·SCORE·TOP·LEVEL·LINES 랙)을
-## 좌석마다 하나씩 세운다. 우물은 반쪽 화면 가운데에 놓이므로 열은 바깥쪽 여백
-## (P1 왼쪽 끝 / P2 오른쪽 끝)에 세워 가운데 분할선을 비워 둔다.
-func _build_seat_huds() -> void:
-	for i in range(2):
-		var x := SEAT_HUD_MARGIN if i == 0 else 1920.0 - SEAT_HUD_MARGIN - SEAT_HUD_W
-		# 좌석 이름표는 그 열의 머리로 올라간다.
-		var name_label: Label = split_labels[i]
-		name_label.position = Vector2(x, 34.0)
-		name_label.size = Vector2(SEAT_HUD_W, 52.0)
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		# 이름표도 카드 안(열 머리)에 앉으므로 흰 배경용 글자로 바꾼다.
-		_ink_label(name_label, UiKit.INK)
-		var hud := {"titles": []}
-		hud["titles"].append(_seat_title(x, 104.0, "NEXT"))
-		var nx: Control = NEXT_PREVIEW.new()
-		nx.position = Vector2(x, 134.0)
-		nx.size = Vector2(SEAT_HUD_W, 116.0)
-		$UI.add_child(nx)
-		hud["next"] = nx
-		# 1인 계기판과 같은 순서·같은 표기: NEXT → LEVEL → SCORE → TOP → LINES 랙.
-		hud["level"] = _seat_stat(hud, x, 276.0, "LEVEL", 52)
-		hud["score"] = _seat_stat(hud, x, 388.0, "SCORE")
-		hud["best"] = _seat_stat(hud, x, 478.0, "TOP")
-		hud["lines"] = _seat_stat(hud, x, 568.0, "LINES")
-		var meter: Control = GOAL_METER.new()
-		meter.position = Vector2(x, 654.0)
-		meter.size = Vector2(SEAT_HUD_W, 110.0)
-		meter.per_row = 5
-		meter.centered = true
-		$UI.add_child(meter)
-		hud["meter"] = meter
-		seat_hud.append(hud)
-
-
-## Small dim caption above a seat stat (matches the solo HUD's title style).
-func _seat_title(x: float, y: float, text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.position = Vector2(x, y)
-	l.size = Vector2(SEAT_HUD_W, 28.0)
-	l.add_theme_font_size_override("font_size", 21)
-	l.add_theme_color_override("font_color", UiKit.MUTED)
-	$UI.add_child(l)
-	return l
-
-
-## Caption + value pair; returns the value label the HUD keeps updating.
-func _seat_stat(hud: Dictionary, x: float, y: float, title: String,
-		font_size := 38) -> Label:
-	hud["titles"].append(_seat_title(x, y, title))
-	var l := Label.new()
-	l.text = "0"
-	l.position = Vector2(x, y + 26.0)
-	l.size = Vector2(SEAT_HUD_W, float(font_size) + 12.0)
-	l.add_theme_font_size_override("font_size", font_size)
-	_ink_label(l, UiKit.GOLD_DEEP if title == "TOP" else UiKit.INK)
-	$UI.add_child(l)
-	return l
-
-
-## 좌석 계기판을 보드 상태에 맞춰 갱신한다 (끝난 좌석은 마지막 값 그대로 멈춘다).
-func _update_seat_huds() -> void:
-	for i in range(2):
-		var b: EscapeBoard = boards[i]
-		var hud: Dictionary = seat_hud[i]
-		(hud["score"] as Label).text = str(b.run_score)
-		(hud["best"] as Label).text = tr("HUD_POINTS").format(
-				{"n": GameState.classic_best})
-		(hud["level"] as Label).text = str(b.level)
-		var quota := Board.classic_quota(b.level)
-		var lines := mini(b.level_lines, quota)
-		(hud["lines"] as Label).text = "%d / %d" % [lines, quota]
-		var meter = hud["meter"]
-		if meter.cleared != lines or meter.quota != quota:
-			meter.set_goal(lines, quota)
-		var nx = hud["next"]
-		if nx.next_type != b.next_type:
-			nx.next_type = b.next_type
-			nx.queue_redraw()
-
-
 func _process(_delta: float) -> void:
-	if GameState.mode == GameState.MODE_PICNIC and not GameState.split:
+	if GameState.mode == GameState.MODE_PICNIC:
 		var t := ceili(board.picnic_time)
 		height_label.text = "%d:%02d" % [t / 60, t % 60]
 		height_label.modulate = Color(1.0, 0.5, 0.45) if t <= 10 else Color.WHITE
-	if split_labels.is_empty():
-		return
-	if GameState.mode == GameState.MODE_CLASSIC:
-		_update_seat_huds()
-	for i in range(2):
-		var b: EscapeBoard = boards[i]
-		if GameState.mode == GameState.MODE_ENDLESS:
-			split_labels[i].text = tr("SPLIT_SCORE").format(
-					{"n": i + 1, "floors": b.best_height})
-		elif GameState.mode == GameState.MODE_CLASSIC:
-			# 진행은 좌석 계기판이 읽어 준다 — 이름표는 좌석과 종료만 알린다.
-			if stage_split_over[i]:
-				split_labels[i].text = tr("SPLIT_STAGE_OVER").format({"n": i + 1})
-				split_labels[i].modulate = Color(1.0, 0.55, 0.5)
-			else:
-				split_labels[i].text = "P%d" % (i + 1)
-		else:
-			split_labels[i].text = "P%d" % (i + 1)
-
-
-## A split board reports its round result. Escape: first escape wins. Any
-## death (crushed, lava, buried) loses the round for that side.
-func _on_split_finished(win: bool, idx: int) -> void:
-	if not round_active:
-		return
-	if GameState.mode == GameState.MODE_CLASSIC:
-		_on_stage_split_finished(idx)
-		return
-	var winner := (idx + 1) if win else (2 - idx)
-	for b in boards:
-		b.is_paused = b.playing  # freeze the other half during the banner
-	_duel_round(winner, "P%d" % winner)
-
-
-## 분할 스테이지 모드: 한쪽이 죽어도 판은 끝나지 않는다 — 죽은 좌석은 그 상태로
-## 멈춰 있고, 남은 좌석이 자기 판을 끝낼 때까지 계속 논다. 둘 다 끝나면 점수가
-## 높은 쪽이 승자고, 그 좌석의 성적만 1인 플레이와 똑같이 기록·랭킹에 올라간다.
-func _on_stage_split_finished(idx: int) -> void:
-	stage_split_over[idx] = true  # 죽는 소리·연출은 보드가 이미 냈다
-	if not stage_split_over.has(false):
-		_finish_stage_split()
-
-
-## 두 좌석 모두 끝났다: 승자를 가리고 그 기록을 남긴다.
-func _finish_stage_split() -> void:
-	round_active = false
-	var b1: EscapeBoard = boards[0]
-	var b2: EscapeBoard = boards[1]
-	# 점수 우선, 같으면 더 멀리 간 판 → 지운 줄 순으로 가른다.
-	var w := 1
-	for key: Array in [[b1.run_score, b2.run_score], [b1.level, b2.level],
-			[b1.total_lines, b2.total_lines]]:
-		if key[0] != key[1]:
-			w = 1 if key[0] > key[1] else 2
-			break
-	var wb: EscapeBoard = boards[w - 1]
-	# 1인 플레이와 같은 기록 경로: 최고 점수·주간 기록·랭킹·도달 LEVEL·업적.
-	var weekly_up := GameState.record_weekly("classic", wb.run_score)
-	var was_record := GameState.record_classic(wb.run_score)
-	if weekly_up and not was_record:  # record_classic already submits
-		Ranks.submit("classic", GameState.classic_best)
-	if wb.level > GameState.classic_level_best:
-		GameState.classic_level_best = wb.level
-		GameState.save_game()
-	Achv.check()
-	var title_text := tr("SPLIT_STAGE_WIN").format(
-			{"n": w, "score": wb.run_score})
-	var stats := "P%d      SCORE %d      LEVEL %d      LINES %d" 			% [w, wb.run_score, wb.level, wb.total_lines]
-	milestone_label.visible = true
-	milestone_label.modulate = Color(1, 1, 1, 0)
-	milestone_label.scale = Vector2(1.8, 1.8)
-	milestone_label.text = title_text
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(milestone_label, "scale", Vector2.ONE, 0.25) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(milestone_label, "modulate:a", 1.0, 0.12)
-	_screen_flash(0.22)
-	if was_record:
-		Sfx.play("record")
-	var pop := create_tween()
-	pop.tween_interval(1.4)
-	pop.tween_callback(func() -> void:
-		milestone_label.visible = false
-		death_popup.open(stats, was_record, "", title_text, ""))
-
-
-func _start_boards() -> void:
-	round_active = true
-	stage_split_over = [false, false]
-	milestone_label.visible = false
-	for l: Label in split_labels:
-		l.modulate = Color.WHITE
-	for b in boards:
-		b.start_game()
-
-
-# --- Versus (local 2P) --------------------------------------------------------
-
-
-func _build_versus_tally() -> void:
-	versus_tally = Label.new()
-	versus_tally.position = Vector2(0.0, 28.0)
-	versus_tally.size = Vector2(1920.0, 60.0)
-	versus_tally.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	versus_tally.add_theme_font_size_override("font_size", 40)
-	versus_tally.add_theme_color_override("font_color", UiKit.INK)
-	versus_tally.add_theme_color_override("font_outline_color", UiKit.WHITE)
-	versus_tally.add_theme_constant_override("outline_size", 10)
-	$UI.add_child(versus_tally)
-	_update_versus_tally()
-
-
-func _update_versus_tally() -> void:
-	if versus_tally == null:
-		return  # 스테이지 분할: 가운데 집계 없이 좌석 계기판만 쓴다
-	if GameState.split:
-		versus_tally.text = "P1  %d : %d  P2" % [p1_wins, p2_wins]
-	else:
-		versus_tally.text = tr("VS_TALLY").format({"p1": p1_wins, "p2": p2_wins})
-
-
-func _on_versus_round(winner: int) -> void:
-	_duel_round(winner, tr("VS_CAT") if winner == 1 else tr("VS_BLOCKS"))
-
-
-## Shared round flow for versus and split: tally, banner, auto next round,
-## first to VERSUS_TARGET takes the match.
-func _duel_round(winner: int, who: String) -> void:
-	round_active = false
-	if winner == 1:
-		p1_wins += 1
-	else:
-		p2_wins += 1
-	_update_versus_tally()
-	match_over = p1_wins >= VERSUS_TARGET or p2_wins >= VERSUS_TARGET
-	milestone_label.visible = true
-	milestone_label.modulate = Color(1, 1, 1, 0)
-	milestone_label.scale = Vector2(1.8, 1.8)
-	if match_over:
-		milestone_label.text = tr("VS_MATCH_WIN").format(
-				{"who": who, "p1": p1_wins, "p2": p2_wins})
-	else:
-		milestone_label.text = tr("VS_ROUND_WIN").format({"who": who})
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(milestone_label, "scale", Vector2.ONE, 0.25) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(milestone_label, "modulate:a", 1.0, 0.12)
-	_screen_flash(0.2)
-	if match_over:
-		return
-	tw.chain().tween_interval(1.3)
-	tw.chain().tween_property(milestone_label, "modulate:a", 0.0, 0.3)
-	tw.chain().tween_callback(func() -> void:
-		milestone_label.visible = false
-		if not match_over and not round_active:
-			_start_boards())
 
 
 ## Floating banner for a first-clear story payout.
@@ -893,15 +519,10 @@ func _on_story_reward(reward_gold: int) -> void:
 func _restart() -> void:
 	death_popup.close()
 	pause_label.visible = false
-	settings_panel.visible = false  # bypass close(): _start_boards resets pause
+	settings_panel.visible = false  # bypass close(): start_game resets pause
 	escape_label.visible = false
-	if GameState.mode == GameState.MODE_VERSUS or GameState.split:
-		p1_wins = 0
-		p2_wins = 0
-		match_over = false
-		milestone_label.visible = false
-		_update_versus_tally()
-	_start_boards()
+	milestone_label.visible = false
+	board.start_game()
 
 
 func _to_title() -> void:
@@ -989,7 +610,7 @@ func _build_skip_level_button() -> void:
 ## the HUD just rolls over to the new level.
 func _on_classic_level_started(level: int, quota: int, _garbage: int) -> void:
 	# 도달 LEVEL은 판이 끝나면 사라지는 값이라 여기서 최고치를 남긴다 (LV5/LV10 업적).
-	if not GameState.split and level > GameState.classic_level_best:
+	if level > GameState.classic_level_best:
 		GameState.classic_level_best = level
 		GameState.save_game()
 		Achv.check()
@@ -1150,20 +771,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		_to_title()
 	elif event.is_action_pressed("restart"):
 		_restart()
-	elif event.is_action_pressed("pause") and round_active \
+	elif event.is_action_pressed("pause") \
 			and (story_intro == null or not story_intro.visible) \
-			and boards.any(func(b: EscapeBoard) -> bool: return b.playing):
+			and board.playing:
 		if board.is_paused:
-			settings_panel.close()  # closed signal resumes the boards
+			settings_panel.close()  # closed signal resumes the board
 		else:
-			for b in boards:
-				b.is_paused = true
+			board.is_paused = true
 			Sfx.play("pause")
 			settings_panel.open(false)
 
 
 ## The pause menu (settings panel) closed: resume play.
 func _on_settings_closed() -> void:
-	for b in boards:
-		b.is_paused = false
+	board.is_paused = false
 	Sfx.play("pause")

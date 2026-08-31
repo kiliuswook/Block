@@ -9,11 +9,9 @@ extends Node2D
 ## doors stay locked until the goal is met. Split screen reuses this board as
 ## a plain escape race with no stage logic.
 
-## Split screen: this board's round result (true = this player escaped/won).
-signal finished(win: bool)
-
 enum PieceState { TRACKING, FALLING, LANDED }
-enum Mode { STORY, ENDLESS, VERSUS, CLASSIC, PICNIC }
+# 값은 GameState.MODE_* 와 1:1 (2번은 제거된 2P 대전 자리라 비워 둔다).
+enum Mode { STORY = 0, ENDLESS = 1, CLASSIC = 3, PICNIC = 4 }
 
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const UiKit := preload("res://core/scripts/ui_kit.gd")
@@ -66,9 +64,6 @@ const SHUTTER_POP_TIME := 0.18  # the tally flares each time it ticks up
 # gravity step on top of the mode's own ramp, so a long run keeps tightening.
 const SPEED_CREEP_TIME := 45.0  # seconds of play per extra step
 const SPEED_CREEP_MAX := 8  # the creep alone never exceeds this many steps
-const P2_DAS_DELAY := 0.17  # versus: held-direction delay before auto-repeat
-const P2_DAS_REPEAT := 0.06
-const VERSUS_RAMP := 7  # versus: difficulty +1 per this many pieces
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -113,8 +108,6 @@ var run_score := 0
 var drop_tap_time := -1e9
 var lava_y := 0.0
 var lava_phase := 0.0
-var p2_das_timer := 0.0
-var versus_pieces := 0
 # Endless: once its countdown ends a piece detaches and falls on its own (no
 # more rotation), so the next piece starts tracking immediately. Each entry:
 # {t: type, r: rot, p: pos, s: PieceState, ft: fall timer, lt: land timer}.
@@ -131,12 +124,6 @@ var rec_events: Array = []
 var _rec_shadow := {}
 var _rec_timer := 0.0
 var _rec_on := false
-# Split screen: one board per player — global EventBus signals are muted and
-# the piece is driven by this board's own action set instead of the defaults.
-var split := false
-var act_rot_cw := "rotate_cw"
-var act_rot_ccw := "rotate_ccw"
-var act_drop := "soft_drop"
 # Story mode: the active stage config and its goal/door state.
 var stage := {}
 var door_left := true
@@ -152,7 +139,6 @@ var survive_time := 0.0
 
 func start_game() -> void:
 	mode = GameState.mode as Mode
-	split = GameState.split
 	rows = PIT_ROWS
 	grid.clear()
 	cracked.clear()
@@ -168,8 +154,6 @@ func start_game() -> void:
 	shutter_pop = 0.0
 	best_height = 0
 	run_score = 0
-	versus_pieces = 0
-	p2_das_timer = 0.0
 	lava_y = rows * CELL + LAVA_START_OFFSET
 	lava_phase = 0.0
 	loose.clear()
@@ -206,7 +190,7 @@ func start_game() -> void:
 		door_left = false
 		door_right = false
 		picnic_time = PICNIC_TIME
-	elif mode == Mode.ENDLESS and not split:
+	elif mode == Mode.ENDLESS:
 		# Consume boosts bought for this run (shop / death-popup chips).
 		for b: String in GameState.take_boosts():
 			match b:
@@ -217,29 +201,24 @@ func start_game() -> void:
 	_spawn_piece()
 	playing = true
 	_rec_reset()
-	if not split:
-		EventBus.game_started.emit()
-		EventBus.lines_changed.emit(0)
-		EventBus.level_changed.emit(level)
-		EventBus.height_changed.emit(0)
-		if mode == Mode.CLASSIC:
-			_classic_announce_level()
+	EventBus.game_started.emit()
+	EventBus.lines_changed.emit(0)
+	EventBus.level_changed.emit(level)
+	EventBus.height_changed.emit(0)
+	if mode == Mode.CLASSIC:
+		_classic_announce_level()
 	queue_redraw()
 
 
-## 점수 한 곳: 보드 자기 몫(run_score)에 쌓고, 1인 플레이에서는 그대로 HUD·지갑이
-## 읽는 GameState.score에도 반영한다. 분할 화면은 좌석마다 점수가 따로라 공용
-## 값을 건드리지 않는다 — 최종 승자의 점수만 main.gd가 기록으로 올린다.
+## 점수 한 곳: 보드 자기 몫(run_score)에 쌓고, HUD·지갑이 읽는
+## GameState.score에도 그대로 반영한다.
 func _add_score(n: int) -> void:
 	run_score += n
-	if not split:
-		GameState.score += n
+	GameState.score += n
 
 
-## Story stage logic runs only in single-player story mode; the split-screen
-## escape race shares this board but keeps the plain always-open-doors rules.
 func _story() -> bool:
-	return mode == Mode.STORY and not split
+	return mode == Mode.STORY
 
 
 func _goal_type() -> String:
@@ -288,13 +267,10 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 	run_time += delta  # only ticks while the board is actually being played
-	if mode == Mode.VERSUS:
-		_p2_input(delta)
-	else:
-		if Input.is_action_just_pressed(act_rot_cw):
-			_try_rotate(1)
-		if Input.is_action_just_pressed(act_rot_ccw):
-			_try_rotate(-1)
+	if Input.is_action_just_pressed("rotate_cw"):
+		_try_rotate(1)
+	if Input.is_action_just_pressed("rotate_ccw"):
+		_try_rotate(-1)
 	if piece_type != "":  # no-piece tutorial stages skip the piece machine
 		match piece_state:
 			PieceState.TRACKING:
@@ -324,20 +300,15 @@ func _process(delta: float) -> void:
 		_update_picnic(delta)
 	elif playing and (player.position.x < -CELL * 0.6
 			or player.position.x > COLS * CELL + CELL * 0.6):
-		if mode == Mode.VERSUS:
-			_versus_over(1)
-		else:
-			_escape()
+		_escape()
 	queue_redraw()
 
 
 ## 무한의 계단도 스테이지 모드와 같은 크기의 우물에서 논다. 고정 우물 모드는
-## 보드 노드를 화면에 맞춰 줄이지만(main.gd `_fit_board()` / `_build_split()`),
-## 무한은 카메라가 그리므로 같은 배율을 카메라 줌으로 준다.
+## 보드 노드를 화면에 맞춰 줄이지만(main.gd `_fit_board()`), 무한은 카메라가
+## 그리므로 같은 배율을 카메라 줌으로 준다.
 func _fit_zoom() -> float:
 	var vp := get_viewport_rect().size
-	if split:
-		return (vp.y - 80.0) / (PIT_ROWS * CELL)
 	var portrait := vp.y > vp.x
 	var top := 200.0 if portrait else 40.0
 	var bottom := 1410.0 if portrait else vp.y - 56.0
@@ -374,8 +345,7 @@ func _update_endless(delta: float) -> void:
 	if h > best_height:
 		_add_score((h - best_height) * HEIGHT_SCORE)
 		best_height = h
-		if not split:
-			EventBus.height_changed.emit(best_height)
+		EventBus.height_changed.emit(best_height)
 
 
 # --- Jelly picnic (casual) ------------------------------------------------------
@@ -388,10 +358,7 @@ func _update_picnic(delta: float) -> void:
 		picnic_time = 0.0
 		playing = false
 		Sfx.play("milestone")
-		if split:
-			finished.emit(false)
-		else:
-			EventBus.game_over.emit()
+		EventBus.game_over.emit()
 		queue_redraw()
 		return
 
@@ -470,7 +437,7 @@ func piece_hits_rect(r: Rect2) -> bool:
 
 
 func _track(delta: float) -> void:
-	if Input.is_action_just_pressed(_drop_action()):
+	if Input.is_action_just_pressed("soft_drop"):
 		drop_tap_time = Time.get_ticks_msec() / 1000.0
 		_release_piece()
 		return
@@ -480,8 +447,6 @@ func _track(delta: float) -> void:
 		piece_pos.y = _endless_spawn_row()
 	while track_move_timer >= TRACK_STEP:
 		track_move_timer -= TRACK_STEP
-		if mode == Mode.VERSUS:
-			continue  # versus: P2 steers the piece by hand instead
 		var target := _track_target()
 		var dir := signi(target - piece_pos.x)
 		if dir != 0 and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), true):
@@ -560,7 +525,7 @@ func _loose_blocked(i: int, dir: Vector2i) -> bool:
 ## Oldest (lowest) pieces step first so mid-air stacks settle bottom-up.
 func _step_loose(delta: float) -> void:
 	var interval := _fall_interval()
-	if Input.is_action_pressed(_drop_action()):
+	if Input.is_action_pressed("soft_drop"):
 		interval /= SOFT_DROP_FACTOR
 	var i := 0
 	while i < loose.size():
@@ -624,19 +589,16 @@ func _start_fall() -> void:
 	piece_state = PieceState.FALLING
 	fall_timer = 0.0
 	# Classic Tetris block out: the stack reaches the spawn area and the
-	# piece has nowhere to start falling. In versus that's on P2 — cat wins.
+	# piece has nowhere to start falling.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if mode == Mode.VERSUS:
-			_versus_over(1)
-		else:
-			_kill_player()
+		_kill_player()
 		return
 	_resolve_piece_overlap()
 
 
 func _fall(delta: float) -> void:
 	# Double-tap soft drop slams the piece all the way down.
-	if Input.is_action_just_pressed(_drop_action()):
+	if Input.is_action_just_pressed("soft_drop"):
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - drop_tap_time <= DROP_DOUBLE_TAP:
 			drop_tap_time = -1e9
@@ -645,7 +607,7 @@ func _fall(delta: float) -> void:
 		drop_tap_time = now
 	fall_timer += delta
 	var interval := _fall_interval()
-	if Input.is_action_pressed(_drop_action()):
+	if Input.is_action_pressed("soft_drop"):
 		interval /= SOFT_DROP_FACTOR
 	while fall_timer >= interval and playing:
 		fall_timer -= interval
@@ -670,7 +632,7 @@ func _landed(delta: float) -> void:
 		fall_timer = 0.0
 		return
 	# Tapping down locks it in place immediately.
-	if Input.is_action_just_pressed(_drop_action()):
+	if Input.is_action_just_pressed("soft_drop"):
 		_lock_piece()
 		return
 	land_timer += delta
@@ -701,51 +663,6 @@ func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 		_story_add_progress("shoves", 1)
 		Sfx.play("shove")
 	return moved
-
-
-## Versus: P2 drives the piece directly — A/D step (with DAS auto-repeat),
-## W/Q rotate, S drop. The drop key itself is handled by the state handlers.
-func _p2_input(delta: float) -> void:
-	if piece_type == "":
-		return
-	if Input.is_action_just_pressed("p2_rot_cw"):
-		_try_rotate(1)
-	if Input.is_action_just_pressed("p2_rot_ccw"):
-		_try_rotate(-1)
-	var axis := int(Input.get_axis("p2_left", "p2_right"))
-	if Input.is_action_just_pressed("p2_left") or Input.is_action_just_pressed("p2_right"):
-		_p2_step(axis)
-		p2_das_timer = P2_DAS_DELAY
-	elif axis != 0:
-		p2_das_timer -= delta
-		if p2_das_timer <= 0.0:
-			p2_das_timer = P2_DAS_REPEAT
-			_p2_step(axis)
-
-
-func _p2_step(dir: int) -> void:
-	if dir == 0 or not playing:
-		return
-	var ignore := piece_state == PieceState.TRACKING
-	if _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), ignore):
-		return
-	piece_pos.x += dir
-	if not ignore:
-		_resolve_piece_overlap()
-
-
-## Versus splits the drop key: the cat keeps ↓ for fast fall, P2 gets S.
-func _drop_action() -> String:
-	return "p2_drop" if mode == Mode.VERSUS else act_drop
-
-
-func _versus_over(winner: int) -> void:
-	Sfx.play("escape" if winner == 1 else "death")
-	if winner == 2:
-		player.die()
-	playing = false
-	EventBus.versus_round_over.emit(winner)
-	queue_redraw()
 
 
 func _hard_drop() -> void:
@@ -835,15 +752,12 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 		if c.y < 0:
 			overflow = true
 	if overflow and mode != Mode.ENDLESS:
-		# Stack spilled over the top: cat dies in escape, P2 loses in versus.
+		# Stack spilled over the top: the cat is buried.
 		if mode == Mode.PICNIC:
 			# Picnic: the whole overstuffed stack bursts and the hunt goes on.
 			_picnic_rescue(true)
 			return false
-		if mode == Mode.VERSUS:
-			_versus_over(1)
-		else:
-			_kill_player()
+		_kill_player()
 		return false
 	if not _free_player_from_grid():
 		return false
@@ -861,8 +775,7 @@ func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
 		elif mode == Mode.CLASSIC:
 			_classic_line_progress(cleared)
 		_story_add_progress("lines", cleared)
-		if not split:
-			EventBus.lines_changed.emit(total_lines)
+		EventBus.lines_changed.emit(total_lines)
 		if _shutter_on():
 			return true  # 레벨 클리어 연출 중: 깔림 판정 없이 셔터가 내려온다
 		if not _free_player_from_grid():
@@ -905,8 +818,6 @@ func _classic_setup_level(n: int) -> void:
 
 ## Tells the HUD which board is up (start of run and every new level).
 func _classic_announce_level() -> void:
-	if split:
-		return  # 분할 화면에는 아케이드 HUD가 없다 — 좌석 라벨이 대신한다
 	EventBus.classic_level_started.emit(level, Board.classic_quota(level), level_garbage)
 	EventBus.classic_level_progress.emit(level_lines, Board.classic_quota(level))
 	EventBus.level_changed.emit(level)
@@ -937,8 +848,7 @@ func _fill_garbage(count: int) -> void:
 func _classic_line_progress(cleared: int) -> void:
 	level_lines += cleared
 	var quota := Board.classic_quota(level)
-	if not split:
-		EventBus.classic_level_progress.emit(mini(level_lines, quota), quota)
+	EventBus.classic_level_progress.emit(mini(level_lines, quota), quota)
 	if level_lines >= quota:
 		_classic_start_shutter()
 
@@ -955,8 +865,7 @@ func classic_skip_level() -> bool:
 	if mode != Mode.CLASSIC or not playing or is_paused or _shutter_on():
 		return false
 	level_lines = Board.classic_quota(level)
-	if not split:
-		EventBus.classic_level_progress.emit(level_lines, level_lines)
+	EventBus.classic_level_progress.emit(level_lines, level_lines)
 	_classic_start_shutter()
 	return true
 
@@ -1039,8 +948,7 @@ func _classic_shutter_landed() -> void:
 		break_fx.append([c, 0.0])
 	if not grid.is_empty():
 		Sfx.play("break", 0.75)
-	if not split:
-		EventBus.classic_level_cleared.emit(level, shutter_bonus)
+	EventBus.classic_level_cleared.emit(level, shutter_bonus)
 	_classic_deal_next_level()
 	shutter_phase = Shutter.HOLD
 	shutter_timer = SHUTTER_HOLD
@@ -1063,7 +971,7 @@ func _classic_deal_next_level() -> void:
 
 
 func _rec_reset() -> void:
-	_rec_on = not split and mode != Mode.VERSUS
+	_rec_on = true
 	rec_frames = PackedInt32Array()
 	rec_events = []
 	_rec_shadow = {}
@@ -1244,32 +1152,22 @@ func _spawn_piece() -> void:
 	if _story() and stage.get("no_pieces", false):
 		piece_type = ""
 		next_type = ""
-		if not split:
-			EventBus.next_piece_changed.emit("")
+		EventBus.next_piece_changed.emit("")
 		return
 	if next_type == "":
 		next_type = _draw_from_bag()
 	piece_type = next_type
 	next_type = _draw_from_bag()
-	if not split:
-		EventBus.next_piece_changed.emit(next_type)
+	EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
-	if mode == Mode.VERSUS:
-		# Neutral center spawn: P2 steers it from there.
-		piece_pos = Vector2i(COLS / 2 - 2, spawn_row)
-		versus_pieces += 1
-	else:
-		piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
+	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
 	track_timer = 0.0
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
 	if _piece_collides(piece_rot, piece_pos, false):
-		if mode == Mode.VERSUS:
-			_versus_over(1)
-		else:
-			_kill_player()
+		_kill_player()
 
 
 func _draw_from_bag() -> String:
@@ -1334,11 +1232,6 @@ func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 
 func _escape() -> void:
 	Sfx.play("escape")
-	# Split screen: first escape ends the round for both halves.
-	if split:
-		playing = false
-		finished.emit(true)
-		return
 	if _story():
 		# A first-time clear keeps its replay (watched from the rankings).
 		if level > GameState.story_stage:
@@ -1411,36 +1304,25 @@ func _kill_player() -> void:
 		# Nobody dies at a picnic — pop the offending jelly and play on.
 		_picnic_rescue()
 		return
-	if mode == Mode.VERSUS:
-		# The cat got crushed or trapped — round to P2.
-		_versus_over(2)
-		return
 	Sfx.play("death")
 	player.die()
 	playing = false
-	if split:
-		finished.emit(false)
-	else:
-		EventBus.game_over.emit()
+	EventBus.game_over.emit()
 	queue_redraw()
 
 
-## Difficulty driver: story scales with stage, endless with height climbed,
-## versus with pieces spawned this round (rounds get tenser as they run long).
+## Difficulty driver: story scales with stage, endless with height climbed.
 func _difficulty() -> int:
 	if mode == Mode.PICNIC:
 		return 1  # picnic never speeds up
 	if mode == Mode.STORY:
 		return level
-	if mode == Mode.VERSUS:
-		return 1 + versus_pieces / VERSUS_RAMP
 	return 1 + best_height / 8
 
 
 ## Extra gravity steps earned purely by staying alive. Classic and endless are
 ## marathons, so a long run keeps tightening even while the level (or the
-## climb) stalls. Story is curated, versus has its own ramp, picnic never
-## speeds up — all three opt out.
+## climb) stalls. Story is curated and picnic never speeds up — both opt out.
 func _speed_creep() -> int:
 	if mode != Mode.CLASSIC and mode != Mode.ENDLESS:
 		return 0
