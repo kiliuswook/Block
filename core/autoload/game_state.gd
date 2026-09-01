@@ -148,6 +148,12 @@ const KEYCAP_PICK_MARKUP := 1.5
 const MYCAT_ID := "mycat"
 const MYCAT_SLOT_MAX := 3
 
+## 파츠 상점 — 꾸미기 부위 옵션은 **기본적으로 잠겨 있고** 꾸미기 화면에서
+## 골드로 바로 산다. 값은 옵션의 희귀도(r 0~3), 색은 한 값으로 고정.
+## 백지 몸통의 기본값과 "없음"만 처음부터 열려 있다 (CustomCat.free_options).
+const PART_PRICES: Array[int] = [200, 400, 800, 1500]
+const PART_COLOR_PRICE := 150
+
 var mode: int = MODE_CLASSIC
 var best_height: int = 0
 var classic_best: int = 0  # classic mode all-time high score
@@ -177,6 +183,8 @@ var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개�
 var gacha_pick: Array = []
 # 캐릭터별 커스터마이징: 냥이 id -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
+## 골드로 산 파츠 {부위 key: [옵션 index, ...]} — 캐릭터가 아니라 계정 단위다.
+var parts_owned: Dictionary = {}
 ## 지금까지 연 커스텀 슬롯 수 (1 ~ MYCAT_SLOT_MAX).
 var custom_slots: int = 1
 ## 타이틀 화면에 앉는 대표 캐릭터 ("" = 지금 고른 냥이를 따라간다).
@@ -280,6 +288,20 @@ func rumble(weak: float, strong: float, duration: float) -> void:
 		Input.start_joy_vibration(dev, weak * k, strong * k, duration)
 
 
+## 손맛 진동 한 곳 — 패드는 rumble()로, 모바일(과 모바일 웹)은 기기 진동으로
+## 같이 울린다. power 0~1 · duration 초. 세기 설정(`vibration` 0~3)이 둘 다 건다.
+func haptic(power: float, duration: float) -> void:
+	if vibration <= 0:
+		return
+	power = clampf(power, 0.0, 1.0)
+	rumble(power * 0.65, power, duration)
+	if OS.has_feature("mobile") or OS.has_feature("web"):
+		# 기기 진동은 세기 조절이 약해서 길이로도 세기를 흉내 낸다.
+		var k := vibration / 3.0
+		var ms := int(clampf(duration * 1000.0 * (0.45 + 0.55 * power), 12.0, 400.0))
+		Input.vibrate_handheld(ms, clampf(power * k, 0.05, 1.0))
+
+
 func reset() -> void:
 	score = 0
 
@@ -303,6 +325,7 @@ func reset_all() -> void:
 	weekly_claimed = 0
 	keycaps = {}
 	cat_custom = {}
+	parts_owned = {}
 	custom_slots = 1
 	feature_cat = ""
 	last_daily = ""
@@ -639,10 +662,25 @@ func custom_idx(id: String, key: String) -> int:
 
 
 func set_custom_part(id: String, key: String, idx: int) -> void:
+	# 나만의 캐릭터는 아직 사지 않은 파츠를 입을 수 없다.
+	if is_custom_cat(id) and not part_unlocked(key, idx):
+		return
 	var sel := custom_sel(id).duplicate()
 	sel[key] = idx
 	cat_custom[id] = sel
 	save_game()
+
+
+## 아직 사지 않은 파츠를 걷어 낸 선택 (프리셋처럼 통째로 들어오는 값에 쓴다).
+func owned_selection(id: String, sel: Dictionary) -> Dictionary:
+	if not is_custom_cat(id):
+		return sel
+	var out := {}
+	for raw: Variant in sel:
+		var key := str(raw)
+		if part_unlocked(key, int(sel[raw])):
+			out[key] = int(sel[raw])
+	return out
 
 
 ## Replaces the whole selection at once (프리셋/랜덤/초기화 buttons).
@@ -778,23 +816,58 @@ func cat_id_for_char(char_id: String) -> String:
 
 
 ## 이 출처(냥이 + 파츠 단계)가 열려 있는가. 단계 t는 등급 1+t에서 붙는다.
+## (해금 조건이 아니라 "어느 냥이의 파츠인가" 안내용으로만 남아 있다.)
 func _source_open(src: Dictionary) -> bool:
 	var cid := cat_id_for_char(str(src.get("char", "")))
 	return cid != "" and cat_grade(cid) >= 1 + int(src.get("tier", 0))
 
 
-## 나만의 캐릭터가 이 부위 옵션을 쓸 수 있는가 (출처가 없는 "없음"은 항상 가능).
+## 처음부터 열려 있는 옵션인가 — 백지 몸통의 기본값과 "없음"은 살 필요가 없다.
+func part_free(key: String, idx: int) -> bool:
+	return idx in CustomCat.free_options(key)
+
+
+## 골드로 사 둔 옵션인가.
+func part_owned(key: String, idx: int) -> bool:
+	return idx in (parts_owned.get(key, []) as Array)
+
+
+## 이 부위 옵션을 쓸 수 있는가 = 기본값이거나, 골드로 샀거나.
 func part_unlocked(key: String, idx: int) -> bool:
-	var srcs: Variant = CustomCat.option_sources(key, idx)
-	if not srcs is Array:
+	return part_free(key, idx) or part_owned(key, idx)
+
+
+## 이 옵션의 값 (0 = 이미 열려 있음).
+func part_price(key: String, idx: int) -> int:
+	if part_unlocked(key, idx):
+		return 0
+	var part := CustomCat.get_part(key)
+	if part.is_empty():
+		return 0
+	if part.get("type") == "color":
+		return PART_COLOR_PRICE
+	var opts: Array = part.opts
+	if idx < 0 or idx >= opts.size():
+		return 0
+	var r: int = clampi(int((opts[idx] as Dictionary).get("r", 0)), 0,
+			PART_PRICES.size() - 1)
+	return PART_PRICES[r]
+
+
+## 파츠 한 칸을 산다 (골드가 모자라면 false — 지갑은 그대로).
+func buy_part(key: String, idx: int) -> bool:
+	if part_unlocked(key, idx):
+		return true
+	if not spend_gold(part_price(key, idx)):
 		return false
-	for src: Dictionary in srcs:
-		if _source_open(src):
-			return true
-	return (srcs as Array).is_empty()
+	var owned: Array = parts_owned.get(key, [])
+	owned.append(idx)
+	parts_owned[key] = owned
+	save_game()
+	return true
 
 
-## 나만의 캐릭터가 지금 쓸 수 있는 파츠 수 / 전체 (타일·팝업 표시용).
+## 지금 쓸 수 있는 파츠 수 / 전체 (타일·팝업 표시용) — 산 것 + 기본값.
 func my_parts_progress() -> Vector2i:
 	var open := 0
 	var total := 0
@@ -923,6 +996,7 @@ func save_dict() -> Dictionary:
 		"keycaps": keycaps,
 		"gacha_pick": gacha_pick,
 		"cat_custom": cat_custom,
+		"parts_owned": parts_owned,
 		"custom_slots": custom_slots,
 		"feature_cat": feature_cat,
 		"last_daily": last_daily,
@@ -1016,7 +1090,34 @@ func load_game() -> void:
 					sel[str(k)] = idx
 				if not sel.is_empty():
 					cat_custom[str(cid)] = sel
+		# 산 파츠 — 카탈로그가 바뀌어 범위를 벗어난 index는 버린다.
+		parts_owned = {}
+		var owned: Variant = data.get("parts_owned", {})
+		if owned is Dictionary:
+			for k in (owned as Dictionary):
+				var part := CustomCat.get_part(str(k))
+				if part.is_empty():
+					continue
+				var list: Variant = (owned as Dictionary)[k]
+				if not list is Array:
+					continue
+				var keep: Array = []
+				for v in (list as Array):
+					var idx := int(v)
+					if idx >= 0 and idx < CustomCat.option_count(part) and not idx in keep:
+						keep.append(idx)
+				if not keep.is_empty():
+					parts_owned[str(k)] = keep
 		custom_slots = clampi(int(data.get("custom_slots", 1)), 1, MYCAT_SLOT_MAX)
+		# 파츠는 사야 쓸 수 있다 — 사지 않은 옵션을 입고 있던 옛 세이브는 정리한다.
+		for cid: Variant in cat_custom.keys():
+			if not is_custom_cat(str(cid)):
+				continue
+			var kept := owned_selection(str(cid), cat_custom[cid])
+			if kept.is_empty():
+				cat_custom.erase(cid)
+			else:
+				cat_custom[cid] = kept
 		feature_cat = str(data.get("feature_cat", ""))
 		last_daily = str(data.get("last_daily", ""))
 		locale = str(data.get("locale", ""))

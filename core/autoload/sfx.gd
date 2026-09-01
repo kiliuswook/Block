@@ -208,6 +208,23 @@ func _build_sounds() -> void:
 	_add_tone(b, 0.0, 0.09, 240.0, 150.0, 0.35, TRIANGLE)
 	_add_tone(b, 0.0, 0.03, 0.0, 0.0, 0.18, NOISE)
 	_sounds["lock"] = _wav(b)
+	# 회전: 짧고 마른 클릭.
+	b = _buf(0.06)
+	_add_tone(b, 0.0, 0.05, 900.0, 1500.0, 0.14, SQUARE, 2.0)
+	_sounds["rotate"] = _wav(b)
+	# 하드드롭: 아래로 빨려 드는 휘파람 + 바람 소리.
+	b = _buf(0.16)
+	_add_tone(b, 0.0, 0.14, 1200.0, 260.0, 0.16, SAW, 1.6)
+	_add_tone(b, 0.0, 0.16, 0.0, 0.0, 0.12, NOISE, 2.5)
+	_sounds["harddrop"] = _wav(b)
+	# 착지 충격: 배를 치는 저음 + 짧은 파열음. 낙하 거리에 따라 음정·음량이 붙는다.
+	b = _buf(0.22)
+	_add_tone(b, 0.0, 0.22, 155.0, 42.0, 0.55, SINE, 1.4)
+	_add_tone(b, 0.0, 0.09, 90.0, 40.0, 0.28, TRIANGLE, 1.2)
+	_add_tone(b, 0.0, 0.05, 0.0, 0.0, 0.22, NOISE, 2.0)
+	_sounds["impact"] = _wav(b)
+	# 콤보: 위로 튀는 두 음 — 콤보 수만큼 피치가 올라간다.
+	_sounds["combo"] = _jingle([784.0, 1046.5], 0.05, SQUARE, 0.18, 2.0)
 	# Dash shove impact.
 	b = _buf(0.14)
 	_add_tone(b, 0.0, 0.14, 170.0, 80.0, 0.45, SQUARE)
@@ -245,6 +262,15 @@ func _build_sounds() -> void:
 	# New record fanfare.
 	_sounds["record"] = _jingle([880.0, 1108.7, 1318.5, 1760.0], 0.1, TRIANGLE,
 			0.22, 3.5)
+	# 골드러시 발동: 위로 치솟는 팡파르 + 금이 쏟아지는 잔향.
+	b = _buf(0.6)
+	_add_tone(b, 0.0, 0.09, 659.25, 659.25, 0.2, SQUARE)
+	_add_tone(b, 0.08, 0.09, 830.61, 830.61, 0.2, SQUARE)
+	_add_tone(b, 0.16, 0.09, 987.77, 987.77, 0.2, SQUARE)
+	_add_tone(b, 0.24, 0.3, 1318.5, 1318.5, 0.22, TRIANGLE, 2.5)
+	_add_tone(b, 0.24, 0.36, 1760.0, 1760.0, 0.12, SQUARE, 3.0)
+	_add_tone(b, 0.0, 0.5, 0.0, 0.0, 0.07, NOISE, 2.0)
+	_sounds["goldrush"] = _wav(b)
 	# Milestone ding (every 10 floors).
 	b = _buf(0.45)
 	_add_tone(b, 0.0, 0.35, 659.25, 659.25, 0.2, TRIANGLE)

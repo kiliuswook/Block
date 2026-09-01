@@ -42,6 +42,13 @@ var _flavor_lbl: Label
 var _grid_w := 900.0
 var _flavor := ""  # 마지막 선택/안내 한 줄
 var _flavor_col := UiKit.MUTED
+## 파츠 구매 확인창 — 잠긴 파츠를 누르면 값을 보여 주고 살지 묻는다.
+var _ask: Control
+var _ask_lbl: Label
+var _ask_buy: Button
+var _ask_no: Button
+var _ask_key := ""
+var _ask_idx := -1
 
 
 func _ready() -> void:
@@ -88,6 +95,7 @@ func _ready() -> void:
 		_refresh_flavor()
 		saved.emit())
 	_bar.add_child(ok)
+	_build_ask()
 	_flavor = tr("CC_FLAVOR_WELCOME")
 	_flavor_col = UiKit.MUTED
 	_refresh_flavor()
@@ -112,6 +120,7 @@ func set_area(rect: Rect2) -> void:
 	_flavor_lbl.size = Vector2(rect.size.x, 26.0)
 	_bar.position = Vector2(0.0, rect.size.y - BAR_H)
 	_bar.size = Vector2(rect.size.x, BAR_H)
+	_layout_ask()
 	_rebuild_panel()
 
 
@@ -388,7 +397,7 @@ func _locked(key: String, idx: int) -> bool:
 
 func _pick(key: String, idx: int) -> void:
 	if _locked(key, idx):
-		_preview_locked(key, idx)
+		_open_buy(key, idx)
 		return
 	var part := CustomCat.get_part(key)
 	# 같은 부위에 걸려 있던 미리보기는 진짜 선택이 덮어쓴다.
@@ -410,32 +419,143 @@ func _pick(key: String, idx: int) -> void:
 	changed.emit()
 
 
-## 잠긴 파츠는 입혀만 본다 — 미리보기에만 얹히고 저장되지 않는다.
-## 다시 누르면 보기를 그만둔다 (토글).
-func _preview_locked(key: String, idx: int) -> void:
-	if int(_preview_sel.get(key, -1)) == idx:
-		_preview_sel.erase(key)
-		Sfx.play("click")
-		_flavor = tr("CC_PREVIEW_CLEAR")
-		_flavor_col = UiKit.MUTED
-	else:
-		_preview_sel[key] = idx
-		Sfx.play("click")
-		_flavor = "%s  ·  %s" % [tr("CC_PREVIEW"), _lock_text(key, idx)]
-		_flavor_col = PREVIEW_COL
-	_refresh()
-	changed.emit()  # 프리뷰(상세 카드)도 입혀 본 모습으로 따라온다
-
-
-## 이 옵션을 여는 조건 문구 — 어느 냥이를 어디까지 키우면 되는지.
+## 잠긴 옵션 한 줄 안내 — 값과, 원래 어느 냥이의 파츠였는지.
 func _lock_text(key: String, idx: int) -> String:
+	var line := tr("CC_PRICE").format({"gold": _gold(GameState.part_price(key, idx))})
 	var hint := GameState.part_unlock_hint(key, idx)
-	if hint.is_empty():
-		return tr("CC_LOCKED_ANY")
-	var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
-	if int(hint.grade) > 1:
-		return tr("CC_LOCKED_GRADE").format({"name": who, "grade": hint.grade})
-	return tr("CC_LOCKED").format({"name": who})
+	if not hint.is_empty():
+		var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
+		line += "   ·   " + tr("CC_FROM").format({"name": who})
+	return line
+
+
+## 1,200 처럼 세 자리마다 끊어 준다.
+func _gold(n: int) -> String:
+	var t := str(maxi(n, 0))
+	var out := ""
+	for i in t.length():
+		if i > 0 and (t.length() - i) % 3 == 0:
+			out += ","
+		out += t[i]
+	return out
+
+
+# --- 파츠 구매 -------------------------------------------------------------------
+## 잠긴 파츠를 누르면 그 모습을 입혀 보여 주면서(프리뷰) 살지 묻는다.
+
+
+func _build_ask() -> void:
+	_ask = Control.new()
+	_ask.visible = false
+	add_child(_ask)
+	_ask.draw.connect(func() -> void:
+		_ask.draw_rect(Rect2(Vector2.ZERO, _ask.size), Color(0.09, 0.13, 0.18, 0.55))
+		UiKit.panel_box(UiKit.WHITE, 22, 0.0).draw(_ask.get_canvas_item(), _ask_card()))
+	_ask_lbl = Label.new()
+	_ask_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ask_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ask_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ask_lbl.add_theme_font_size_override("font_size", 18)
+	_ask_lbl.add_theme_color_override("font_color", INK)
+	_ask.add_child(_ask_lbl)
+	_ask_buy = Button.new()
+	UiKit.style_button(_ask_buy, UiKit.GOLD, UiKit.GOLD_DEEP, INK, 21, 14)
+	_ask_buy.pressed.connect(_confirm_buy)
+	_ask.add_child(_ask_buy)
+	_ask_no = Button.new()
+	_ask_no.text = tr("UI_CANCEL")
+	UiKit.btn_ghost(_ask_no, 21)
+	_ask_no.pressed.connect(_close_ask)
+	_ask.add_child(_ask_no)
+	_layout_ask()
+
+
+## 확인창 카드 자리 (패널 한가운데).
+func _ask_card() -> Rect2:
+	var w := minf(430.0, maxf(240.0, size.x - 40.0))
+	var h := 236.0
+	return Rect2(((size - Vector2(w, h)) / 2.0).floor(), Vector2(w, h))
+
+
+func _layout_ask() -> void:
+	if _ask == null:
+		return
+	_ask.position = Vector2.ZERO
+	_ask.size = size
+	var card := _ask_card()
+	_ask_lbl.position = card.position + Vector2(18.0, 18.0)
+	_ask_lbl.size = Vector2(card.size.x - 36.0, card.size.y - 92.0)
+	var bw := (card.size.x - 54.0) / 2.0
+	var by := card.position.y + card.size.y - 68.0
+	_ask_buy.position = Vector2(card.position.x + 18.0, by)
+	_ask_buy.size = Vector2(bw, 50.0)
+	_ask_no.position = Vector2(card.position.x + 36.0 + bw, by)
+	_ask_no.size = Vector2(bw, 50.0)
+	_ask.queue_redraw()
+
+
+func _open_buy(key: String, idx: int) -> void:
+	var part := CustomCat.get_part(key)
+	if part.is_empty():
+		return
+	_ask_key = key
+	_ask_idx = idx
+	var price := GameState.part_price(key, idx)
+	var name := tr(str(part.name)) if part.get("type") == "color" 			else str((part.opts as Array)[idx].name)
+	_ask_lbl.text = "%s
+
+%s
+%s" % [
+			tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)}),
+			_lock_text(key, idx),
+			tr("CC_WALLET").format({"gold": _gold(GameState.gold)})]
+	_ask_buy.text = tr("CC_BUY")
+	_ask_buy.disabled = GameState.gold < price
+	_ask.visible = true
+	_layout_ask()
+	_ask.move_to_front()
+	# 사기 전에 입혀 본 모습을 보여 준다 (저장되지 않는다).
+	_preview_sel[key] = idx
+	Sfx.play("click")
+	_refresh()
+	changed.emit()
+
+
+func _close_ask() -> void:
+	_ask.visible = false
+	if _ask_key != "":
+		_preview_sel.erase(_ask_key)
+	_ask_key = ""
+	_ask_idx = -1
+	_refresh()
+	changed.emit()
+
+
+func _confirm_buy() -> void:
+	var key := _ask_key
+	var idx := _ask_idx
+	if key == "" or idx < 0:
+		_close_ask()
+		return
+	var price := GameState.part_price(key, idx)
+	if not GameState.buy_part(key, idx):
+		Sfx.play("error")
+		_flavor = tr("CC_NO_GOLD").format({"gold": _gold(price)})
+		_flavor_col = UiKit.RED_DEEP
+		_refresh_flavor()
+		return
+	Sfx.play("buy")
+	_ask.visible = false
+	_ask_key = ""
+	_ask_idx = -1
+	_preview_sel.erase(key)
+	# 산 파츠는 그 자리에서 바로 입는다.
+	GameState.set_custom_part(_cat_id, key, idx)
+	Achv.unlock(Achv.CUSTOM_CAT)
+	_flavor = tr("CC_BOUGHT").format({"gold": _gold(price)})
+	_flavor_col = UiKit.GOLD_DEEP
+	_refresh()
+	changed.emit()
 
 
 ## 페이지 프리뷰가 쓰는 스킨 — 잠긴 파츠를 입혀 보는 중이면 그 모습이다.
@@ -528,9 +648,13 @@ func _load_preset(char_id: String) -> void:
 		return
 	Sfx.play("record")
 	_preview_sel.clear()
-	GameState.set_custom_all(_cat_id,
-			CustomCat.char_selection(char_id, _preset_tier(char_id)))
-	_flavor = tr("CC_FLAVOR_PRESET")
+	# 프리셋도 산 파츠까지만 가져온다 — 안 산 부위는 지금 모습 그대로 남는다.
+	var want := CustomCat.char_selection(char_id, _preset_tier(char_id))
+	var got := GameState.owned_selection(_cat_id, want)
+	GameState.set_custom_all(_cat_id, got)
+	var skipped := want.size() - got.size()
+	_flavor = tr("CC_FLAVOR_PRESET") if skipped <= 0 			else "%s   %s" % [tr("CC_FLAVOR_PRESET"),
+					tr("CC_PRESET_LOCKED").format({"n": skipped})]
 	_flavor_col = UiKit.GOLD_DEEP
 	_refresh()
 	changed.emit()
@@ -556,9 +680,18 @@ func _make_swatch(key: String, idx: int, col: Color, selected: bool,
 			face.draw_arc(Vector2(SWATCH, SWATCH) / 2.0, SWATCH * 0.32, 0.0, TAU, 28,
 					PREVIEW_COL if previewing else UiKit.WHITE, 4.0)
 		if locked:
-			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0)))
+			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0 - 8.0))
+			_draw_price(face, Vector2(8.0, SWATCH - 10.0),
+					GameState.part_price(key, idx), 12))
 	b.add_child(face)
 	return b
+
+
+## 잠긴 옵션의 값 — 골드 색 작은 글씨.
+func _draw_price(ci: CanvasItem, at: Vector2, price: int, fs := 13) -> void:
+	ci.draw_string(ThemeDB.fallback_font, at,
+			tr("CC_PRICE").format({"gold": _gold(price)}),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UiKit.GOLD_DEEP)
 
 
 ## 잠금 뱃지 — 자물쇠 하나. sc로 스와치/타일 크기에 맞춘다.
@@ -592,6 +725,7 @@ func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 				else _shadow(_skin(key, idx)))
 		if locked:
 			_draw_lock(face, Vector2(TILE.x - 22.0, 24.0), 0.9)
+			_draw_price(face, Vector2(9.0, 24.0), GameState.part_price(key, idx))
 		var font := ThemeDB.fallback_font
 		var fs := UiKit.fit_size(font, opt_name, TILE.x - 10.0, 15)
 		var w := font.get_string_size(opt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

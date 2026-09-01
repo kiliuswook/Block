@@ -7,6 +7,8 @@ const CatArt := preload("res://core/scripts/cat_art.gd")
 
 const SIZE := 50.0
 const SQUASH_TIME := 0.12
+const SCARE_EASE := 7.0  # 놀람이 풀리는 속도 (놀라는 건 즉시, 푸는 건 천천히)
+const JOLT_TIME := 0.22  # 착지 충격에 몸이 튀는 시간
 
 const BODY_COLOR := Color("f4e3c8")
 const EAR_COLOR := Color("d9a05c")
@@ -48,6 +50,8 @@ var wall_jumps_left := 1
 var facing := 1
 var last_tap := {-1: -1e9, 1: -1e9}
 var skin_override := ""
+var scare := 0.0  # 머리 위 블록이 얼마나 가까운가 (0~1) — 움츠림·놀란 표정을 몬다
+var jolt := 0.0  # 근처에 블록이 박힌 충격 (0~1) — 몸이 한 번 튄다
 # Per-cat stat multipliers, refreshed from GameState on respawn.
 var stat_speed := 1.0
 var stat_jump := 1.0
@@ -80,6 +84,8 @@ func respawn(pos: Vector2) -> void:
 	velocity = Vector2.ZERO
 	alive = true
 	on_floor = false
+	scare = 0.0
+	jolt = 0.0
 	dash_timer = 0.0
 	dash_cooldown = 0.0
 	coyote_timer = 0.0
@@ -104,9 +110,18 @@ func _physics_process(delta: float) -> void:
 	if not alive or not board.playing or board.is_paused:
 		return
 	squash_timer = maxf(squash_timer - delta, 0.0)
+	# 머리 위 블록: 놀라는 건 즉시, 푸는 건 천천히 — 스쳐 지나가도 여운이 남는다.
+	scare = maxf(board.overhead_threat(rect()), scare - delta * SCARE_EASE)
+	jolt = maxf(jolt - delta / JOLT_TIME, 0.0)
 	_handle_input(delta)
 	_apply_motion(delta)
 	queue_redraw()
+
+
+## 옆에서 블록이 쿵 하고 박혔다 — 몸이 한 번 튄다 (escape_board가 부른다).
+func shock(power: float) -> void:
+	jolt = maxf(jolt, clampf(power, 0.0, 1.0))
+	squash_timer = maxf(squash_timer, SQUASH_TIME * 0.7 * power)
 
 
 func _handle_input(delta: float) -> void:
@@ -193,6 +208,9 @@ func _apply_motion(delta: float) -> void:
 			if not on_floor and velocity.y > 300.0:
 				squash_timer = SQUASH_TIME
 				Sfx.play("land")
+				# 내려앉은 발밑에서 먼지가 인다 — 세기는 떨어진 속도를 따른다.
+				board.land_dust(Vector2(position.x, rect().end.y),
+						clampf(velocity.y / 1400.0, 0.2, 1.0))
 			on_floor = true
 			wall_jumps_left = 1
 		elif velocity.y < 0.0:
@@ -265,11 +283,54 @@ func _draw() -> void:
 			scale_xy = Vector2(0.9, 1.13)
 		elif velocity.y > 500.0:
 			scale_xy = Vector2(0.94, 1.07)
-	draw_set_transform(Vector2(0.0, half * (1.0 - scale_xy.y)), 0.0, scale_xy)
-	var mouth_open := not on_floor and velocity.y < -100.0
+	# 머리 위에서 블록이 내려오면 납작하게 움츠린다 — 놀랄수록 더 눌린다.
+	if alive and scare > 0.0:
+		scale_xy *= Vector2(1.0 + 0.14 * scare, 1.0 - 0.16 * scare)
+	# 옆에서 블록이 박힌 충격은 짧게 떨리는 흔들림으로 나온다.
+	var jitter := Vector2.ZERO
+	if jolt > 0.0:
+		jitter = Vector2(sin(jolt * 47.0), cos(jolt * 61.0)) * 3.5 * jolt
+	draw_set_transform(jitter + Vector2(0.0, half * (1.0 - scale_xy.y)), 0.0, scale_xy)
+	var mouth_open := (not on_floor and velocity.y < -100.0) or scare > 0.45
 	paint_cat(self, Vector2.ZERO, SIZE, look, alive, mouth_open, skin)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if alive and scare > 0.2:
+		_draw_scare(half)
 
+
+
+## 머리 위 블록이 코앞이라는 신호: 볼 옆 땀방울과, 가까우면 머리 위 느낌표.
+## 냥이 그림 위에 코드로 얹는다 — 스프라이트든 코드 렌더든 똑같이 붙고, 어두운
+## 우물에서도 읽히도록 크림색 + 잉크 외곽선으로 그린다.
+func _draw_scare(half: float) -> void:
+	var t := clampf((scare - 0.2) / 0.8, 0.0, 1.0)
+	# 땀방울 — 놀란 쪽(바라보는 반대편) 볼 옆에서 흘러내린다.
+	var sx := -float(facing)
+	var rr := half * 0.24
+	var drop := Vector2(sx * half * 0.95, -half * 0.45 + half * 0.6 * t)
+	var tear := PackedVector2Array([
+		drop + Vector2(0.0, -rr * 1.9), drop + Vector2(rr, rr * 0.45),
+		drop + Vector2(0.0, rr * 1.2), drop + Vector2(-rr, rr * 0.45),
+	])
+	draw_polyline(tear + PackedVector2Array([tear[0]]),
+			Color(0.17, 0.16, 0.20, 0.9 * t), rr * 0.5)
+	draw_colored_polygon(tear, Color(0.62, 0.87, 1.0, 0.95 * t))
+	draw_circle(drop + Vector2(-rr * 0.32, -rr * 0.25), rr * 0.33,
+			Color(1.0, 1.0, 1.0, 0.9 * t))
+	if scare < 0.35:
+		return
+	# 더 가까워지면 머리 위에 느낌표가 튀어 오른다. 어두운 우물에서 묻히지 않게
+	# 뜨자마자 제 색을 내고(짧은 페이드인), 가까울수록 더 높이 뛴다.
+	var a := clampf((scare - 0.35) / 0.12, 0.0, 1.0)
+	var e := clampf((scare - 0.35) / 0.5, 0.0, 1.0)
+	var w := half * 0.3
+	var bx := half * 0.55 * float(facing) - w / 2.0
+	var by := -half * (1.55 + 0.25 * e)
+	var bar := Rect2(bx, by, w, half * 0.66)
+	var dot := Rect2(bx, by + half * 0.8, w, w)
+	for r: Rect2 in [bar, dot]:
+		draw_rect(r.grow(w * 0.4), Color(0.17, 0.16, 0.20, a))
+		draw_rect(r, Color(1.0, 0.86, 0.32, a))
 
 
 ## 큐브 고양이 렌더는 파츠 레이어 방식으로 cat_art.gd가 담당한다.

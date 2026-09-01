@@ -563,6 +563,65 @@ func _ready() -> void:
 	_check(b7.ore.is_empty(), "ore: a fresh level board starts without leftover gold")
 	b7.queue_free()
 
+	# --- 골드러시 (무한의 계단 도파민 스파이크) ---------------------------------
+	GameState.mode = GameState.MODE_ENDLESS
+	var b8: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p8: Node2D = load("res://core/scripts/player.gd").new()
+	p8.name = "Player"
+	b8.add_child(p8)
+	var cam8 := Camera2D.new()
+	cam8.name = "Cam"
+	b8.add_child(cam8)
+	add_child(b8)
+	b8.start_game()
+	_check(not b8.rush_on() and is_equal_approx(b8.rush_gauge, 0.0),
+			"rush: a run starts with the gauge empty")
+	# 시간만 흘려서는 절대 차지 않는다 — 실력이 터뜨리는 게이지다.
+	var feet_safe: float = b8.lava_y - EscapeBoard.RUSH_NEAR_DIST - 10.0
+	b8._rush_step(1.0, feet_safe)
+	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: idling never charges the gauge")
+	# 발끝 세이브: 용암에 붙어 있는 동안만 찬다.
+	b8._rush_step(1.0, b8.lava_y - 10.0)
+	_check(b8.rush_gauge > 0.0, "rush: hugging the lava charges the gauge")
+	# 줄 클리어가 주 수입원 — 4줄 한 방이 게이지 절반을 넘긴다.
+	b8.rush_gauge = 0.0
+	b8.combo = 1
+	b8._endless_line_reward(4)
+	_check(b8.rush_gauge > EscapeBoard.RUSH_MAX * 0.5, "rush: a tetris fills over half")
+	# 만땅이면 발동: 용암이 밀려나고 금 확률이 뛴다.
+	var rush_lava_before: float = b8.lava_y
+	b8._rush_gain(EscapeBoard.RUSH_MAX)
+	_check(b8.rush_on(), "rush: a full gauge triggers the rush")
+	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: the gauge empties on trigger")
+	_check(b8.lava_y > rush_lava_before, "rush: triggering shoves the lava back down")
+	b8._rush_gain(EscapeBoard.RUSH_MAX)
+	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: charging is off while the rush runs")
+	# 발동 중에는 블록마다 금이 박혀 나온다 (평소 10% → 75%).
+	var ore_pieces := 0
+	for i in 40:
+		b8._spawn_piece()
+		if b8.piece_ore >= 0:
+			ore_pieces += 1
+	_check(ore_pieces > 20, "rush: gold shows up in most pieces while it runs")
+	# 종료: 필드에 남은 금이 한 칸씩 순차로 터진다.
+	b8.grid[Vector2i(2, 18)] = "O"
+	b8.grid[Vector2i(3, 18)] = "O"
+	b8.ore[Vector2i(2, 18)] = true
+	b8.ore[Vector2i(3, 18)] = true
+	var gold_before: int = b8.ore_gold
+	b8._rush_step(EscapeBoard.RUSH_TIME, feet_safe)
+	_check(not b8.rush_on(), "rush: it ends when the timer runs out")
+	_check(not b8.rush_pop.is_empty() or b8.ore.is_empty(),
+			"rush: the leftover gold is queued to blow")
+	for i in 10:
+		b8._rush_pop_step(EscapeBoard.RUSH_POP_STEP)
+	_check(b8.ore.is_empty(), "rush: the queue empties the field of gold")
+	_check(b8.ore_gold == gold_before + 2 * EscapeBoard.ORE_VALUE,
+			"rush: the blow-out pays full value per cell")
+	_check(is_equal_approx(b8.rush_gauge, 0.0),
+			"rush: the blow-out does not recharge the gauge")
+	b8.queue_free()
+
 	GameState.save_game()
 
 	if failures == 0:

@@ -49,6 +49,24 @@ const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the player by more than this
 const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
+# --- 골드러시 (무한의 계단 전용 스파이크) --------------------------------------
+# 무한의 계단은 처음부터 끝까지 같은 리듬으로 조여 오기만 해서 "판이 뒤집히는
+# 순간"이 없었다. 골드러시가 그 자리다. 게이지는 **시간으로는 절대 차지 않고**
+# 줄 클리어·콤보·금 캐기·용암 발끝 세이브로만 찬다 — 운이 아니라 실력이
+# 터뜨린다. 발동하면 용암이 멎고 블록마다 금이 박혀 나오며, 끝나는 순간 필드에
+# 남은 금이 아래에서부터 한 칸씩 순차로 터진다: 그래서 러시 중에는 "지금 캘까,
+# 쌓아 둘까"라는 판단이 하나 더 생긴다.
+const RUSH_MAX := 100.0
+const RUSH_LINE_GAIN := [0.0, 8.0, 20.0, 36.0, 60.0]  # 한 번에 지운 줄 수만큼
+const RUSH_COMBO_GAIN := 5.0  # 콤보 한 단계마다 얹는다
+const RUSH_ORE_GAIN := 6.0  # 금 한 칸을 직접 깨서 캤다
+const RUSH_NEAR_GAIN := 12.0  # 발끝 세이브: 용암에 붙어 있는 동안 초당
+const RUSH_NEAR_DIST := CELL * 1.5  # 발과 용암이 이보다 가까우면 "발끝"
+const RUSH_TIME := 10.0  # 발동 지속 (초)
+const RUSH_ORE_CHANCE := 0.75  # 발동 중 블록에 금이 박힐 확률
+const RUSH_LAVA_PUSH := 6  # 발동 순간 용암을 이만큼(칸) 밀어낸다
+const RUSH_POP_STEP := 0.09  # 종료 폭발: 금 한 칸이 터지는 간격
+const RUSH_FLASH_TIME := 0.5  # 발동 순간의 금빛 섬광
 # Classic level-clear shutter (Atari B-type): a steel curtain rolls down over
 # the well, paying a bonus for every empty row it passes at the top, holds shut
 # while the next level's board is dealt behind it, then rolls back up.
@@ -60,6 +78,25 @@ const SHUTTER_POP_TIME := 0.18  # the tally flares each time it ticks up
 # gravity step on top of the mode's own ramp, so a long run keeps tightening.
 const SPEED_CREEP_TIME := 45.0  # seconds of play per extra step
 const SPEED_CREEP_MAX := 8  # the creep alone never exceeds this many steps
+
+# --- 타격감(임팩트 연출) 상수 -------------------------------------------------
+# 블록이 "무겁게" 느껴지도록 이동·회전·낙하·착지·줄 클리어마다 화면을 흔들고
+# 잔상·먼지·파편·배너를 얹는다. 전부 보드 로컬 좌표로 그리므로 가로·세로 화면이
+# 같은 코드를 쓴다 — 흔들림만 고정 우물은 노드 자리를, 무한은 카메라를 민다.
+const SHAKE_MAX := 30.0  # 흔들림 진폭 상한 (화면 px)
+const SHAKE_DECAY := 9.0  # 초당 감쇠 계수
+const HITSTOP_MAX := 0.12  # 임팩트 프레임 상한 (초)
+const SLIDE_TIME := 0.07  # 가로 한 칸 이동을 눈이 따라잡는 시간
+const SPIN_SPEED := 16.0  # 회전 잔여 각도가 풀리는 속도 (rad/s)
+const LAND_SQUASH_TIME := 0.22  # 착지 눌림이 펴지는 시간
+const TRAIL_TIME := 0.22  # 낙하 잔상이 남는 시간
+const DUST_TIME := 0.45
+const SHARD_TIME := 0.7
+const RING_TIME := 0.35
+const ROW_FLASH_TIME := 0.3
+const LOCK_FLASH_TIME := 0.16
+const BANNER_TIME := 1.0
+const FX_MAX := 200  # 먼지·파편 총량 상한 (웹 빌드 프레임 보호)
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
@@ -123,6 +160,36 @@ var _rec_shadow := {}
 var _rec_timer := 0.0
 var _rec_on := false
 
+# --- 타격감 연출 상태 (`_fx_reset()`이 전부 비운다) ---------------------------
+var base_pos := Vector2.ZERO  # 흔들림의 기준 자리 — main.gd `_fit_board()`가 물려 준다
+var shake_amt := 0.0
+var shake_t := 0.0
+var hitstop := 0.0  # 이 시간 동안 판이 멎는다 (임팩트가 눈에 박히게)
+var slide_off := 0.0  # 떨어지는 블록의 가로 잔여 오프셋 (칸 단위, 0으로 수렴)
+var spin_off := 0.0  # 회전 잔여 각도 (rad, 0으로 수렴)
+var spin_pop := 0.0  # 회전 직후의 테두리 섬광 (0..1)
+var land_squash := 0.0  # 착지 눌림 (0..1)
+var fall_from := 0  # 낙하를 시작한 줄 — 착지 세기 계산용
+var hard_drop_rows := 0  # 이번 하드드롭이 훑고 내려온 줄 수
+var trails: Array = []  # [cells, swept, color, age] — 낙하 잔상
+var dust: Array = []  # [pos, vel, age, life, size, color]
+var shards: Array = []  # [pos, vel, age, color, size, spin]
+var rings: Array = []  # [pos, age, radius, color] — 착지 충격 링
+var row_flash: Array = []  # [row_y, age] — 지워지는 줄의 섬광
+var lock_flash: Array = []  # [cells, age, color] — 격자에 박히는 순간
+var banner_key := ""  # 멀티 라인 배너 번역 키
+var banner_age := BANNER_TIME
+var banner_y := 0.0
+var combo := 0  # 연속 줄 클리어 — 못 지운 락에서 끊긴다
+
+# --- 골드러시 상태 (`_fx_reset()`이 전부 비운다) -------------------------------
+var rush_gauge := 0.0  # 0 ~ RUSH_MAX
+var rush_time := 0.0  # 남은 발동 시간 (0 = 꺼짐)
+var rush_near := 0.0  # 발끝 세이브 근접도 0..1 — 용암 위 열기 연출에 쓴다
+var rush_pop: Array = []  # 종료 폭발 대기열 (아래 칸부터)
+var rush_pop_t := 0.0
+var rush_flash := 0.0  # 발동 순간의 금빛 섬광 (초)
+
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
 
@@ -152,6 +219,7 @@ func start_game() -> void:
 	lava_phase = 0.0
 	loose.clear()
 	is_paused = false
+	_fx_reset()
 	GameState.reset()
 	view_zoom = _fit_zoom() if mode == Mode.ENDLESS else 1.0
 	view_below = VIEW_BELOW / view_zoom
@@ -203,14 +271,17 @@ func _bank_ore(c: Vector2i, value: int) -> void:
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
+	_update_shake(delta)
+	_age_fx(delta)
+	if hitstop > 0.0:
+		# 임팩트 프레임: 판은 멎고 연출만 흐른다 — 한 방이 눈에 박히는 자리다.
+		hitstop -= delta
+		queue_redraw()
+		return
 	if _shutter_on():
 		# Classic 레벨 클리어 연출: 셔터가 내려오는 동안 조작·낙하·판정 정지.
 		_update_shutter(delta)
 		shutter_pop = maxf(shutter_pop - delta / SHUTTER_POP_TIME, 0.0)
-		for fx in break_fx:
-			fx[1] += delta
-		break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-		_age_ore_fx(delta)
 		queue_redraw()
 		return
 	run_time += delta  # only ticks while the board is actually being played
@@ -229,10 +300,6 @@ func _process(delta: float) -> void:
 	if mode == Mode.ENDLESS and playing:
 		_step_loose(delta)
 	_rec_tick(delta)
-	for fx in break_fx:
-		fx[1] += delta
-	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
-	_age_ore_fx(delta)
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
 	queue_redraw()
@@ -241,6 +308,227 @@ func _process(delta: float) -> void:
 ## 무한의 계단도 스테이지 모드와 같은 크기의 우물에서 논다. 고정 우물 모드는
 ## 보드 노드를 화면에 맞춰 줄이지만(main.gd `_fit_board()`), 무한은 카메라가
 ## 그리므로 같은 배율을 카메라 줌으로 준다.
+# --- 타격감 엔진 ---------------------------------------------------------------
+
+
+## 판을 새로 깔 때 연출 상태를 전부 비운다 — 흔들려 있던 자리도 제자리로.
+func _fx_reset() -> void:
+	shake_amt = 0.0
+	shake_t = 0.0
+	hitstop = 0.0
+	slide_off = 0.0
+	spin_off = 0.0
+	spin_pop = 0.0
+	land_squash = 0.0
+	fall_from = 0
+	hard_drop_rows = 0
+	combo = 0
+	rush_gauge = 0.0
+	rush_time = 0.0
+	rush_near = 0.0
+	rush_pop.clear()
+	rush_pop_t = 0.0
+	rush_flash = 0.0
+	banner_key = ""
+	banner_age = BANNER_TIME
+	trails.clear()
+	dust.clear()
+	shards.clear()
+	rings.clear()
+	row_flash.clear()
+	lock_flash.clear()
+	if cam:
+		cam.offset = Vector2.ZERO
+	if base_pos != Vector2.ZERO:
+		position = base_pos
+
+
+## 연출 타이머 한 곳. 임팩트 프레임·셔터 연출 중에도 계속 돌아간다.
+func _age_fx(delta: float) -> void:
+	for fx in break_fx:
+		fx[1] += delta
+	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+	_age_ore_fx(delta)
+	slide_off = move_toward(slide_off, 0.0, delta / SLIDE_TIME)
+	spin_off = move_toward(spin_off, 0.0, delta * SPIN_SPEED)
+	spin_pop = maxf(spin_pop - delta * 7.0, 0.0)
+	land_squash = maxf(land_squash - delta / LAND_SQUASH_TIME, 0.0)
+	for e in trails:
+		e[3] += delta
+	trails = trails.filter(func(e: Array) -> bool: return e[3] < TRAIL_TIME)
+	for e in lock_flash:
+		e[1] += delta
+	lock_flash = lock_flash.filter(func(e: Array) -> bool: return e[1] < LOCK_FLASH_TIME)
+	for e in rings:
+		e[1] += delta
+	rings = rings.filter(func(e: Array) -> bool: return e[1] < RING_TIME)
+	for e in row_flash:
+		e[1] += delta
+	row_flash = row_flash.filter(func(e: Array) -> bool: return e[1] < ROW_FLASH_TIME)
+	for d in dust:
+		d[2] += delta
+		d[1] = (d[1] as Vector2) * maxf(1.0 - delta * 3.2, 0.0) + Vector2(0.0, 220.0 * delta)
+		d[0] = (d[0] as Vector2) + (d[1] as Vector2) * delta
+	dust = dust.filter(func(d: Array) -> bool: return d[2] < d[3])
+	for sh in shards:
+		sh[2] += delta
+		sh[1] = (sh[1] as Vector2) + Vector2(0.0, 1500.0 * delta)
+		sh[0] = (sh[0] as Vector2) + (sh[1] as Vector2) * delta
+		sh[5] += delta * 9.0
+	shards = shards.filter(func(sh: Array) -> bool: return sh[2] < SHARD_TIME)
+	banner_age = minf(banner_age + delta, BANNER_TIME)
+	if banner_age >= BANNER_TIME:
+		banner_key = ""
+
+
+## 화면 흔들림 한 곳. 고정 우물은 보드 노드를 base_pos 기준으로 흔들고, 무한의
+## 계단은 카메라 오프셋을 민다 — 카메라 줌으로 나눠 화면 픽셀 진폭을 맞춘다.
+func _update_shake(delta: float) -> void:
+	if shake_amt <= 0.01:
+		if shake_amt != 0.0:
+			shake_amt = 0.0
+			if cam and cam.enabled:
+				cam.offset = Vector2.ZERO
+			elif base_pos != Vector2.ZERO:
+				position = base_pos
+		return
+	shake_t += delta
+	var off := Vector2(
+			sin(shake_t * 61.0) + 0.5 * sin(shake_t * 113.0),
+			cos(shake_t * 47.0) + 0.5 * sin(shake_t * 89.0)) * shake_amt * 0.55
+	if cam and cam.enabled:
+		cam.offset = off / maxf(view_zoom, 0.05)
+	elif base_pos != Vector2.ZERO:
+		position = base_pos + off
+	shake_amt = maxf(shake_amt - shake_amt * SHAKE_DECAY * delta - 14.0 * delta, 0.0)
+
+
+## 흔들림을 얹는다 — 겹치면 큰 쪽이 이긴다(연달아 터져도 화면이 폭주하지 않게).
+func shake(amount: float) -> void:
+	shake_amt = minf(maxf(shake_amt, amount), SHAKE_MAX)
+
+
+## 임팩트 프레임(히트스톱). 같은 이유로 겹치면 긴 쪽이 이긴다.
+func _freeze(t: float) -> void:
+	hitstop = minf(maxf(hitstop, t), HITSTOP_MAX)
+
+
+## 착지·파괴 자리에서 먼지가 좌우로 퍼진다.
+func _spawn_dust(at: Vector2, n: int, power: float,
+		col := Color(1.0, 0.96, 0.86)) -> void:
+	if dust.size() > FX_MAX:
+		return
+	for i in n:
+		var ang := -PI * (0.15 + 0.7 * randf())
+		var sp := (140.0 + 300.0 * randf()) * power
+		dust.append([
+			at + Vector2(randf_range(-CELL * 0.4, CELL * 0.4), 0.0),
+			Vector2(cos(ang) * sp * 1.7, sin(ang) * sp * 0.55),
+			0.0, DUST_TIME * (0.6 + 0.6 * randf()),
+			CELL * (0.05 + 0.10 * randf()), col])
+
+
+## 부서진 블록 파편: 제 색을 물고 사방으로 튄 뒤 중력에 진다.
+func _spawn_shards(at: Vector2, col: Color, n: int, power := 1.0) -> void:
+	if shards.size() > FX_MAX:
+		return
+	for i in n:
+		var ang := randf() * TAU
+		var sp := (180.0 + 400.0 * randf()) * power
+		shards.append([at, Vector2(cos(ang) * sp * 1.3, sin(ang) * sp - 260.0), 0.0,
+				col, CELL * (0.09 + 0.13 * randf()), randf() * TAU])
+
+
+## 블록이 스택/바닥에 닿았다: 눌림 + 흔들림 + 충격 링 + 먼지. 세기(power)는
+## 얼마나 멀리서 떨어졌는가로, 하드드롭이 가장 세다.
+func _impact(cells: Array, col: Color, power: float) -> void:
+	land_squash = clampf(power, 0.2, 1.0)
+	shake(4.0 + 15.0 * power)
+	_freeze(0.015 + 0.05 * power)
+	GameState.haptic(0.22 + 0.55 * power, 0.05 + 0.09 * power)
+	Sfx.play("impact", 1.15 - 0.3 * power, -9.0 + 8.0 * power)
+	# 블록의 아랫변마다 먼지가 일고, 그 가운데에 납작한 충격 링이 퍼진다.
+	var low := {}
+	for c: Vector2i in cells:
+		if not low.has(c.x) or c.y > low[c.x]:
+			low[c.x] = c.y
+	if low.is_empty():
+		return
+	var mid := Vector2.ZERO
+	for cx in low:
+		var at := _cell_rect(Vector2i(cx, low[cx])).get_center() + Vector2(0.0, CELL * 0.5)
+		_spawn_dust(at, 3 + int(4.0 * power), 0.5 + power)
+		mid += at
+	mid /= float(low.size())
+	rings.append([mid, 0.0, CELL * (0.6 + 1.5 * power), col.lerp(Color.WHITE, 0.6)])
+	# 가까이서 박히면 고양이도 함께 튄다 — 멀면 화면 흔들림만 남는다.
+	if player and player.alive:
+		var near := clampf(1.0 - player.position.distance_to(mid) / (CELL * 5.0), 0.0, 1.0)
+		if near > 0.0:
+			player.shock(power * near)
+
+
+## 낙하 잔상: 지나온 자리에 블록 색 띠를 남긴다 (swept = 훑고 온 줄 수).
+func _push_trail(swept: int, strength: float) -> void:
+	if piece_type == "" or swept <= 0 or trails.size() > 24:
+		return
+	trails.append([_cells(piece_type, piece_rot, piece_pos), swept,
+			Color(Board.COLORS[piece_type], strength), 0.0])
+
+
+## 대시로 블록을 밀어냈다 — 미끄러진 만큼 잔상을 남기고 짧게 멎는다.
+func _shove_impact() -> void:
+	slide_off = clampf(slide_off, -2.5, 2.5)
+	shake(7.0)
+	_freeze(0.035)
+	GameState.haptic(0.4, 0.06)
+	var cells := _cells(piece_type, piece_rot, piece_pos) if piece_type != "" else []
+	if not cells.is_empty():
+		_spawn_dust(_cell_rect(cells[0]).get_center(), 5, 0.8)
+
+
+## 줄이 지워진 순간의 타격 — 지운 줄 수만큼 크게 흔들리고 잠깐 멎는다.
+func _line_clear_fx(cleared: int) -> void:
+	shake(9.0 + 6.0 * cleared)
+	_freeze(0.05 + 0.03 * cleared)
+	GameState.haptic(clampf(0.45 + 0.16 * cleared, 0.0, 1.0), 0.1 + 0.05 * cleared)
+	banner_age = 0.0
+	banner_key = "FX_LINE_%d" % cleared if cleared >= 2 else ""
+	if combo >= 2:
+		Sfx.play("combo", clampf(0.85 + 0.09 * combo, 0.85, 1.9))
+
+
+## 고양이 머리 바로 위에서 내려오는 블록이 얼마나 가까운가 (0 = 없음, 1 = 코앞).
+## player.gd가 이 값으로 움츠린 자세와 놀란 표정을 고른다. 추적 중(TRACKING)인
+## 블록은 아직 매달려 있을 뿐이라 절반만 세고, 떨어지는 중이면 제값을 센다.
+func overhead_threat(r: Rect2) -> float:
+	var worst := 0.0
+	var groups: Array = []
+	if piece_type != "" and piece_state != PieceState.LANDED:
+		groups.append([_cells(piece_type, piece_rot, piece_pos),
+				0.5 if piece_state == PieceState.TRACKING else 1.0])
+	for e: Dictionary in loose:
+		if e.s != PieceState.LANDED:
+			groups.append([_loose_cells(e), 1.0])
+	for g: Array in groups:
+		for c: Vector2i in g[0]:
+			var cr := _cell_rect(c)
+			if cr.end.x <= r.position.x or cr.position.x >= r.end.x:
+				continue  # 머리 위가 아니다
+			var gap := r.position.y - cr.end.y
+			if gap < 0.0:
+				continue  # 이미 옆·아래다
+			worst = maxf(worst, (1.0 - clampf(gap / (CELL * 5.0), 0.0, 1.0)) * g[1])
+	return worst
+
+
+## 플레이어가 쿵 하고 내려앉은 자리에 먼지가 인다 (player.gd가 부른다).
+func land_dust(at: Vector2, power: float) -> void:
+	_spawn_dust(at, 3 + int(5.0 * power), 0.4 + 0.7 * power)
+	if power > 0.7:
+		shake(3.0 * power)
+
+
 func _fit_zoom() -> float:
 	var vp := get_viewport_rect().size
 	var portrait := vp.y > vp.x
@@ -269,12 +557,17 @@ func _update_endless(delta: float) -> void:
 	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
 	lava_phase += delta
-	lava_y -= _lava_speed() * delta
+	# 골드러시가 도는 동안 용암은 멎는다 — 10초짜리 숨통이자, 낮게 파고들어 금을
+	# 캘 수 있는 유일한 창이다. (낙하 속도는 건드리지 않는다: 느려지면 긴장이
+	# 죽고, 빨라지면 벌 수가 없다.)
+	if not rush_on():
+		lava_y -= _lava_speed() * delta
 	lava_y = minf(lava_y, player.position.y + LAVA_MAX_GAP)
 	var feet := player.position.y + Player.SIZE / 2.0
 	if feet > lava_y:
 		_kill_player()
 		return
+	_rush_step(delta, feet)
 	var h := int(round((rows * CELL - feet) / CELL))
 	if h > best_height:
 		_add_score((h - best_height) * HEIGHT_SCORE)
@@ -340,6 +633,8 @@ func _track(delta: float) -> void:
 		var dir := signi(target - piece_pos.x)
 		if dir != 0 and not _piece_collides(piece_rot, piece_pos + Vector2i(dir, 0), true):
 			piece_pos.x += dir
+			# 눈은 한 박자 늦게 따라온다 — 칸 단위 이동이 미끄러지듯 보이게.
+			slide_off = clampf(slide_off - float(dir), -1.5, 1.5)
 	if track_timer >= _track_time():
 		_release_piece()
 
@@ -426,6 +721,7 @@ func _step_loose(delta: float) -> void:
 				if _loose_blocked(i, Vector2i(0, 1)):
 					e.s = PieceState.LANDED
 					e.lt = 0.0
+					_impact(_loose_cells(e), Board.COLORS[e.t], 0.55)
 					break
 				e.p += Vector2i(0, 1)
 				if _resolve_loose_overlap(i) or not playing:
@@ -477,6 +773,8 @@ func _shove_loose(dir: int, max_cells: int) -> bool:
 func _start_fall() -> void:
 	piece_state = PieceState.FALLING
 	fall_timer = 0.0
+	fall_from = piece_pos.y
+	hard_drop_rows = 0
 	# Classic Tetris block out: the stack reaches the spawn area and the
 	# piece has nowhere to start falling.
 	if _piece_collides(piece_rot, piece_pos, false):
@@ -504,14 +802,26 @@ func _fall(delta: float) -> void:
 			_land()
 			return
 		piece_pos.y += 1
+		if Input.is_action_pressed("soft_drop"):
+			_push_trail(1, 0.5)  # 빠르게 내려올 때만 자국이 남는다
 		if _resolve_piece_overlap():
 			return
 
 
 ## Touched down: hold briefly in a shovable state before locking for real.
 func _land() -> void:
+	var was := piece_state
 	piece_state = PieceState.LANDED
 	land_timer = 0.0
+	if was == PieceState.LANDED or piece_type == "":
+		return
+	# 멀리서 떨어질수록, 하드드롭일수록 세게 박힌다.
+	var fallen := maxi(hard_drop_rows, piece_pos.y - fall_from)
+	var power := clampf(0.25 + fallen / 16.0, 0.25, 1.0)
+	if hard_drop_rows > 0:
+		power = minf(power * 1.5, 1.0)
+	_impact(_cells(piece_type, piece_rot, piece_pos), Board.COLORS[piece_type], power)
+	hard_drop_rows = 0
 
 
 func _landed(delta: float) -> void:
@@ -519,6 +829,7 @@ func _landed(delta: float) -> void:
 	if not _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
 		piece_state = PieceState.FALLING
 		fall_timer = 0.0
+		fall_from = piece_pos.y
 		return
 	# Tapping down locks it in place immediately.
 	if Input.is_action_just_pressed("soft_drop"):
@@ -544,20 +855,28 @@ func shove_piece(dir: int, max_cells: int = COLS) -> bool:
 		piece_pos.x += dir
 		moved = true
 		cells += 1
+		slide_off = clampf(slide_off - float(dir), -2.5, 2.5)
 		if _resolve_piece_overlap() or not playing:
 			Sfx.play("shove")
+			_shove_impact()
 			return true
 	if moved:
 		Sfx.play("shove")
+		_shove_impact()
 	return moved
 
 
 func _hard_drop() -> void:
+	var from_y := piece_pos.y
 	while playing and not _piece_collides(piece_rot, piece_pos + Vector2i(0, 1), false):
 		piece_pos.y += 1
 		if _resolve_piece_overlap():
 			return
 	if playing:
+		hard_drop_rows = piece_pos.y - from_y
+		if hard_drop_rows > 0:
+			_push_trail(hard_drop_rows, 0.6)
+			Sfx.play("harddrop")
 		_land()
 
 
@@ -651,8 +970,15 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 	if not _free_player_from_grid():
 		return false
 	Sfx.play("lock")
+	lock_flash.append([cells, 0.0, Board.COLORS[t]])
+	shake(2.5)
 	_add_score(10 * level)
 	var cleared := _clear_lines()
+	if cleared == 0:
+		combo = 0
+	else:
+		combo += 1
+		_line_clear_fx(cleared)
 	if cleared > 0:
 		total_lines += cleared
 		# Classic pays the arcade table (40/100/300/1200 × stage, pre-level-up).
@@ -671,11 +997,87 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 	return true
 
 
+# --- 골드러시 -------------------------------------------------------------------
+
+
+## 지금 골드러시가 돌고 있는가 (계기판·금 확률·용암 정지가 이 값을 본다).
+func rush_on() -> bool:
+	return rush_time > 0.0
+
+
+## 게이지 충전. 무한의 계단에서, 러시가 돌고 있지 않을 때만 찬다 — 가만히 있어서
+## 차는 길은 어디에도 없다.
+func _rush_gain(amount: float) -> void:
+	if mode != Mode.ENDLESS or not playing or rush_on() or amount <= 0.0:
+		return
+	if not rush_pop.is_empty():
+		return  # 종료 폭발이 자기 게이지를 다시 채우면 러시가 끊기지 않는다
+	rush_gauge = minf(rush_gauge + amount, RUSH_MAX)
+	EventBus.goldrush_changed.emit(rush_gauge / RUSH_MAX, 0.0)
+	if rush_gauge >= RUSH_MAX:
+		_rush_start()
+
+
+## 발동: 용암을 한 번 크게 밀어내고 10초간 금이 쏟아진다.
+func _rush_start() -> void:
+	rush_gauge = 0.0
+	rush_time = RUSH_TIME
+	rush_flash = RUSH_FLASH_TIME
+	lava_y += RUSH_LAVA_PUSH * CELL
+	shake(16.0)
+	_freeze(0.08)
+	GameState.haptic(0.9, 0.25)
+	banner_key = "FX_GOLDRUSH"
+	banner_age = 0.0
+	banner_y = player.position.y - CELL * 1.6 if player else rows * CELL * 0.4
+	Sfx.play("goldrush")
+	EventBus.goldrush_changed.emit(0.0, rush_time)
+
+
+## 매 프레임: 남은 시간을 깎고, 발끝 세이브를 재고, 종료 폭발을 흘린다.
+func _rush_step(delta: float, feet: float) -> void:
+	rush_flash = maxf(rush_flash - delta, 0.0)
+	# 발끝 세이브 — 용암에 바짝 붙어 있는 동안만 게이지가 찬다. 안전하게만
+	# 올라가면 러시는 영영 안 터진다: 위험을 감수할 이유를 만드는 자리다.
+	var gap := lava_y - feet
+	rush_near = clampf(1.0 - gap / RUSH_NEAR_DIST, 0.0, 1.0) if gap > 0.0 else 0.0
+	if rush_near > 0.0:
+		_rush_gain(RUSH_NEAR_GAIN * delta)
+	if rush_on():
+		rush_time = maxf(rush_time - delta, 0.0)
+		EventBus.goldrush_changed.emit(0.0, rush_time)
+		if rush_time <= 0.0:
+			_rush_end()
+	_rush_pop_step(delta)
+
+
+## 종료: 필드에 남은 금을 아래에서부터 한 칸씩 터뜨린다. 러시 중에 캐지 않고
+## 쌓아 둔 금이 여기서 한꺼번에 돌아오는 것이 이 연출의 전부다.
+func _rush_end() -> void:
+	rush_pop = ore.keys()
+	rush_pop.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y > b.y)
+	rush_pop_t = 0.0
+	rush_near = 0.0
+	EventBus.goldrush_changed.emit(0.0, 0.0)
+
+
+func _rush_pop_step(delta: float) -> void:
+	if rush_pop.is_empty():
+		return
+	rush_pop_t -= delta
+	while rush_pop_t <= 0.0 and not rush_pop.is_empty():
+		rush_pop_t += RUSH_POP_STEP
+		_bank_ore(rush_pop.pop_front() as Vector2i, ORE_VALUE)
+		shake(3.0)
+
+
 ## Endless: line clears fight the lava — every clear shoves it back down,
 ## scaling steeply with multi-line clears.
 ## Height itself is never lost: _clear_lines leaves gaps instead of collapsing.
 func _endless_line_reward(cleared: int) -> void:
 	lava_y += LAVA_PUSH[cleared] * CELL
+	# 줄 클리어가 골드러시 게이지의 주 수입원이다 — 4줄 한 방이면 절반이 넘는다.
+	_rush_gain(RUSH_LINE_GAIN[cleared] + RUSH_COMBO_GAIN * float(maxi(combo - 1, 0)))
 
 
 # --- Classic level (arcade B-type) ------------------------------------------------
@@ -828,12 +1230,24 @@ func _shutter_pay_row(y: int) -> bool:
 ## The curtain has come to rest on the stack: it flattens whatever is left
 ## and the next board is dealt.
 func _classic_shutter_landed() -> void:
+	# 커튼이 스택에 부딪히는 이 순간이 레벨의 마지막 한 방이다 — 남은 블록이
+	# 통째로 파편이 되어 흩어지고, 부딪힌 자리를 따라 먼지와 충격 링이 퍼진다.
 	for c: Vector2i in grid:
 		break_fx.append([c, 0.0])
+		_spawn_shards(_cell_rect(c).get_center(), Board.COLORS[grid[c]], 4, 1.2)
 		# 셔터가 쓸어 간 금은 절반값이다 — 직접 깨서 먹는 쪽이 늘 이득이도록.
 		_bank_ore(c, ORE_SWEEP_VALUE)
 	if not grid.is_empty():
 		Sfx.play("break", 0.75)
+		Sfx.play("impact", 0.7, 0.0)
+		shake(SHAKE_MAX)
+		_freeze(HITSTOP_MAX)
+		GameState.haptic(1.0, 0.3)
+		var hit_y := float(shutter_row) * CELL
+		for i in range(6):
+			_spawn_dust(Vector2(COLS * CELL * (i + 0.5) / 6.0, hit_y), 6, 1.3)
+		rings.append([Vector2(COLS * CELL * 0.5, hit_y), 0.0, COLS * CELL * 0.3,
+				Color(1.0, 0.96, 0.84)])  # 우물 밖으로 삐져나가지 않는 폭
 	EventBus.classic_level_cleared.emit(level, shutter_bonus)
 	_classic_deal_next_level()
 	shutter_phase = Shutter.HOLD
@@ -926,6 +1340,12 @@ func _clear_lines() -> int:
 			full_rows.append(y)
 	if full_rows.is_empty():
 		return 0
+	# 지워질 줄마다 흰 섬광을 깔고, 배너가 뜰 높이를 그 한가운데로 잡는다.
+	banner_y = 0.0
+	for y in full_rows:
+		row_flash.append([y, 0.0])
+		banner_y += float(y) * CELL
+	banner_y = banner_y / full_rows.size() + CELL * 0.5
 	# Endless keeps the stack floating: cleared rows become open gaps instead of
 	# dropping everything above, so a clear never costs the climb its height.
 	var collapse := mode != Mode.ENDLESS
@@ -935,6 +1355,7 @@ func _clear_lines() -> int:
 	for c in grid:
 		if c.y in full_rows:
 			break_fx.append([c, 0.0])
+			_spawn_shards(_cell_rect(c).get_center(), Board.COLORS[grid[c]], 3)
 			_bank_ore(c, ORE_VALUE)  # 줄로 지운 금도 제값 — 지우면 손해가 되면 안 된다
 			continue
 		var dest: Vector2i = c
@@ -999,15 +1420,18 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		return false
 	if ore.has(best):
 		# 골드 블록은 한 방에 터진다 — 두 번 쳐야 하면 리듬이 죽는다.
+		_break_fx_at(best, Board.COLORS[grid[best]])
 		cracked.erase(best)
 		grid.erase(best)
 		break_fx.append([best, 0.0])
 		_bank_ore(best, ORE_VALUE)
+		_rush_gain(RUSH_ORE_GAIN)
 		_add_score(BREAK_SCORE)
 		Sfx.play("break")
 		queue_redraw()
 		return true
 	if cracked.has(best):
+		_break_fx_at(best, Board.COLORS[grid[best]])
 		cracked.erase(best)
 		grid.erase(best)
 		break_fx.append([best, 0.0])
@@ -1015,6 +1439,8 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		Sfx.play("break")
 	else:
 		cracked[best] = true
+		shake(3.0)
+		_spawn_dust(_cell_rect(best).get_center(), 3, 0.5)
 		Sfx.play("crack")
 	queue_redraw()
 	return true
@@ -1031,7 +1457,8 @@ func _spawn_piece() -> void:
 	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
 	# 금은 블록 네 칸 중 한 곳에 박힌다 — 회전해도 같은 칸을 따라간다(_try_rotate).
-	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ORE_CHANCE else -1
+	var ore_chance := RUSH_ORE_CHANCE if rush_on() else ORE_CHANCE
+	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ore_chance else -1
 	track_timer = 0.0
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
@@ -1082,8 +1509,13 @@ func _try_rotate(dir: int) -> void:
 			if overlaps:
 				continue
 		piece_ore = _rotate_ore_index(piece_type, piece_rot, new_rot, piece_ore)
+		slide_off = clampf(slide_off - float(target.x - piece_pos.x), -1.5, 1.5)
 		piece_pos = target
 		piece_rot = new_rot
+		# 도형은 이미 돌아갔고, 눈에 보이는 각도만 뒤에서 따라 붙는다.
+		spin_off = -float(dir) * PI * 0.5
+		spin_pop = 1.0
+		Sfx.play("rotate", 1.0 + 0.06 * dir)
 		return
 
 
@@ -1132,6 +1564,9 @@ func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
 func _kill_player() -> void:
 	if _shutter_on():
 		return  # 셔터 연출 중엔 아무도 죽지 않는다
+	if player and player.alive:
+		shake(SHAKE_MAX)
+		GameState.haptic(1.0, 0.45)
 	Sfx.play("death")
 	player.die()
 	playing = false
@@ -1221,6 +1656,7 @@ func _draw() -> void:
 		draw_line(Vector2(x * CELL, top), Vector2(x * CELL, h), Color(1, 1, 1, 0.04))
 	for y in range(int(floor(top / CELL)) + 1, rows):
 		draw_line(Vector2(0, y * CELL), Vector2(w, y * CELL), Color(1, 1, 1, 0.04))
+	_draw_record_line(w)
 	var show_hidden := mode == Mode.ENDLESS
 	for c in grid:
 		if show_hidden or c.y >= 0:
@@ -1229,14 +1665,22 @@ func _draw() -> void:
 				_draw_ore(_cell_rect(c).get_center())
 			if cracked.has(c):
 				_draw_crack(c)
+	_draw_lock_flash()
 	for fx in break_fx:
 		var t: float = 1.0 - fx[1] / BREAK_FX_TIME
 		var r := _cell_rect(fx[0]).grow(-CELL * 0.5 * (1.0 - t))
 		draw_rect(r, Color(1.0, 1.0, 0.8, 0.7 * t))
+	_draw_row_flash(w)
+	_draw_trails()
 	_draw_loose()
 	if piece_type != "":
+		_draw_ghost()
 		_draw_piece()
+	_draw_shards()
+	_draw_dust()
+	_draw_rings()
 	_draw_ore_fx()
+	_draw_banner(w, top)
 	# 우물 테두리는 UI 키트와 같은 두꺼운 잉크 선 — 하늘 배경에 "뚫린 구덩이"로 보이게.
 	var border := UiKit.INK
 	var bw := 7.0
@@ -1250,8 +1694,67 @@ func _draw() -> void:
 		draw_line(Vector2(w + 2, top), Vector2(w + 2, wall_bottom), border, bw)
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
 		_draw_lava(w)
+		_draw_near_heat(w)
+	_draw_rush_glow(w, top, h)
 	if shutter_row > 0:
 		_draw_shutter(w)
+
+
+## 자기 최고 기록 높이에 걸리는 금색 점선. 무한의 계단에 "눈에 보이는 목표"를
+## 하나 주고, 넘어서는 순간 사라진다 (그때부터는 계기판의 기록 갱신 줄이 맡는다).
+func _draw_record_line(w: float) -> void:
+	var best := GameState.best_height
+	if mode != Mode.ENDLESS or best <= 0 or best_height >= best:
+		return
+	var y := rows * CELL - best * CELL
+	var col := Color(1.0, 0.86, 0.38, 0.5)
+	var x := 0.0
+	while x < w:
+		draw_line(Vector2(x, y), Vector2(minf(x + 22.0, w), y), col, 4.0)
+		x += 38.0
+	draw_string(ThemeDB.fallback_font, Vector2(10.0, y - 12.0),
+			tr("FX_BEST_LINE").format({"n": best}), HORIZONTAL_ALIGNMENT_LEFT, -1, 26,
+			Color(1.0, 0.86, 0.38, 0.78))
+
+
+## 발끝 세이브: 용암에 바짝 붙어 있는 동안 수면 위로 열기가 번진다 — 골드러시
+## 게이지가 차고 있다는 신호이자 "지금 죽기 직전"이라는 경고를 겸한다.
+func _draw_near_heat(w: float) -> void:
+	if rush_near <= 0.0 or rush_on():
+		return
+	var pulse := 0.55 + 0.45 * sin(lava_phase * 13.0)
+	var band := CELL * 0.7
+	for i in 4:
+		var a := rush_near * pulse * 0.26 * (1.0 - float(i) / 4.0)
+		draw_rect(Rect2(0.0, lava_y - band * (i + 1), w, band), Color(1.0, 0.42, 0.22, a))
+
+
+## 골드러시가 도는 동안 우물이 금빛으로 달아오른다. 어두운 구덩이에 반투명
+## 금색을 넓게 깔면 잿빛 얼룩으로 보이므로, 벽 안쪽 금선과 좁은 띠로만 칠한다
+## (발동 순간의 섬광만 예외로 화면을 통째로 덮는다).
+func _draw_rush_glow(w: float, top: float, h: float) -> void:
+	if not rush_on() and rush_flash <= 0.0:
+		return
+	var bottom := h + (view_below * 2.0 if mode == Mode.ENDLESS else 0.0)
+	if rush_flash > 0.0:
+		var f := rush_flash / RUSH_FLASH_TIME
+		draw_rect(Rect2(0.0, top, w, bottom - top), Color(1.0, 0.88, 0.45, 0.42 * f))
+	if not rush_on():
+		return
+	var fade := clampf(rush_time / 1.2, 0.0, 1.0)  # 끝나기 직전엔 잦아든다
+	var pulse := (0.62 + 0.38 * sin(lava_phase * 9.0)) * fade
+	draw_line(Vector2(8.0, top), Vector2(8.0, bottom),
+			Color(1.0, 0.84, 0.34, 0.85 * pulse), 16.0)
+	draw_line(Vector2(w - 8.0, top), Vector2(w - 8.0, bottom),
+			Color(1.0, 0.84, 0.34, 0.85 * pulse), 16.0)
+	# 금가루가 우물 위쪽에서 천천히 내려앉는다 — 화면이 "쏟아지고 있다"고 말한다.
+	var span := bottom - top
+	for i in 26:
+		var seed := float(i) * 37.7
+		var x := fposmod(seed * 13.1, w - 20.0) + 10.0
+		var y := top + fposmod(seed * 7.3 + lava_phase * (90.0 + float(i % 5) * 26.0), span)
+		var r := 2.5 + float(i % 3)
+		draw_circle(Vector2(x, y), r, Color(1.0, 0.9, 0.5, 0.75 * fade))
 
 
 ## Level-clear curtain: slatted steel rolling down over the well, lit from
@@ -1294,6 +1797,12 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
 		bot_col = bot_col.lerp(Color("2a3040"), t)
+	if rush_on():
+		# 골드러시 동안은 구덩이 자체가 달아오른다 — 벽 금선만으로는 10초가
+		# 시작됐는지 눈에 안 들어온다. 끝나기 직전 1.2초에 걸쳐 식는다.
+		var g := clampf(rush_time / 1.2, 0.0, 1.0)
+		top_col = top_col.lerp(Color("5c3f0e"), 0.62 * g)
+		bot_col = bot_col.lerp(Color("2e1e05"), 0.9 * g)
 	# 무한의 계단은 우물 바닥 아래(용암이 차오르는 어둠)까지 카메라에 들어온다 —
 	# 하늘 배경이 비쳐 우물이 떠 보이지 않게 바닥색으로 더 아래까지 깐다.
 	var floor_y := h + (view_below * 2.0 if mode == Mode.ENDLESS else 0.0)
@@ -1335,18 +1844,33 @@ func _draw_piece() -> void:
 		pulse = 0.5 + 0.5 * sin(land_timer * 16.0)
 		color = color.lightened(0.18 + 0.18 * pulse)
 	var cells := _cells(piece_type, piece_rot, piece_pos)
+	# 격자에는 이미 칸 단위로 박혀 있고, 눈에 보이는 것만 뒤에서 따라온다 —
+	# 가로 잔여 이동 · 회전 잔여 각도 · 착지 눌림을 변환 하나에 실어 그린다.
+	var pivot := Vector2.ZERO
+	for c: Vector2i in cells:
+		pivot += _cell_rect(c).get_center()
+	pivot /= float(maxi(cells.size(), 1))
+	var sq := land_squash * land_squash
+	var sc := Vector2(1.0 + 0.22 * sq, 1.0 - 0.26 * sq)
+	draw_set_transform_matrix(Transform2D(spin_off, sc, 0.0,
+			pivot + Vector2(slide_off * CELL, 0.0)))
 	for i in range(cells.size()):
 		var c: Vector2i = cells[i]
 		if mode == Mode.ENDLESS or c.y >= 0:
-			_draw_cell(c, color)
+			var p := Vector2(c) * CELL - pivot
+			_draw_block(p, color)
 			if i == piece_ore:
-				_draw_ore(_cell_rect(c).get_center(), color.a)
+				_draw_ore(p + Vector2(CELL, CELL) * 0.5, color.a)
 			if piece_state == PieceState.LANDED:
-				draw_rect(_cell_rect(c).grow(-2.0),
+				draw_rect(Rect2(p + Vector2(2.0, 2.0), Vector2(CELL - 4.0, CELL - 4.0)),
 						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
+			if spin_pop > 0.0:
+				draw_rect(Rect2(p, Vector2(CELL, CELL)),
+						Color(1.0, 1.0, 0.95, 0.5 * spin_pop), false, 3.0)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
 	if piece_state == PieceState.TRACKING:
 		var remain := ceili(_track_time() - track_timer)
-		var top_left := Vector2(piece_pos) * CELL
+		var top_left := Vector2(piece_pos) * CELL + Vector2(slide_off * CELL, 0.0)
 		draw_string(ThemeDB.fallback_font, top_left + Vector2(CELL * 1.6, CELL * 1.4),
 				str(remain), HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(1, 1, 1, 0.9))
 
@@ -1433,6 +1957,140 @@ func _draw_ore_fx() -> void:
 				HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(1.0, 0.86, 0.36, fade))
 
 
+## 격자에 박히는 순간의 흰 섬광 — "쿵" 소리에 그림을 붙인다.
+func _draw_lock_flash() -> void:
+	for e in lock_flash:
+		var t: float = 1.0 - float(e[1]) / LOCK_FLASH_TIME
+		for c: Vector2i in e[0]:
+			if mode == Mode.ENDLESS or c.y >= 0:
+				draw_rect(_cell_rect(c).grow(-1.0), Color(1.0, 1.0, 0.95, 0.55 * t))
+
+
+## 지워지는 줄: 흰 띠가 번쩍이며 얇아지고, 가운데 선이 좌우로 삐져나간다.
+func _draw_row_flash(w: float) -> void:
+	for e in row_flash:
+		var t: float = clampf(float(e[1]) / ROW_FLASH_TIME, 0.0, 1.0)
+		var y: float = float(e[0]) * CELL
+		var h := CELL * (1.0 - ease(t, 0.4))
+		var fade := 1.0 - t
+		draw_rect(Rect2(0.0, y + (CELL - h) * 0.5, w, h),
+				Color(1.0, 0.99, 0.9, 0.85 * fade))
+		draw_rect(Rect2(-CELL * 0.5 * t, y + CELL * 0.5 - 2.0,
+				w + CELL * t, 4.0), Color(1.0, 1.0, 1.0, fade))
+
+
+## 빠르게 내려온 자국. 지나온 칸에 블록 색 띠 + 가운데 흰 심지가 남는다.
+func _draw_trails() -> void:
+	for e in trails:
+		var t: float = clampf(float(e[3]) / TRAIL_TIME, 0.0, 1.0)
+		var col: Color = e[2]
+		var fade := (1.0 - t) * col.a
+		var swept: int = e[1]
+		for c: Vector2i in e[0]:
+			var x := float(c.x) * CELL
+			var y0 := float(c.y - swept) * CELL
+			var h := float(swept) * CELL
+			draw_rect(Rect2(x + CELL * 0.16, y0, CELL * 0.68, h),
+					Color(col.r, col.g, col.b, 0.18 * fade))
+			draw_rect(Rect2(x + CELL * 0.42, y0, CELL * 0.16, h),
+					Color(1.0, 0.98, 0.9, 0.4 * fade))
+
+
+## 착지 예상 자리. 어디에 떨어질지 보이면 조작이 붙는다 — 무한의 계단은 블록이
+## 제 갈 길로 떨어져 나가므로(loose) 그리지 않는다.
+func _draw_ghost() -> void:
+	if mode == Mode.ENDLESS or piece_state == PieceState.LANDED:
+		return
+	var p := piece_pos
+	var guard := 0
+	while guard < rows + 4 and not _piece_collides(piece_rot, p + Vector2i(0, 1), false):
+		p.y += 1
+		guard += 1
+	if p == piece_pos:
+		return
+	var col: Color = Board.COLORS[piece_type]
+	var off := Vector2(slide_off * CELL, 0.0)
+	for c: Vector2i in _cells(piece_type, piece_rot, p):
+		if c.y < 0:
+			continue
+		var r := _cell_rect(c).grow(-CELL * 0.13)
+		r.position += off
+		draw_rect(r, Color(col.r, col.g, col.b, 0.10))
+		draw_rect(r, Color(col.r, col.g, col.b, 0.5), false, 3.0)
+
+
+func _draw_dust() -> void:
+	for d in dust:
+		var t: float = clampf(float(d[2]) / float(d[3]), 0.0, 1.0)
+		var col: Color = d[5]
+		draw_circle(d[0], float(d[4]) * (0.6 + 1.6 * t),
+				Color(col.r, col.g, col.b, 0.45 * (1.0 - t)))
+
+
+func _draw_shards() -> void:
+	for sh in shards:
+		var t: float = clampf(float(sh[2]) / SHARD_TIME, 0.0, 1.0)
+		var sz: float = float(sh[4]) * (1.0 - 0.6 * t)
+		var col: Color = sh[3]
+		col.a = 1.0 - t
+		var u := Vector2(cos(sh[5]), sin(sh[5])) * sz
+		var v := Vector2(-u.y, u.x)
+		var at: Vector2 = sh[0]
+		draw_colored_polygon(PackedVector2Array([at + u, at + v, at - u, at - v]), col)
+
+
+## 착지 충격 링 — 바닥에 납작하게 퍼진다(빛은 위에서 온다는 규칙과 같은 방향).
+func _draw_rings() -> void:
+	for e in rings:
+		var t: float = clampf(float(e[1]) / RING_TIME, 0.0, 1.0)
+		var col: Color = e[3]
+		col.a = 0.7 * (1.0 - t)
+		var rr: float = float(e[2]) * (0.35 + 1.3 * ease(t, 0.3))
+		var pts := PackedVector2Array()
+		for i in range(25):
+			var ang := TAU * i / 24.0
+			pts.append((e[0] as Vector2) + Vector2(cos(ang) * rr, sin(ang) * rr * 0.34))
+		draw_polyline(pts, col, maxf(2.0, 7.0 * (1.0 - t)))
+
+
+## 멀티 라인/콤보 배너 — 지운 줄 자리에서 크게 튀어 올라 사라진다.
+func _draw_banner(w: float, top: float) -> void:
+	if banner_age >= BANNER_TIME or (banner_key == "" and combo < 2):
+		return
+	var t := banner_age / BANNER_TIME
+	var pop := 1.0 + 0.45 * (1.0 - ease(minf(t * 4.5, 1.0), 0.25))
+	var fade := 1.0 - ease(t, 3.0)
+	var font := ThemeDB.fallback_font
+	var y := clampf(banner_y - 44.0 * t, top + CELL * 1.4, rows * CELL - CELL)
+	if banner_key != "":
+		var text := tr(banner_key)
+		var fs := int(70 * pop)
+		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var at := Vector2((w - tw) * 0.5, y)
+		draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 10,
+				Color(0.17, 0.16, 0.20, fade))
+		draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+				Color(1.0, 0.94, 0.62, fade))
+	if combo >= 2:
+		var ctext := tr("FX_COMBO").format({"n": combo})
+		var cw := font.get_string_size(ctext, HORIZONTAL_ALIGNMENT_LEFT, -1, 40).x
+		var cat := Vector2((w - cw) * 0.5, y + (56.0 if banner_key != "" else 0.0))
+		draw_string_outline(font, cat, ctext, HORIZONTAL_ALIGNMENT_LEFT, -1, 40, 8,
+				Color(0.17, 0.16, 0.20, fade))
+		draw_string(font, cat, ctext, HORIZONTAL_ALIGNMENT_LEFT, -1, 40,
+				Color(0.62, 0.92, 1.0, fade))
+
+
+## 블록 한 칸이 부서졌다: 파편 + 먼지 + 짧은 흔들림.
+func _break_fx_at(c: Vector2i, col: Color) -> void:
+	var at := _cell_rect(c).get_center()
+	_spawn_shards(at, col, 6)
+	_spawn_dust(at, 4, 0.7)
+	shake(6.0)
+	_freeze(0.03)
+	GameState.haptic(0.35, 0.05)
+
+
 func _draw_crack(c: Vector2i) -> void:
 	var p := Vector2(c) * CELL
 	var col := Color(1.0, 0.96, 0.84, 0.65)
@@ -1442,6 +2100,17 @@ func _draw_crack(c: Vector2i) -> void:
 	draw_polyline(PackedVector2Array([
 		p + Vector2(48, 12), p + Vector2(36, 30), p + Vector2(50, 44),
 	]), col, 2.0)
+
+
+## 지금 떨어지는 블록의 한가운데 (보드 로컬 좌표) — HUD 연출이 과녁으로 쓴다.
+func piece_center() -> Vector2:
+	if piece_type == "":
+		return Vector2(COLS * CELL * 0.5, 0.0)
+	var cells := _cells(piece_type, piece_rot, piece_pos)
+	var mid := Vector2.ZERO
+	for c: Vector2i in cells:
+		mid += _cell_rect(c).get_center()
+	return mid / float(maxi(cells.size(), 1))
 
 
 ## 캐릭터별 알파벳 키캡. 캡 색은 그 냥이의 몸/귀 색을 따르고, 캡 위에는

@@ -124,7 +124,7 @@ func _ready() -> void:
 				_view_cat(inst, "mycat")
 				inst._customizer._cur = 5  # 눈 줄 — 모양+색을 한 패널에서 확인
 				inst._customizer._refresh()
-				# 잠긴 파츠 미리보기 — 눈 3번(잠금)을 입혀 본 상태
+				# 잠긴 파츠를 누른 상태 — 입혀 보여 주면서 값을 묻는 구매 확인창
 				inst._customizer._pick("eyes", 3))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
@@ -167,12 +167,44 @@ func _ready() -> void:
 	# 골드 블록: 스택에 박힌 금 · 떨어지는 블록에 실린 금 · 터지는 순간의 연출.
 	await _capture("res://core/scenes/main.tscn", OUT + "/classic_ore.png",
 			func(inst: Node) -> void: _seed_ore(inst.get_node("Board")))
+	# 타격감 연출: 착지 예상 자리(고스트) · 낙하 잔상 · 착지 먼지/충격 링 ·
+	# 지워지는 줄의 섬광과 파편 · 멀티 라인 배너.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_impact.png",
+			func(inst: Node) -> void: _seed_impact(inst.get_node("Board")))
+	# 셔터가 스택에 내려앉는 마지막 한 방: 남은 블록이 통째로 파편이 된다.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_shutter_blast.png",
+			func(inst: Node) -> void:
+				var b: Node = inst.get_node("Board")
+				b._classic_setup_level(4)
+				b.level_lines = Board.classic_quota(4)
+				for y in range(14, 20):
+					for x in range(EscapeBoard.COLS):
+						if (x + y) % 4 != 0:
+							b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
+				inst._on_classic_level_started(4, Board.classic_quota(4), b.level_garbage)
+				b._classic_start_shutter()
+				for i in range(60):
+					b._update_shutter(1.0)
+					if b.shutter_phase != EscapeBoard.Shutter.CLOSING:
+						break
+				b._age_fx(0.12)
+				b.set_process(false)
+				b.queue_redraw())
+	# 머리 위에서 블록이 내려오는 중 — 고양이가 움츠리고 땀을 흘린다 + NEXT 핸드오프.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_scare.png",
+			func(inst: Node) -> void: _seed_scare(inst))
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
 			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_hud.png",
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
+	# 골드러시: 게이지가 반쯤 찬 평상시 · 발동 중(금빛 우물 + 금이 박힌 스택) ·
+	# 기록선(자기 최고 높이에 걸린 금색 점선).
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_rush_gauge.png",
+			func(inst: Node) -> void: _seed_rush(inst, false))
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_rush.png",
+			func(inst: Node) -> void: _seed_rush(inst, true))
 	await _capture("res://core/scenes/main.tscn", OUT + "/pause_settings.png",
 			func(inst: Node) -> void:
 				inst.settings_panel.open(false))
@@ -205,6 +237,10 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_rush.png",
+			func(inst: Node) -> void:
+				inst.get_node("TouchControls").visible = true
+				_seed_rush(inst, true))
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
@@ -231,6 +267,28 @@ func _ready() -> void:
 
 ## 골드 블록 캡처용 상태: 쌓인 금 몇 칸 + 지금 떨어지는 블록에 실린 금 +
 ## 방금 터진 금의 튐 연출.
+## 무한의 계단 골드러시 한 컷. `on`이면 발동 중(금빛 우물 · 금이 박힌 스택),
+## 아니면 게이지가 반쯤 찬 평상시 + 기록선이 걸린 모습이다.
+func _seed_rush(inst: Node, on: bool) -> void:
+	var b: Node = inst.get_node("Board")
+	GameState.best_height = 26
+	EventBus.height_changed.emit(11)
+	for y in range(15, 20):
+		for x in range(EscapeBoard.COLS):
+			if (x + y) % 3 != 0:
+				b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
+				if (x * 3 + y) % 5 == 0 and on:
+					b.ore[Vector2i(x, y)] = true
+	if on:
+		b._rush_gain(EscapeBoard.RUSH_MAX)
+		b._rush_step(EscapeBoard.RUSH_TIME * 0.4, b.lava_y - 400.0)
+		b.rush_flash = 0.0  # 발동 섬광은 지나갔다 — 금빛 우물만 남는다
+	else:
+		b._rush_gain(EscapeBoard.RUSH_MAX * 0.55)
+		b.rush_near = 0.8
+	b.queue_redraw()
+
+
 func _seed_ore(b: Node) -> void:
 	b._classic_setup_level(3)
 	for y in range(15, 20):
@@ -246,6 +304,61 @@ func _seed_ore(b: Node) -> void:
 	b.ore_fx.append([b._cell_rect(Vector2i(6, 13)).get_center(),
 			EscapeBoard.ORE_FX_TIME * 0.25, EscapeBoard.ORE_VALUE])
 	b.set_process(false)  # 튐 연출이 캡처 전에 늙어 사라지지 않게 정지시켜 둔다
+	b.queue_redraw()
+
+
+## 타격감 캡처용 상태: 방금 내리꽂힌 블록 하나(잔상·먼지·링·눌림)와, 그 아래에서
+## 지워지는 중인 두 줄(섬광·파편·배너). 연출이 캡처 전에 늙지 않게 판을 세워 둔다.
+func _seed_impact(b: Node) -> void:
+	b._classic_setup_level(3)
+	for y in range(14, 20):
+		for x in range(EscapeBoard.COLS):
+			if (x + y) % 5 != 0:
+				b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
+	b._spawn_piece()
+	b.piece_type = "T"
+	b.piece_rot = 0
+	b.piece_pos = Vector2i(3, 11)
+	b.piece_state = EscapeBoard.PieceState.FALLING
+	b.fall_from = 2
+	b.hard_drop_rows = 9
+	b._push_trail(9, 0.6)
+	b._land()
+	# 지워지는 중인 두 줄 + 배너.
+	for y in [17, 18]:
+		b.row_flash.append([y, 0.05])
+		for x in range(EscapeBoard.COLS):
+			b._spawn_shards(b._cell_rect(Vector2i(x, y)).get_center(),
+					Board.COLORS[Board.PIECES[(x + y) % 7]], 3)
+	b.combo = 3
+	b.banner_y = 17.5 * EscapeBoard.CELL
+	b.banner_key = "FX_LINE_2"
+	b.banner_age = 0.12
+	b.hitstop = 0.0
+	b.set_process(false)  # 연출이 캡처 전에 늙어 사라지지 않게 정지시켜 둔다
+	b.queue_redraw()
+
+
+## 고양이 머리 바로 위로 블록이 내려오는 순간 + NEXT 카드에서 날아오는 조각.
+func _seed_scare(inst: Node) -> void:
+	var b: Node = inst.get_node("Board")
+	b._classic_setup_level(2)
+	b._spawn_piece()
+	b.piece_type = "O"
+	b.piece_rot = 0
+	b.piece_state = EscapeBoard.PieceState.FALLING
+	var col := int(b.player.position.x / EscapeBoard.CELL)
+	b.piece_pos = Vector2i(clampi(col - 1, 0, EscapeBoard.COLS - 2), 15)
+	b.player.scare = b.overhead_threat(b.player.rect())
+	b.player.queue_redraw()
+	inst._flyer_armed = true
+	inst._launch_handoff("O")
+	# 연출이 캡처 전에 늙어 사라지지 않게 판·조각·고양이를 그 자리에 세워 둔다.
+	inst.piece_flyer._flights[0][3] = 0.14
+	inst.piece_flyer.set_process(false)
+	inst.piece_flyer.queue_redraw()
+	b.set_process(false)
+	b.playing = false
 	b.queue_redraw()
 
 

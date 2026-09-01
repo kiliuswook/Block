@@ -8,7 +8,9 @@ const GOLD := Color(1.0, 0.85, 0.35)
 const UiKit := preload("res://core/scripts/ui_kit.gd")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const GOAL_METER := preload("res://core/scripts/goal_meter.gd")
+const RUSH_METER := preload("res://core/scripts/rush_meter.gd")
 const USER_HUD := preload("res://core/scripts/user_hud.gd")
+const PIECE_FLYER := preload("res://core/scripts/piece_flyer.gd")
 ## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
 const HUD_COL_W := 300.0
 const HUD_CARD_PAD := Vector2(22.0, 18.0)
@@ -44,11 +46,14 @@ var record_broken := false
 var height_tween: Tween
 var record_tween: Tween
 var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
+var rush_meter: Control  # endless: the gold-rush gauge
 # Gold already paid out this run.
 var gold_awarded := 0
 var xp_awarded := 0  # 이 판이 이미 지급한 계정 경험치 (중복 지급 방지)
 var settings_panel: Control  # doubles as the pause menu (volume sliders)
 var user_hud: CanvasLayer  # 타이틀과 같은 자리·같은 카드의 유저 정보 HUD
+var piece_flyer: Control  # NEXT 카드 → 우물로 넘어오는 블록 조각 연출
+var _flyer_armed := false  # 판을 열 때의 첫 블록은 예고된 적이 없다
 ## 계기판 뒤에 깔리는 흰 카드(들)를 그리는 레이어와, 카드가 감쌀 노드 묶음.
 var hud_cards: Control
 var hud_groups: Array = []
@@ -61,6 +66,7 @@ func _ready() -> void:
 	EventBus.lines_changed.connect(func(v: int) -> void: lines_label.text = str(v))
 	EventBus.height_changed.connect(_on_height_changed)
 	EventBus.ore_collected.connect(_on_ore_collected)
+	EventBus.next_piece_changed.connect(_on_next_piece)
 	EventBus.game_started.connect(_on_game_started)
 	EventBus.game_over.connect(_on_game_over)
 	death_popup.restart_pressed.connect(_restart)
@@ -93,6 +99,8 @@ func _ready() -> void:
 	if endless:
 		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
 		goal_label.visible = false
+		_build_rush_meter()
+		EventBus.goldrush_changed.connect(_on_goldrush)
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
 	if get_viewport_rect().size.y > get_viewport_rect().size.x:
@@ -100,6 +108,9 @@ func _ready() -> void:
 		# and the touch buttons explain themselves — drop the text everywhere.
 		help_label.visible = false
 	_build_user_hud()
+	piece_flyer = PIECE_FLYER.new()
+	$PopupLayer.add_child(piece_flyer)
+	$PopupLayer.move_child(piece_flyer, 0)  # 결과 팝업·설정 아래에 깔린다
 	settings_panel = SETTINGS_PANEL.new()
 	settings_panel.closed.connect(_on_settings_closed)
 	$PopupLayer.add_child(settings_panel)
@@ -294,6 +305,30 @@ func _on_game_over() -> void:
 			death_popup.open(stats, was_record, earned, "", xp_line, reward))
 
 
+## NEXT 카드에 예고돼 있던 블록이 방금 우물로 들어왔다: 카드에서 조각 하나가
+## 떨어져 나와 우물 위 그 자리로 날아간다. 신호가 오는 시점에는 새 블록의
+## 자리(piece_pos)가 아직 안 정해져 있어서 한 프레임 미룬다.
+func _on_next_piece(_next: String) -> void:
+	if piece_flyer == null or not is_instance_valid(board):
+		return
+	var moved: String = board.piece_type
+	if moved == "" or not _flyer_armed:
+		_flyer_armed = true  # 판을 열 때의 첫 블록은 예고된 적이 없다
+		return
+	_launch_handoff.call_deferred(moved)
+
+
+## 위 신호의 실제 연출 — NEXT 카드 한가운데에서 그 블록이 선 자리까지.
+func _launch_handoff(type: String) -> void:
+	if piece_flyer == null or not is_instance_valid(board) or not board.playing:
+		return
+	var card: Control = $UI/NextPreview
+	if not card.visible:
+		return
+	piece_flyer.launch(type, card.get_global_rect().get_center(),
+			board.get_global_transform_with_canvas() * board.piece_center())
+
+
 ## 골드 블록이 터졌다: 그 자리에서 코인 한 닢이 좌상단 지갑으로 빨려 들어가고
 ## 숫자가 오른다. 지갑은 이미 board._bank_ore()가 채워 뒀으니 여기는 연출만 맡는다.
 ## 세로 인게임은 플레이 중 HUD를 숨겨 두므로(터치 메뉴 자리) 보드 쪽 연출만 남는다.
@@ -403,6 +438,11 @@ func _layout_stat_column() -> void:
 		val.size = Vector2(HUD_COL_W, ceilf(fs * 1.25))
 		val.pivot_offset = val.size / 2.0
 		y += val.size.y + HUD_ROW_GAP
+		if val == height_label and rush_meter != null:
+			# 골드러시 게이지는 큰 층수 바로 아래 — 이 판의 리듬을 읽는 줄이다.
+			rush_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 8.0)
+			rush_meter.size = Vector2(HUD_COL_W - 40.0, 50.0)
+			y = rush_meter.position.y + rush_meter.size.y + HUD_ROW_GAP
 		if val == lines_label and goal_meter != null:
 			# 타일 랙은 LINES 숫자에 딸린 줄이라 바로 아래 붙인다.
 			goal_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 10.0)
@@ -430,7 +470,8 @@ func _build_hud_cards() -> void:
 	else:
 		var col: Array = [$UI/NextTitle, $UI/NextPreview, score_title, score_label,
 				level_title, level_label, lines_title, lines_label, height_title,
-				height_label, best_title, best_label, goal_label, goal_meter]
+				height_label, best_title, best_label, goal_label, goal_meter,
+				rush_meter]
 		# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
 		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
 	if help_label.visible and help_label.text != "":
@@ -448,6 +489,10 @@ func _build_hud_cards() -> void:
 func _build_hud_cards_portrait() -> void:
 	hud_groups.append({"nodes": [$UI/NextTitle, $UI/NextPreview], "w": 0.0})
 	hud_groups.append({"nodes": [height_title, height_label], "w": 0.0})
+	if rush_meter != null:
+		# 골드러시 게이지는 NEXT 카드 아래 — 우물(x 220~860) 왼쪽 여백이라
+		# 판을 가리지 않고, 엄지에서도 먼 자리다.
+		hud_groups.append({"nodes": [rush_meter], "w": 0.0})
 	# 오른쪽 열 — 우물(x 220~860) 바깥에 서므로 카드가 판을 가리지 않는다.
 	# 기록 갱신 줄(★ NEW RECORD!)은 열보다 넓어 카드에 넣지 않고 그대로 띄운다.
 	var right: Array = [best_title, best_label, score_title, score_label,
@@ -552,6 +597,7 @@ func _restart() -> void:
 	death_popup.close()
 	pause_label.visible = false
 	settings_panel.visible = false  # bypass close(): start_game resets pause
+	_flyer_armed = false
 	milestone_label.visible = false
 	board.start_game()
 
@@ -574,6 +620,8 @@ func _fit_board() -> void:
 	var s := minf(1.0, (bottom - top) / (board.rows * EscapeBoard.CELL))
 	board.scale = Vector2(s, s)
 	board.position = Vector2((vp.x - EscapeBoard.COLS * EscapeBoard.CELL * s) / 2.0, top)
+	# 흔들림은 이 자리를 기준으로 보드 노드를 민다 (무한은 카메라가 대신 흔들린다).
+	board.base_pos = board.position
 	if portrait:
 		# The tall well runs through the portrait help-line slot — drop it,
 		# the touch buttons are self-explanatory.
@@ -581,6 +629,23 @@ func _fit_board() -> void:
 
 
 # --- Classic level (arcade B-type) ----------------------------------------------
+
+
+## 골드러시 게이지. 가로 화면의 자리는 `_layout_stat_column()`이 큰 층수 바로
+## 아래로 잡고, 세로 화면만 여기서 따로 배치한다(NEXT 카드 아래 왼쪽 여백).
+func _build_rush_meter() -> void:
+	rush_meter = RUSH_METER.new()
+	$UI.add_child(rush_meter)
+	var vp := get_viewport_rect().size
+	if vp.y > vp.x:
+		rush_meter.position = Vector2(40.0, 292.0)
+		rush_meter.size = Vector2(196.0, 50.0)
+
+
+## 골드러시가 터진 순간에만 화면을 한 번 밝힌다 (게이지가 차는 동안은 조용히).
+func _on_goldrush(_gauge: float, time_left: float) -> void:
+	if time_left >= EscapeBoard.RUSH_TIME - 0.001:
+		_screen_flash(0.28)
 
 
 ## LINES goal as a rack of tiles. 가로 화면의 자리·크기는 `_layout_stat_column()`이

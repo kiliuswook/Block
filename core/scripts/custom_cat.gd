@@ -610,7 +610,7 @@ static func groups_all() -> Array[Dictionary]:
 	return _groups_all
 
 
-## 이 부위가 임시 파츠로 새로 생긴 자리인가 (기본 옵션까지 늘 열려 있다).
+## 이 부위가 임시 파츠로 새로 생긴 자리인가 (출처표에 출처 없이 오른다).
 static func _is_temp_part(key: String) -> bool:
 	for np in TempParts.NEW_PARTS:
 		if str(np.key) == key:
@@ -618,7 +618,8 @@ static func _is_temp_part(key: String) -> bool:
 	return false
 
 
-## [임시] 임시 파츠·임시 색은 해금 조건이 없다 — 출처표에 "상시 개방"으로 적는다.
+## [임시] 임시 파츠·임시 색은 빌려 온 냥이가 없다 — 출처표에 출처 없이 올린다.
+## (실제 해금은 골드 구매다 — GameState.part_unlocked 참조.)
 static func _mark_temp_open(out: Dictionary, part: Dictionary) -> void:
 	var key := str(part.key)
 	if part.get("type") == "color":
@@ -635,6 +636,27 @@ static func _mark_temp_open(out: Dictionary, part: Dictionary) -> void:
 			out[key][i] = []
 
 
+
+## 파츠 상점: 처음부터 열려 있는 옵션 index들 (부위 key별) — 백지 몸통(BLANK_CHAR)의
+## 기본값과 "없음"이다. 나머지는 전부 꾸미기 화면에서 골드로 사야 쓸 수 있다.
+static var _free_opts: Dictionary = {}
+
+
+static func free_options(key: String) -> Array:
+	if _free_opts.is_empty():
+		var base := char_selection("custom")  # 백지 몸통의 기본 선택
+		for part in parts_all():
+			var k := str(part.key)
+			var out: Array = []
+			if base.has(k):
+				out.append(int(base[k]))
+			if part.get("type") != "color":
+				var opts: Array = part.opts
+				for i in opts.size():
+					if str((opts[i] as Dictionary).id) == "none" and not i in out:
+						out.append(i)
+			_free_opts[k] = out
+	return _free_opts.get(key, [])
 
 static func get_part(key: String) -> Dictionary:
 	for p in parts_all():
@@ -825,7 +847,7 @@ static func my_sources() -> Dictionary:
 			for i in opts.size():
 				if str(opts[i].id) == "none":
 					out[key][i] = []
-		_mark_temp_open(out, part)  # [임시] 임시 파츠는 해금 없이 늘 열려 있다
+		_mark_temp_open(out, part)  # [임시] 임시 파츠는 빌려 온 냥이가 없다
 	for char_id: String in CHARS:
 		var def: Dictionary = CHARS[char_id]
 		_collect_sources(out, char_id, 0, def.parts)

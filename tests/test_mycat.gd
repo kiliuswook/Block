@@ -10,6 +10,10 @@ var failures := 0
 
 
 func _ready() -> void:
+	# 실기 세이브를 그대로 읽으므로, 판정에 쓰는 상태는 먼저 비워 고정한다.
+	GameState.save_enabled = false
+	GameState.cat_custom.erase("mycat")
+	GameState.parts_owned = {}
 	# 커스텀 슬롯 자체
 	_check(GameState.is_custom_cat("mycat"), "mycat is the custom slot")
 	_check(not GameState.is_custom_cat("cream"), "design cats are not custom slots")
@@ -28,27 +32,37 @@ func _ready() -> void:
 	# [임시 · 임시 파츠와 함께 되돌릴 것] 원래는 "디자인 냥이가 안 입은 파츠는
 	# 카탈로그에 없다"를 확인하던 자리다. 지금은 임시 파츠가 그 자리를 채우고
 	# 있고, 임시 파츠는 해금 없이 늘 열려 있어야 한다.
-	var heart_eyes := _idx("eyes", "heart")
-	_check(heart_eyes in CustomCat.my_options("eyes"), "임시 파츠가 카탈로그에 있다")
-	_check(GameState.part_unlocked("eyes", heart_eyes), "임시 파츠는 늘 열려 있다")
+	# [임시 · 임시 파츠와 함께 되돌릴 것] 임시 파츠도 카탈로그에 선다.
+	_check(_idx("eyes", "heart") in CustomCat.my_options("eyes"),
+			"임시 파츠가 카탈로그에 있다")
 	_check(CustomCat.option_sources("head", _idx("head", "none")) == [],
 			'"none" is always open')
 
-	# 해금 판정 — 각 옵션은 출처 냥이의 등급을 따라간다
-	_check(GameState.part_unlocked("eyes", _idx("eyes", "oval")),
-			"the free cat's parts are usable")
-	_check(GameState.part_unlocked("head", _idx("head", "none")),
-			'"none" needs no unlock')
-	_check(GameState.part_unlocked("eyes", _idx("eyes", "iris"))
-			== GameState.is_unlocked("black"),
-			"char02's eyes follow char02's recruitment")
-	# 선글라스는 char02의 2nd 파츠 = 등급 3부터.
-	_check(GameState.part_unlocked("face", _idx("face", "sunglasses"))
-			== (GameState.cat_grade("black") >= 3),
-			"tier parts need the owner's grade")
+	# 해금 판정 — 파츠는 기본적으로 잠겨 있고 골드로 산다
+	_check(GameState.part_free("eyes", _idx("eyes", "oval")),
+			"the blank body's own parts are free")
+	_check(GameState.part_free("head", _idx("head", "none")),
+			'"none" needs no purchase')
+	var iris := _idx("eyes", "iris")
+	_check(not GameState.part_unlocked("eyes", iris),
+			"every other part starts locked")
+	_check(GameState.part_price("eyes", iris)
+			== GameState.PART_PRICES[1], "the price follows the rarity")
+	_check(GameState.part_price("body", 2) == GameState.PART_COLOR_PRICE,
+			"colors have one flat price")
+	# 골드가 모자라면 지갑도 파츠도 그대로다.
+	GameState.gold = 0
+	_check(not GameState.buy_part("eyes", iris), "no gold, no part")
+	_check(not GameState.part_unlocked("eyes", iris), "the failed buy changed nothing")
+	GameState.gold = 10000
+	_check(GameState.buy_part("eyes", iris), "the part is bought")
+	_check(GameState.part_unlocked("eyes", iris), "and usable right away")
+	_check(GameState.gold == 10000 - GameState.PART_PRICES[1], "the gold is spent")
+	_check(GameState.part_price("eyes", iris) == 0, "an owned part costs nothing")
+	# 출처(어느 냥이의 파츠였나)는 안내 문구로만 남아 있다.
 	var hint := GameState.part_unlock_hint("face", _idx("face", "sunglasses"))
 	_check(str(hint.get("cat", "")) == "black" and int(hint.get("grade", 0)) == 3,
-			"the lock hint names the cat and the grade it opens at")
+			"the origin hint still names the cat")
 
 	# 백지 몸통이 실제로 조립되는가
 	var skin: Dictionary = GameState.cat_skin("mycat")
