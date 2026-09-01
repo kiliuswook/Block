@@ -353,11 +353,14 @@ func record_weekly(mode_key: String, v: int) -> bool:
 	return true
 
 
-func add_currency(add_gold: int) -> void:
+## persist=false는 저장을 미룬다 — 인게임 골드 블록처럼 한 판에 수십 번 들어올
+## 때 쓰고, 판이 끝날 때의 보상 지급이 어차피 한 번에 저장한다.
+func add_currency(add_gold: int, persist := true) -> void:
 	gold += add_gold
 	if add_gold > 0:
 		gold_earned += add_gold
-	save_game()
+	if persist:
+		save_game()
 
 
 func spend_gold(amount: int) -> bool:
@@ -795,7 +798,7 @@ func part_unlocked(key: String, idx: int) -> bool:
 func my_parts_progress() -> Vector2i:
 	var open := 0
 	var total := 0
-	for part in CustomCat.PARTS:
+	for part in CustomCat.parts_all():
 		var key := str(part.key)
 		for i: int in CustomCat.my_options(key):
 			total += 1

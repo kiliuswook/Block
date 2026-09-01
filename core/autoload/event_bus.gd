@@ -15,3 +15,5 @@ signal keycap_collected(cat_id: String, letter: String, count: int)  # 캐릭터
 signal classic_level_started(level: int, quota: int, garbage: int)
 signal classic_level_progress(cleared: int, quota: int)
 signal classic_level_cleared(level: int, bonus: int)
+# 골드 블록 한 칸이 터져 지갑에 들어갔다 (at = 보드 로컬 좌표) — HUD 연출용.
+signal ore_collected(amount: int, at: Vector2)

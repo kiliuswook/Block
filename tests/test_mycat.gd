@@ -24,8 +24,13 @@ func _ready() -> void:
 	_check(not src.is_empty(), "part sources are built")
 	_check(_idx("eyes", "oval") in CustomCat.my_options("eyes"),
 			"char01's eyes are in the catalog")
-	_check(not (_idx("eyes", "heart") in CustomCat.my_options("eyes")),
-			"parts no design cat wears stay out of the catalog")
+	_check(_idx("eyes", "nosuch") < 0, "unknown option ids are not in the catalog")
+	# [임시 · 임시 파츠와 함께 되돌릴 것] 원래는 "디자인 냥이가 안 입은 파츠는
+	# 카탈로그에 없다"를 확인하던 자리다. 지금은 임시 파츠가 그 자리를 채우고
+	# 있고, 임시 파츠는 해금 없이 늘 열려 있어야 한다.
+	var heart_eyes := _idx("eyes", "heart")
+	_check(heart_eyes in CustomCat.my_options("eyes"), "임시 파츠가 카탈로그에 있다")
+	_check(GameState.part_unlocked("eyes", heart_eyes), "임시 파츠는 늘 열려 있다")
 	_check(CustomCat.option_sources("head", _idx("head", "none")) == [],
 			'"none" is always open')
 

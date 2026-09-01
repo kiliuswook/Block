@@ -7,7 +7,7 @@ var _ok := true
 
 
 func _ready() -> void:
-	GameState.persist = false
+	GameState.save_enabled = false
 	_check(GameState.CATS.size() == 31, "냥이 30종 + 커스텀 슬롯 1 = %d" % GameState.CATS.size())
 	_check(CustomCat.all_chars().size() == 30, "캐릭터 정의 30종")
 	for cat in GameState.CATS:

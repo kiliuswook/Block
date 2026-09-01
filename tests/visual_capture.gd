@@ -164,6 +164,9 @@ func _ready() -> void:
 				b._classic_start_shutter()
 				for i in range(12):
 					b._update_shutter(1.0))
+	# 골드 블록: 스택에 박힌 금 · 떨어지는 블록에 실린 금 · 터지는 순간의 연출.
+	await _capture("res://core/scenes/main.tscn", OUT + "/classic_ore.png",
+			func(inst: Node) -> void: _seed_ore(inst.get_node("Board")))
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
@@ -205,6 +208,10 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic_ore.png",
+			func(inst: Node) -> void:
+				inst.get_node("TouchControls").visible = true
+				_seed_ore(inst.get_node("Board")))
 	# 결과 화면 — 세로에서는 유저 HUD가 여기서 처음 뜬다 (코인이 날아갈 과녁).
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_death_popup.png",
@@ -220,6 +227,26 @@ func _ready() -> void:
 						{"gold": 87, "gold_from": GameState.gold - 87,
 						"xp": 56, "xp_from": maxi(GameState.xp - 56, 0)}))
 	get_tree().quit()
+
+
+## 골드 블록 캡처용 상태: 쌓인 금 몇 칸 + 지금 떨어지는 블록에 실린 금 +
+## 방금 터진 금의 튐 연출.
+func _seed_ore(b: Node) -> void:
+	b._classic_setup_level(3)
+	for y in range(15, 20):
+		for x in range(EscapeBoard.COLS):
+			if (x + y) % 3 != 0:
+				b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
+	b.ore[Vector2i(2, 17)] = true
+	b.ore[Vector2i(7, 19)] = true
+	b.ore[Vector2i(4, 15)] = true
+	b._spawn_piece()
+	b.piece_pos = Vector2i(3, 6)
+	b.piece_ore = 1
+	b.ore_fx.append([b._cell_rect(Vector2i(6, 13)).get_center(),
+			EscapeBoard.ORE_FX_TIME * 0.25, EscapeBoard.ORE_VALUE])
+	b.set_process(false)  # 튐 연출이 캡처 전에 늙어 사라지지 않게 정지시켜 둔다
+	b.queue_redraw()
 
 
 ## 캐릭터 페이지를 열고 그 냥이를 본문에 펼친다.

@@ -12,6 +12,8 @@ extends RefCounted
 
 ## 시트 파츠 배치표 — 나만의 캐릭터가 어떤 레이어를 빌릴 수 있는지 확인한다.
 const CatLayouts := preload("res://core/scripts/cat_layouts.gd")
+## [임시 · 진짜 파츠 아트가 나오면 제거] 부위마다 5~6개씩 더 얹은 임시 파츠 카탈로그.
+const TempParts := preload("res://core/scripts/temp_parts.gd")
 
 const RARITY_NAMES: Array[String] = ["CAT_RARITY_0", "CAT_RARITY_1",
 		"CAT_RARITY_2", "CAT_RARITY_3"]
@@ -545,8 +547,97 @@ static func mix_tints(parts: Dictionary) -> Dictionary:
 	return out
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# [임시 · temp_parts.gd와 함께 제거] 정식 카탈로그 + 임시 파츠
+# 임시 옵션·임시 색은 기존 목록 **뒤에** 붙는다 — 저장된 index가 밀리지 않는다.
+# 제거할 때: parts_all()/groups_all() 호출부를 PARTS/GROUPS로 되돌리면 된다.
+# ══════════════════════════════════════════════════════════════════════════════
+
+static var _parts_all: Array[Dictionary] = []
+static var _groups_all: Array[Dictionary] = []
+
+
+## 커스터마이저가 실제로 늘어놓는 부위 목록 = PARTS + 임시 파츠.
+static func parts_all() -> Array[Dictionary]:
+	if not _parts_all.is_empty():
+		return _parts_all
+	var out: Array[Dictionary] = []
+	for part in PARTS:
+		var p: Dictionary = part.duplicate(true)
+		var key := str(p.key)
+		if p.get("type") == "color":
+			if TempParts.COLORS.has(key):
+				var cols: Array = (p.cols as Array).duplicate()
+				for hex: String in (TempParts.COLORS[key] as Array):
+					cols.append(Color(hex))
+				p["cols"] = cols
+		elif TempParts.STYLES.has(key):
+			var opts: Array = (p.opts as Array).duplicate(true)
+			for opt: Dictionary in (TempParts.STYLES[key] as Array):
+				opts.append(opt.duplicate(true))
+			p["opts"] = opts
+		out.append(p)
+	# 정식 카탈로그에 아예 없던 부위 (목 소품 · 코 모양).
+	for np in TempParts.NEW_PARTS:
+		var p: Dictionary = np.duplicate(true)
+		var opts: Array = (p.base as Array).duplicate(true)
+		p.erase("base")
+		for opt: Dictionary in (TempParts.STYLES.get(str(p.key), []) as Array):
+			opts.append(opt.duplicate(true))
+		p["opts"] = opts
+		out.append(p)
+	_parts_all = out
+	return _parts_all
+
+
+## 커스터마이저 부위 묶음 = GROUPS + 임시 부위 자리.
+static func groups_all() -> Array[Dictionary]:
+	if not _groups_all.is_empty():
+		return _groups_all
+	var out: Array[Dictionary] = []
+	for g in GROUPS:
+		var d: Dictionary = g.duplicate(true)
+		# 코 모양은 코 색과 같은 묶음에 앉힌다.
+		if str(d.key) == "g_nose":
+			(d.parts as Array).append("nose")
+		out.append(d)
+		for ex in TempParts.GROUPS_EXTRA:
+			if str(ex.get("after", "")) == str(d.key):
+				var e: Dictionary = ex.duplicate(true)
+				e.erase("after")
+				out.append(e)
+	_groups_all = out
+	return _groups_all
+
+
+## 이 부위가 임시 파츠로 새로 생긴 자리인가 (기본 옵션까지 늘 열려 있다).
+static func _is_temp_part(key: String) -> bool:
+	for np in TempParts.NEW_PARTS:
+		if str(np.key) == key:
+			return true
+	return false
+
+
+## [임시] 임시 파츠·임시 색은 해금 조건이 없다 — 출처표에 "상시 개방"으로 적는다.
+static func _mark_temp_open(out: Dictionary, part: Dictionary) -> void:
+	var key := str(part.key)
+	if part.get("type") == "color":
+		var base := 0
+		for o in PARTS:
+			if str(o.key) == key:
+				base = (o.cols as Array).size()
+		for i in range(base, (part.cols as Array).size()):
+			out[key][i] = []
+		return
+	var opts: Array = part.opts
+	for i in opts.size():
+		if _is_temp_part(key) or TempParts.owns(key, str(opts[i].id)):
+			out[key][i] = []
+
+
+
 static func get_part(key: String) -> Dictionary:
-	for p in PARTS:
+	for p in parts_all():
 		if p.key == key:
 			return p
 	return {}
@@ -593,13 +684,13 @@ static func char_parts(char_id: String, tier := TIER_MAX) -> Dictionary:
 ## 한국어로 박혀 있어 번역이 안 되므로, 번역 키가 있는 부위 이름(CAT_PART_*)만 준다.
 static func tier_gain_names(char_id: String, tier: int) -> Array[String]:
 	var out: Array[String] = []
-	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
+	var def: Dictionary = all_chars().get(char_id, BLANK_CHAR)
 	var tiers: Array = def.tiers
 	if tier < 0 or tier >= tiers.size():
 		return out
 	var gained: Dictionary = tiers[tier]
 	for bundle_key: String in gained:
-		for part in PARTS:
+		for part in parts_all():
 			if _parts_key(str(part.key)) != bundle_key or part.get("type") == "color":
 				continue
 			var nm := str(part.name)
@@ -613,7 +704,7 @@ static func tier_gain_names(char_id: String, tier: int) -> Array[String]:
 static func char_selection(char_id: String, tier := TIER_MAX) -> Dictionary:
 	var parts := char_parts(char_id, tier)
 	var sel := {}
-	for part in PARTS:
+	for part in parts_all():
 		var key := str(part.key)
 		var want: Variant = parts.get(_parts_key(key))
 		if want == null:
@@ -681,7 +772,9 @@ static func build_skin(char_id: String, tier: int, sel: Dictionary) -> Dictionar
 	var skin := skin_from_parts(parts)
 	# 디자인 냥이가 아니면(= 나만의 캐릭터, 그리고 아직 시트가 없는 임시 캐릭터)
 	# 시트 파츠 그림을 직접 조립해 그린다.
-	if not CHARS.has(char_id):
+	# [임시] 몸 실루엣을 바꾸는 임시 파츠(귀 모양)를 골랐으면 시트 조립을 포기하고
+	# 코드 렌더러에 맡긴다 — 시트에는 그 실루엣 그림이 없다.
+	if not CHARS.has(char_id) and not TempParts.forces_code_render(parts):
 		skin["mix"] = mix_of(parts)
 		skin["tints"] = mix_tints(parts)
 	return skin
@@ -723,7 +816,7 @@ static func my_sources() -> Dictionary:
 	if not _sources.is_empty():
 		return _sources
 	var out := {}
-	for part in PARTS:
+	for part in parts_all():
 		var key := str(part.key)
 		out[key] = {}
 		# "없음"은 어느 냥이의 것도 아니다 — 늘 고를 수 있어야 원상복구가 된다.
@@ -732,6 +825,7 @@ static func my_sources() -> Dictionary:
 			for i in opts.size():
 				if str(opts[i].id) == "none":
 					out[key][i] = []
+		_mark_temp_open(out, part)  # [임시] 임시 파츠는 해금 없이 늘 열려 있다
 	for char_id: String in CHARS:
 		var def: Dictionary = CHARS[char_id]
 		_collect_sources(out, char_id, 0, def.parts)
@@ -745,7 +839,7 @@ static func my_sources() -> Dictionary:
 ## 파츠 묶음 하나(기본 파츠 또는 해금 단계 하나)를 출처표에 적는다.
 static func _collect_sources(out: Dictionary, char_id: String, tier: int,
 		parts: Dictionary) -> void:
-	for part in PARTS:
+	for part in parts_all():
 		var key := str(part.key)
 		var want: Variant = parts.get(_parts_key(key))
 		if want == null:

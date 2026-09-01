@@ -479,6 +479,90 @@ func _ready() -> void:
 			"endless: shove moved it by the push-stat cells")
 	b6.loose.clear()
 
+	# --- 골드 블록 ------------------------------------------------------------
+	# 직접 깨면 제값, 셔터가 쓸어 가면 절반. 회전해도 금은 같은 칸에 붙어 있다.
+	GameState.mode = GameState.MODE_CLASSIC
+	var b7: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p7: Node2D = load("res://core/scripts/player.gd").new()
+	p7.name = "Player"
+	b7.add_child(p7)
+	add_child(b7)
+	b7.start_game()
+	b7.grid.clear()
+	b7.ore.clear()
+	b7.loose.clear()
+	b7.ore_gold = 0
+
+	# 골드 블록은 한 방에 터지고 제값을 준다 (일반 블록은 두 번 쳐야 한다).
+	var gold0: int = GameState.gold
+	var oc := Vector2i(4, 10)
+	b7.grid[oc] = "T"
+	b7.ore[oc] = true
+	var oprobe := Rect2(4 * c + 30, 10 * c + 30, 10, 10)
+	_check(b7.break_cell_in_rect(oprobe), "ore: the hit registers")
+	_check(not b7.grid.has(oc), "ore: one hit destroys a gold block")
+	_check(not b7.ore.has(oc), "ore: the gold is taken off the field")
+	_check(GameState.gold == gold0 + EscapeBoard.ORE_VALUE, "ore: breaking pays full value")
+	_check(b7.ore_gold == EscapeBoard.ORE_VALUE, "ore: the run tally counts it")
+
+	# 줄로 지운 금도 제값 — 지우면 손해가 되면 안 된다.
+	gold0 = GameState.gold
+	for x in range(EscapeBoard.COLS):
+		b7.grid[Vector2i(x, b7.rows - 1)] = "O"
+	b7.ore[Vector2i(2, b7.rows - 1)] = true
+	_check(b7._clear_lines() == 1, "ore: the row clears")
+	_check(GameState.gold == gold0 + EscapeBoard.ORE_VALUE, "ore: a line clear pays full value")
+
+	# 살아남은 금은 줄이 무너질 때 함께 내려온다.
+	b7.grid.clear()
+	b7.ore.clear()
+	for x in range(EscapeBoard.COLS):
+		b7.grid[Vector2i(x, b7.rows - 1)] = "O"
+	b7.grid[Vector2i(3, b7.rows - 2)] = "T"
+	b7.ore[Vector2i(3, b7.rows - 2)] = true
+	b7._clear_lines()
+	_check(b7.ore.has(Vector2i(3, b7.rows - 1)), "ore: surviving gold rides the row shift down")
+
+	# 셔터가 쓸어 간 금은 절반값이다.
+	b7.grid.clear()
+	b7.ore.clear()
+	gold0 = GameState.gold
+	b7.grid[Vector2i(5, b7.rows - 1)] = "O"
+	b7.ore[Vector2i(5, b7.rows - 1)] = true
+	b7._classic_shutter_landed()
+	_check(GameState.gold == gold0 + EscapeBoard.ORE_SWEEP_VALUE,
+			"ore: the shutter sweep pays half")
+
+	# 회전해도 금은 같은 칸을 따라간다: 도형 중심에서 잰 자리가 그대로여야 한다.
+	var rot_ok := true
+	for t: String in Board.PIECES:
+		for r in 4:
+			for idx in Board.SHAPES[t][r].size():
+				var to_rot := (r + 1) % 4
+				var moved: int = b7._rotate_ore_index(t, r, to_rot, idx)
+				var src: Array = Board.SHAPES[t][r]
+				var dst: Array = Board.SHAPES[t][to_rot]
+				var c_src := Vector2.ZERO
+				for sc: Vector2i in src:
+					c_src += Vector2(sc)
+				c_src /= src.size()
+				var c_dst := Vector2.ZERO
+				for dc: Vector2i in dst:
+					c_dst += Vector2(dc)
+				c_dst /= dst.size()
+				var v := Vector2(src[idx]) - c_src
+				var want := c_dst + Vector2(-v.y, v.x)
+				if Vector2(dst[moved]).distance_to(want) > 0.01:
+					rot_ok = false
+	_check(rot_ok, "ore: rotation keeps the gold on the same cell")
+	_check(b7._rotate_ore_index("T", 0, 1, -1) == -1, "ore: a plain piece stays plain")
+
+	# 새 레벨 판은 금을 물려받지 않는다.
+	b7.ore[Vector2i(1, 1)] = true
+	b7._classic_setup_level(2)
+	_check(b7.ore.is_empty(), "ore: a fresh level board starts without leftover gold")
+	b7.queue_free()
+
 	GameState.save_game()
 
 	if failures == 0:

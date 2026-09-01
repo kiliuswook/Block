@@ -60,6 +60,7 @@ func _ready() -> void:
 	EventBus.level_changed.connect(func(v: int) -> void: level_label.text = str(v))
 	EventBus.lines_changed.connect(func(v: int) -> void: lines_label.text = str(v))
 	EventBus.height_changed.connect(_on_height_changed)
+	EventBus.ore_collected.connect(_on_ore_collected)
 	EventBus.game_started.connect(_on_game_started)
 	EventBus.game_over.connect(_on_game_over)
 	death_popup.restart_pressed.connect(_restart)
@@ -267,6 +268,7 @@ func _on_game_over() -> void:
 	var xp_before := GameState.xp
 	var got_gold := _award_run_rewards()
 	var got_xp := _award_run_xp(was_record)
+	GameState.save_game()  # 판 중에 미뤄 둔 골드 블록 몫까지 여기서 확정된다
 	var earned: String = got_gold.get("line", "")
 	var xp_line: String = got_xp.get("line", "")
 	# 골드 단계가 세는 것은 **이 판이 번 골드**뿐이다 — 레벨업 보상 골드는
@@ -290,6 +292,19 @@ func _on_game_over() -> void:
 			if user_hud:
 				user_hud.visible = true  # 세로 화면은 여기서 처음 뜬다
 			death_popup.open(stats, was_record, earned, "", xp_line, reward))
+
+
+## 골드 블록이 터졌다: 그 자리에서 코인 한 닢이 좌상단 지갑으로 빨려 들어가고
+## 숫자가 오른다. 지갑은 이미 board._bank_ore()가 채워 뒀으니 여기는 연출만 맡는다.
+## 세로 인게임은 플레이 중 HUD를 숨겨 두므로(터치 메뉴 자리) 보드 쪽 연출만 남는다.
+func _on_ore_collected(amount: int, at: Vector2) -> void:
+	if not is_instance_valid(user_hud) or not user_hud.visible:
+		return
+	var from: Vector2 = board.get_global_transform_with_canvas() * at
+	user_hud.fly_coin(from, 0.0, 0.42, func() -> void:
+		if is_instance_valid(user_hud):
+			user_hud.pop_gain(amount)
+			user_hud.refresh())
 
 
 ## 유저 정보 HUD — 타이틀과 같은 스크립트·같은 자리(좌상단).
@@ -542,6 +557,8 @@ func _restart() -> void:
 
 
 func _to_title() -> void:
+	# 인게임에서 주운 골드 블록은 저장을 미뤄 뒀다 — 나가기 전에 한 번 쓴다.
+	GameState.save_game()
 	get_tree().change_scene_to_file("res://core/scenes/boot.tscn")
 
 

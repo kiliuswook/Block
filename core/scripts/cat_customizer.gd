@@ -141,7 +141,7 @@ func _char_id() -> String:
 # --- 왼쪽 부위 목록 --------------------------------------------------------------
 ## 이 캐릭터에 실제로 반영되는 부위만 줄로 세운다. 시트 그림으로 그리는 냥이는
 ## 레이어 색만, 나만의 캐릭터는 디자인 냥이에게서 빌려 온 파츠만 다룬다.
-## 부위는 CustomCat.GROUPS 단위 — 한 줄 안에서 모양과 색이 함께 나온다.
+## 부위는 CustomCat.groups_all() 단위 — 한 줄 안에서 모양과 색이 함께 나온다.
 
 
 func _build_rows() -> void:
@@ -149,7 +149,7 @@ func _build_rows() -> void:
 	_custom_slot = GameState.is_custom_cat(_cat_id)
 	_preset_tab = not sprite
 	_groups.clear()
-	for group in CustomCat.GROUPS:
+	for group in CustomCat.groups_all():
 		var keys: Array = []
 		for part in CustomCat.group_parts(group):
 			var key := str(part.key)

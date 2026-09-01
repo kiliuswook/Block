@@ -14,6 +14,8 @@ extends RefCounted
 ## (class_name 없이 preload로 참조 — 전역 클래스 캐시 갱신 불필요)
 
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
+## [임시 · 진짜 파츠 아트가 나오면 제거] 시트 그림이 없는 임시 파츠 카탈로그.
+const TempParts := preload("res://core/scripts/temp_parts.gd")
 
 const INK := Color("2c2a33")  # 두꺼운 잉크 외곽선 (UI 키트와 동일 톤)
 const DEAD_BODY := Color("a8a29a")
@@ -146,8 +148,14 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	# 컨셉 시트 스프라이트 우선 — 소품만 그 위에 코드로 얹는다.
 	var sprite := str(skin.get("sprite", ""))
 	var gray: bool = not alive or bool(skin.get("gray", false))
+	# [임시] 시트에 그림이 없는 임시 파츠 — 베이스 그림 앞뒤로 코드로 얹는다.
+	var temp: Dictionary = {} if gray else TempParts.overlay_of(p)
 	# 나만의 캐릭터 — 여러 냥이의 시트 파츠 그림을 섞어 그린다.
 	var mix: Dictionary = skin.get("mix", {})
+	var sheet := not mix.is_empty() or sprite != ""
+	if sheet and not temp.is_empty():
+		_temp_over(ci, center, s, p, temp, TempParts.BEHIND_SLOTS, line, ink,
+				look, body_col)
 	if not mix.is_empty() and CatSprite.paint_mix(ci, center, s, mix,
 			skin.get("tints", {}), not gray):
 		if not alive:
@@ -155,6 +163,8 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			return
 		if bool(skin.get("gray", false)):
 			return
+		_temp_over(ci, center, s, p, temp, TempParts.FRONT_SLOTS, line, ink,
+				look, body_col)
 		return
 	if sprite != "" and CatSprite.paint(ci, center, s, sprite,
 			int(skin.get("tier", CatSprite.TIER_MAX)), not gray,
@@ -164,7 +174,13 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 			return
 		if bool(skin.get("gray", false)):
 			return
+		_temp_over(ci, center, s, p, temp, TempParts.FRONT_SLOTS, line, ink,
+				look, body_col)
 		return
+
+	# 코드 렌더 — cat_art가 이미 아는 모양은 아래 painter들이 직접 그리므로,
+	# [임시] 여기서는 temp_parts.gd가 직접 그리는 모양만 얹으면 된다.
+	_temp_new(ci, center, s, temp, TempParts.BEHIND_SLOTS, line, ink)
 
 	# Layer 6 — 등 소품 (망토·날개).
 	if alive:
@@ -213,6 +229,63 @@ static func paint(ci: CanvasItem, center: Vector2, s: float, look := 0.0,
 	_paint_face_prop(ci, center, s, _sid(p, "face", "none"), line, ink)
 	# Layer 85 — 머리 소품 (모자·과일·리본).
 	_paint_head_prop(ci, center, s, _sid(p, "head", "none"), line, ink)
+	_temp_new(ci, center, s, temp, TempParts.FRONT_SLOTS, line, ink)
+
+
+# --- [임시 · temp_parts.gd와 함께 제거] 임시 파츠 오버레이 ---------------------------
+## 시트/믹스 그림 위에 임시 파츠를 코드로 얹는다. 아래 painter들이 이미 아는
+## 모양이면 그대로 부르고, temp_parts.gd가 직접 그리는 모양이면 거기에 맡긴다.
+## (시트 조립은 그림이 없는 레이어를 건너뛰므로 겹쳐 그려지지 않는다.)
+static func _temp_over(ci: CanvasItem, center: Vector2, s: float, p: Dictionary,
+		temp: Dictionary, slots: Array[String], line: float, ink: Color,
+		look: float, body_col: Color) -> void:
+	for slot in slots:
+		if not temp.has(slot):
+			continue
+		var id := str(temp[slot])
+		if TempParts.is_new(slot, id):
+			TempParts.paint_new(ci, center, s, slot, id, line, ink)
+			continue
+		match slot:
+			"back":
+				_paint_back(ci, center, s, id, line)
+			"tail":
+				_paint_tail(ci, center, s, id, p.get("tail_col",
+						p.get("ear_col", Color("d9a05c"))), line, ink)
+			"pattern":
+				_paint_pattern(ci, center, s, p, body_col, line, ink)
+			"hold":
+				_paint_hold(ci, center, s, id, line, ink)
+			"chest":
+				_paint_chest(ci, center, s, id, line, ink)
+			"neck":
+				_paint_neck(ci, center, s, id, line, ink)
+			"whisker":
+				_paint_whisker(ci, center, s, id, body_col, ink,
+						p.get("whisker_col", null))
+			"mouth":
+				_paint_mouth(ci, center, s, look, false, id, body_col, ink,
+						p.get("mouth_col", null))
+			"nose":
+				_paint_nose(ci, center, s, look, id,
+						p.get("nose_col", Color("e58a86")))
+			"eyes":
+				_paint_eyes(ci, center, s, look, id,
+						p.get("eye_col", Color("2a2230")), body_col, line)
+			"mark":
+				_paint_forehead(ci, center, s, id, body_col, ink)
+			"face":
+				_paint_face_prop(ci, center, s, id, line, ink)
+			"head":
+				_paint_head_prop(ci, center, s, id, line, ink)
+
+
+## 코드 렌더 경로용 — temp_parts.gd가 직접 그리는 모양만 얹는다.
+static func _temp_new(ci: CanvasItem, center: Vector2, s: float, temp: Dictionary,
+		slots: Array[String], line: float, ink: Color) -> void:
+	for slot in slots:
+		if temp.has(slot) and TempParts.is_new(slot, str(temp[slot])):
+			TempParts.paint_new(ci, center, s, slot, str(temp[slot]), line, ink)
 
 
 static func _paint_dead_face(ci: CanvasItem, center: Vector2, s: float,

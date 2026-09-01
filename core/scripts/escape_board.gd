@@ -29,6 +29,15 @@ const SOFT_DROP_FACTOR := 4.0
 const DROP_DOUBLE_TAP := 0.3
 const BREAK_SCORE := 20
 const BREAK_FX_TIME := 0.3
+# 골드 블록: 떨어지는 블록 네 칸 중 하나에 금이 박혀 나온다. 직접 부딪혀 깨거나
+# 줄로 지우면 제값(ORE_VALUE)을, 레벨 클리어 셔터가 쓸어 가면 절반만 준다 —
+# "제때 먹어라"가 낮게 쌓기(빈 줄 보너스)와 같은 방향을 보게 하는 값이다.
+const ORE_CHANCE := 0.10  # 이 확률로 블록 하나에 금이 박힌다
+const ORE_GARBAGE_CHANCE := 0.35  # 스테이지 방해 블록 줄마다 금 한 칸이 섞일 확률
+const ORE_VALUE := 20  # 직접 깨기 · 줄 클리어
+const ORE_SWEEP_VALUE := 10  # 셔터가 쓸어 간 몫 (절반)
+const ORE_FX_TIME := 0.6  # 금이 사방으로 튀는 연출 길이
+const ORE_SPARKS := 9
 const LOCK_GRACE := 0.7  # landed piece stays shovable this long before locking
 const HEIGHT_SCORE := 10
 const VIEW_BELOW := 620.0  # how far below the camera center the pit stays drawn
@@ -54,6 +63,10 @@ const SPEED_CREEP_MAX := 8  # the creep alone never exceeds this many steps
 
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
+var ore := {}  # Vector2i -> true; 금이 박힌 칸 (grid와 나란히 간다)
+var piece_ore := -1  # 지금 떨어지는 블록에서 금이 박힌 칸 번호 (-1 = 없음)
+var ore_gold := 0  # 이 판에 골드 블록으로 번 골드
+var ore_fx: Array = []  # [중심 좌표, 경과 시간, 값] — 금이 튀는 연출
 var bag: Array = []
 var piece_type := ""
 var next_type := ""
@@ -119,6 +132,10 @@ func start_game() -> void:
 	rows = PIT_ROWS
 	grid.clear()
 	cracked.clear()
+	ore.clear()
+	ore_fx.clear()
+	ore_gold = 0
+	piece_ore = -1
 	bag.clear()
 	next_type = ""
 	level = 1
@@ -168,6 +185,21 @@ func _add_score(n: int) -> void:
 	GameState.score += n
 
 
+## 골드 블록 한 칸이 사라졌다: 그 자리에서 금을 사방으로 튀기고 지갑에 바로 넣는다.
+## 세이브는 판이 끝날 때 보상과 함께 한 번만 쓴다 — 깰 때마다 저장하면 디스크를
+## 두드리게 된다(중간에 죽어도 지급은 결과 화면의 저장으로 확정된다).
+func _bank_ore(c: Vector2i, value: int) -> void:
+	if not ore.has(c):
+		return
+	ore.erase(c)
+	ore_gold += value
+	GameState.add_currency(value, false)
+	var at := _cell_rect(c).get_center()
+	ore_fx.append([at, 0.0, value])
+	Sfx.play("gold", 1.05 + randf() * 0.15)
+	EventBus.ore_collected.emit(value, at)
+
+
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
@@ -178,6 +210,7 @@ func _process(delta: float) -> void:
 		for fx in break_fx:
 			fx[1] += delta
 		break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+		_age_ore_fx(delta)
 		queue_redraw()
 		return
 	run_time += delta  # only ticks while the board is actually being played
@@ -199,6 +232,7 @@ func _process(delta: float) -> void:
 	for fx in break_fx:
 		fx[1] += delta
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
+	_age_ore_fx(delta)
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
 	queue_redraw()
@@ -344,7 +378,7 @@ func _detach_piece() -> void:
 	if _cells_hit_loose(_cells(piece_type, piece_rot, piece_pos), -1):
 		return  # the previous piece still fills this lane — try again next frame
 	loose.append({"t": piece_type, "r": piece_rot, "p": piece_pos,
-			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0})
+			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0, "o": piece_ore})
 	if _resolve_loose_overlap(loose.size() - 1) or not playing:
 		return
 	_spawn_piece()
@@ -405,7 +439,7 @@ func _step_loose(delta: float) -> void:
 				e.lt += delta
 				if e.lt >= LOCK_GRACE:
 					loose.remove_at(i)
-					_merge_piece(e.t, e.r, e.p)
+					_merge_piece(e.t, e.r, e.p, int(e.get("o", -1)))
 					if not playing:
 						return
 					continue
@@ -589,7 +623,7 @@ func _resolve_overlap_cells(piece_cells: Array) -> bool:
 
 
 func _lock_piece() -> void:
-	if _merge_piece(piece_type, piece_rot, piece_pos):
+	if _merge_piece(piece_type, piece_rot, piece_pos, piece_ore):
 		_spawn_piece()
 
 
@@ -597,11 +631,17 @@ func _lock_piece() -> void:
 ## Serves both the active piece and detached (loose) endless pieces. Returns
 ## false when the game ended — or a rescue already spawned the next piece —
 ## and the caller must not spawn another.
-func _merge_piece(t: String, r: int, pos: Vector2i) -> bool:
+func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 	var overflow := false
-	for c in _cells(t, r, pos):
+	var cells := _cells(t, r, pos)
+	for i in cells.size():
+		var c: Vector2i = cells[i]
 		grid[c] = t
 		cracked.erase(c)
+		if i == ore_idx:
+			ore[c] = true
+		else:
+			ore.erase(c)
 		if c.y < 0:
 			overflow = true
 	if overflow and mode != Mode.ENDLESS:
@@ -649,6 +689,7 @@ func _classic_setup_level(n: int) -> void:
 	level_garbage = Board.classic_garbage(n)
 	grid.clear()
 	cracked.clear()
+	ore.clear()
 	loose.clear()
 	piece_type = ""
 	_fill_garbage(level_garbage)
@@ -675,10 +716,15 @@ func _fill_garbage(count: int) -> void:
 		var holes := {hole: true}
 		if i % 3 == 2:  # deeper rows occasionally get a second gap to dig into
 			holes[(hole + 2 + randi() % (COLS - 3)) % COLS] = true
+		var solid: Array = []
 		for x in range(COLS):
 			if holes.has(x):
 				continue
 			grid[Vector2i(x, y)] = Board.PIECES[randi() % Board.PIECES.size()]
+			solid.append(x)
+		# 파묻힌 금: 방해 블록을 파고들 이유를 하나 준다.
+		if not solid.is_empty() and randf() < ORE_GARBAGE_CHANCE:
+			ore[Vector2i(solid[randi() % solid.size()], y)] = true
 
 
 ## A clear landed in classic: bank it toward this level's 10 lines. Meeting the
@@ -784,6 +830,8 @@ func _shutter_pay_row(y: int) -> bool:
 func _classic_shutter_landed() -> void:
 	for c: Vector2i in grid:
 		break_fx.append([c, 0.0])
+		# 셔터가 쓸어 간 금은 절반값이다 — 직접 깨서 먹는 쪽이 늘 이득이도록.
+		_bank_ore(c, ORE_SWEEP_VALUE)
 	if not grid.is_empty():
 		Sfx.play("break", 0.75)
 	EventBus.classic_level_cleared.emit(level, shutter_bonus)
@@ -883,9 +931,11 @@ func _clear_lines() -> int:
 	var collapse := mode != Mode.ENDLESS
 	var new_grid := {}
 	var new_cracked := {}
+	var new_ore := {}
 	for c in grid:
 		if c.y in full_rows:
 			break_fx.append([c, 0.0])
+			_bank_ore(c, ORE_VALUE)  # 줄로 지운 금도 제값 — 지우면 손해가 되면 안 된다
 			continue
 		var dest: Vector2i = c
 		if collapse:
@@ -897,6 +947,9 @@ func _clear_lines() -> int:
 		new_grid[dest] = grid[c]
 		if cracked.has(c):
 			new_cracked[dest] = true
+		if ore.has(c):
+			new_ore[dest] = true
+	ore = new_ore
 	grid = new_grid
 	cracked = new_cracked
 	return full_rows.size()
@@ -944,6 +997,16 @@ func break_cell_in_rect(r: Rect2) -> bool:
 					best = c
 	if best.x < 0:
 		return false
+	if ore.has(best):
+		# 골드 블록은 한 방에 터진다 — 두 번 쳐야 하면 리듬이 죽는다.
+		cracked.erase(best)
+		grid.erase(best)
+		break_fx.append([best, 0.0])
+		_bank_ore(best, ORE_VALUE)
+		_add_score(BREAK_SCORE)
+		Sfx.play("break")
+		queue_redraw()
+		return true
 	if cracked.has(best):
 		cracked.erase(best)
 		grid.erase(best)
@@ -967,6 +1030,8 @@ func _spawn_piece() -> void:
 	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
 	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
+	# 금은 블록 네 칸 중 한 곳에 박힌다 — 회전해도 같은 칸을 따라간다(_try_rotate).
+	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ORE_CHANCE else -1
 	track_timer = 0.0
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
@@ -1016,9 +1081,43 @@ func _try_rotate(dir: int) -> void:
 					break
 			if overlaps:
 				continue
+		piece_ore = _rotate_ore_index(piece_type, piece_rot, new_rot, piece_ore)
 		piece_pos = target
 		piece_rot = new_rot
 		return
+
+
+## 회전해도 금은 같은 칸에 붙어 있어야 한다 — 칸 목록의 순서는 회전판마다
+## 제각각이라, 금 칸을 도형 중심으로 90° 돌린 뒤 새 회전판에서 가장 가까운
+## 칸을 찾아 번호를 다시 매긴다.
+func _rotate_ore_index(t: String, from_rot: int, to_rot: int, idx: int) -> int:
+	if idx < 0:
+		return -1
+	var src: Array = Board.SHAPES[t][from_rot]
+	var dst: Array = Board.SHAPES[t][to_rot]
+	if idx >= src.size():
+		return -1
+	var c_src := Vector2.ZERO
+	for c: Vector2i in src:
+		c_src += Vector2(c)
+	c_src /= src.size()
+	var c_dst := Vector2.ZERO
+	for c: Vector2i in dst:
+		c_dst += Vector2(c)
+	c_dst /= dst.size()
+	var turns := posmod(to_rot - from_rot, 4)
+	var v := Vector2(src[idx]) - c_src
+	for i in turns:
+		v = Vector2(-v.y, v.x)  # 화면 좌표계(y 아래)에서의 시계 방향
+	var want := c_dst + v
+	var best := 0
+	var best_d := INF
+	for i in dst.size():
+		var d := Vector2(dst[i]).distance_squared_to(want)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
 
 
 func _piece_collides(rot: int, pos: Vector2i, ignore_grid: bool) -> bool:
@@ -1126,6 +1225,8 @@ func _draw() -> void:
 	for c in grid:
 		if show_hidden or c.y >= 0:
 			_draw_cell(c, Board.COLORS[grid[c]])
+			if ore.has(c):
+				_draw_ore(_cell_rect(c).get_center())
 			if cracked.has(c):
 				_draw_crack(c)
 	for fx in break_fx:
@@ -1135,6 +1236,7 @@ func _draw() -> void:
 	_draw_loose()
 	if piece_type != "":
 		_draw_piece()
+	_draw_ore_fx()
 	# 우물 테두리는 UI 키트와 같은 두꺼운 잉크 선 — 하늘 배경에 "뚫린 구덩이"로 보이게.
 	var border := UiKit.INK
 	var bw := 7.0
@@ -1237,6 +1339,8 @@ func _draw_piece() -> void:
 		var c: Vector2i = cells[i]
 		if mode == Mode.ENDLESS or c.y >= 0:
 			_draw_cell(c, color)
+			if i == piece_ore:
+				_draw_ore(_cell_rect(c).get_center(), color.a)
 			if piece_state == PieceState.LANDED:
 				draw_rect(_cell_rect(c).grow(-2.0),
 						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
@@ -1255,11 +1359,78 @@ func _draw_loose() -> void:
 		if e.s == PieceState.LANDED:
 			pulse = 0.5 + 0.5 * sin(e.lt * 16.0)
 			color = color.lightened(0.18 + 0.18 * pulse)
-		for c: Vector2i in _loose_cells(e):
+		var cells := _loose_cells(e)
+		var oi := int(e.get("o", -1))
+		for i in cells.size():
+			var c: Vector2i = cells[i]
 			_draw_cell(c, color)
+			if i == oi:
+				_draw_ore(_cell_rect(c).get_center(), color.a)
 			if e.s == PieceState.LANDED:
 				draw_rect(_cell_rect(c).grow(-2.0),
 						Color(1.0, 0.96, 0.8, 0.3 + 0.45 * pulse), false, 3.0)
+
+
+## 튀어 나간 금 부스러기를 나이 먹인다.
+func _age_ore_fx(delta: float) -> void:
+	if ore_fx.is_empty():
+		return
+	for fx in ore_fx:
+		fx[1] += delta
+	ore_fx = ore_fx.filter(func(fx: Array) -> bool: return fx[1] < ORE_FX_TIME)
+
+
+## 블록 안에 박힌 금 — 잉크 외곽선 두른 금괴 한 덩이에 위쪽 하이라이트.
+## 빛은 늘 위에서 온다는 아트 규칙을 그대로 따른다.
+func _draw_ore(center: Vector2, alpha := 1.0) -> void:
+	var r := CELL * 0.24
+	var gold := Color(0.99, 0.79, 0.24, alpha)
+	var deep := Color(0.78, 0.53, 0.10, alpha)
+	var ink := UiKit.INK
+	ink.a = alpha
+	var pts := PackedVector2Array([
+		center + Vector2(0.0, -r * 1.15),
+		center + Vector2(r, 0.0),
+		center + Vector2(0.0, r * 1.15),
+		center + Vector2(-r, 0.0),
+	])
+	draw_colored_polygon(pts, gold)
+	draw_colored_polygon(PackedVector2Array([
+		pts[2], pts[1], center + Vector2(0.0, r * 0.1)]), deep)
+	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), ink, 2.5)
+	draw_line(center + Vector2(-r * 0.34, -r * 0.42), center + Vector2(-r * 0.04, -r * 0.72),
+			Color(1.0, 0.99, 0.88, 0.9 * alpha), 3.0)
+
+
+## 부서진 골드 블록에서 금이 사방으로 튄다 + 딴 금액이 떠오른다.
+func _draw_ore_fx() -> void:
+	var font := ThemeDB.fallback_font
+	for fx in ore_fx:
+		var at: Vector2 = fx[0]
+		var t: float = clampf(fx[1] / ORE_FX_TIME, 0.0, 1.0)
+		var fade := 1.0 - t
+		for i in ORE_SPARKS:
+			var ang := TAU * (float(i) / ORE_SPARKS) + at.x * 0.01
+			var dist := CELL * (0.25 + 1.05 * ease(t, 0.35))
+			var p := at + Vector2(cos(ang), sin(ang) * 0.85) * dist
+			p.y += CELL * 1.1 * t * t  # 튀어 오른 뒤 중력에 진다
+			draw_circle(p, maxf(2.0, 7.0 * fade), Color(1.0, 0.84, 0.32, fade))
+		# 퍼지는 금빛 링 + 초반 한 점의 섬광. 넓게 깐 반투명 원은 어두운 우물에서
+		# 잿빛 얼룩으로 보여서 쓰지 않는다.
+		var ring := CELL * (0.26 + 0.6 * ease(t, 0.3))
+		draw_circle(at, ring, Color(1.0, 0.86, 0.38, 0.9 * fade), false,
+				maxf(2.0, 8.0 * fade))
+		if t < 0.45:
+			var flash := 1.0 - t / 0.45
+			draw_circle(at, CELL * 0.42 * (0.45 + 0.55 * flash),
+					Color(1.0, 0.98, 0.85, minf(1.0, flash * 1.8)))
+		var text := "+%d" % int(fx[2])
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
+		var ty := at.y - CELL * 0.62 - 52.0 * t
+		draw_string_outline(font, Vector2(at.x - w / 2.0, ty), text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 30, 6, Color(0.17, 0.16, 0.20, fade))
+		draw_string(font, Vector2(at.x - w / 2.0, ty), text,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(1.0, 0.86, 0.36, fade))
 
 
 func _draw_crack(c: Vector2i) -> void:
