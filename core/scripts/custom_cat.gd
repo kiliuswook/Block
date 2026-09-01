@@ -54,6 +54,8 @@ const NOSE_COLS: Array[Color] = [Color("e58a86")]  # Cat_Nose
 ## 슬롯 순서 = 시트의 레이어 순서(뒤 → 앞).
 ## type "color"는 cols 팔레트에서, "style"은 opts에서 고른다. index 0이 기본값.
 ## 옵션의 "r"은 희귀도(0 일반~3 전설, 표시용), "d"는 플레이버 텍스트.
+## "u": true = **유니크 파츠** — 골드로는 살 수 없고 통조림 캔으로만 산다
+## (캔은 주간 랭킹 보상으로만 들어온다). 판정은 is_unique_option().
 const PARTS: Array[Dictionary] = [
 	# --- Prop_Back ------------------------------------------------------------
 	{"key": "back", "name": "CAT_PART_BACK", "type": "style", "opts": [
@@ -84,12 +86,12 @@ const PARTS: Array[Dictionary] = [
 		{"id": "mug", "src": "char01", "name": "머그컵", "r": 1, "d": "Char01의 1st 파츠."},
 		{"id": "tie", "src": "char02", "name": "넥타이", "r": 1, "d": "Char02의 1st 파츠."},
 		{"id": "keyboard", "src": "char03", "name": "키보드", "r": 1, "d": "Char03의 2nd 파츠."},
-		{"id": "lantern", "src": "char04", "name": "랜턴", "r": 2, "d": "Char04의 2nd 파츠."},
-		{"id": "orb", "src": "char05", "name": "수정 구슬", "r": 2, "d": "Char05의 2nd 파츠."},
+		{"id": "lantern", "src": "char04", "name": "랜턴", "r": 2, "u": true, "d": "Char04의 2nd 파츠."},
+		{"id": "orb", "src": "char05", "name": "수정 구슬", "r": 2, "u": true, "d": "Char05의 2nd 파츠."},
 		{"id": "book", "src": "char06", "name": "책", "r": 1, "d": "Char06의 2nd 파츠."}]},
 	{"key": "chest", "name": "CAT_PART_CHEST", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "가슴팍은 비워둔다."},
-		{"id": "badge", "src": "char02", "name": "경찰 배지", "r": 2, "d": "Char02의 1st 파츠."},
+		{"id": "badge", "src": "char02", "name": "경찰 배지", "r": 2, "u": true, "d": "Char02의 1st 파츠."},
 		{"id": "bowtie", "src": "char06", "name": "나비넥타이", "r": 1, "d": "Char06의 1st 파츠."}]},
 	# --- Cat_Feet -------------------------------------------------------------
 	{"key": "pad_col", "name": "CAT_PART_PAD_COL", "type": "color", "cols": PAD_COLS},
@@ -114,7 +116,7 @@ const PARTS: Array[Dictionary] = [
 		{"id": "iris", "src": "char02", "name": "홍채눈", "r": 1, "d": "Char02의 노란 눈동자."},
 		{"id": "squint", "src": "char03", "name": "><눈", "d": "Char03의 기분 최고 눈."},
 		{"id": "sleep", "src": "char04", "name": "감은눈", "d": "Char04의 잠든 눈."},
-		{"id": "star", "src": "char05", "name": "별눈", "r": 2, "d": "Char05의 별 박은 눈."},
+		{"id": "star", "src": "char05", "name": "별눈", "r": 2, "u": true, "d": "Char05의 별 박은 눈."},
 		{"id": "tired", "src": "char06", "name": "졸린눈", "d": "Char06의 반쯤 감긴 눈."}]},
 	{"key": "eye_col", "name": "CAT_PART_EYE_COL", "type": "color", "cols": EYE_COLS},
 	{"key": "mark", "name": "CAT_PART_MARK", "type": "style", "opts": [
@@ -123,13 +125,13 @@ const PARTS: Array[Dictionary] = [
 	# --- Prop_Face / Prop_Head --------------------------------------------------
 	{"key": "face", "name": "CAT_PART_FACE", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "민낯의 자신감."},
-		{"id": "sunglasses", "src": "char02", "name": "선글라스", "r": 2, "d": "Char02의 2nd 파츠."},
+		{"id": "sunglasses", "src": "char02", "name": "선글라스", "r": 2, "u": true, "d": "Char02의 2nd 파츠."},
 		{"id": "round_glasses", "src": "char06", "name": "동글 안경", "d": "Char06의 기본 파츠."}]},
 	{"key": "head", "name": "CAT_PART_HEAD", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "머리는 가볍게."},
 		{"id": "headset", "src": "char03", "name": "게이밍 헤드셋", "r": 1, "d": "Char03의 1st 파츠."},
 		{"id": "sleep_mask", "src": "char04", "name": "수면 안대", "r": 1, "d": "Char04의 1st 파츠."},
-		{"id": "wizard", "src": "char05", "name": "마법사 모자", "r": 2, "d": "Char05의 1st 파츠."},
+		{"id": "wizard", "src": "char05", "name": "마법사 모자", "r": 2, "u": true, "d": "Char05의 1st 파츠."},
 		{"id": "orange", "src": "char01", "name": "귤", "r": 1, "d": "Char01의 2nd 파츠."}]},
 ]
 
@@ -657,6 +659,18 @@ static func free_options(key: String) -> Array:
 						out.append(i)
 			_free_opts[k] = out
 	return _free_opts.get(key, [])
+
+## 유니크 파츠인가 — 골드가 아니라 통조림 캔으로만 살 수 있는 옵션.
+## 색(color)에는 유니크가 없다 (모양 옵션에만 "u": true를 단다).
+static func is_unique_option(key: String, idx: int) -> bool:
+	var part := get_part(key)
+	if part.is_empty() or part.get("type") == "color":
+		return false
+	var opts: Array = part.opts
+	if idx < 0 or idx >= opts.size():
+		return false
+	return bool((opts[idx] as Dictionary).get("u", false))
+
 
 static func get_part(key: String) -> Dictionary:
 	for p in parts_all():

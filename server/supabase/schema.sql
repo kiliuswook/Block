@@ -141,7 +141,8 @@ create policy saves_own on public.saves
 -- ---------------------------------------------------------------------------
 -- 주간 시상 — 정산은 아래 cron 이 하고, 클라이언트는 claim_rewards() 로 받기만
 -- 한다. rewards 에 쓰기 정책이 없으므로 상금 행은 정산 함수만 만들 수 있다.
--- 금액은 클라이언트의 Ranks.WEEKLY_REWARDS = [500, 300, 200] 과 같아야 한다.
+-- 금액은 클라이언트의 Ranks.WEEKLY_REWARDS = [500, 300, 200] 과 같아야 하고,
+-- 통조림 캔은 Ranks.WEEKLY_CANS (1위 10캔 ~ 100위 1캔) 과 같아야 한다.
 -- ---------------------------------------------------------------------------
 create table if not exists public.rewards (
 	user_id    uuid not null references auth.users(id) on delete cascade,
@@ -149,9 +150,13 @@ create table if not exists public.rewards (
 	mode       text not null,
 	rank       int not null,
 	gold       int not null,
+	cans       int not null default 0,
 	claimed_at timestamptz,
 	primary key (user_id, week_id, mode)
 );
+
+-- 캔 이전에 만들어 둔 테이블에도 열을 붙인다 (이미 있으면 무시).
+alter table public.rewards add column if not exists cans int not null default 0;
 
 alter table public.rewards enable row level security;
 
@@ -159,21 +164,33 @@ drop policy if exists rewards_read on public.rewards;
 create policy rewards_read on public.rewards
 	for select to authenticated using (user_id = auth.uid());
 
--- 끝난 주의 보드에서 모드별 상위 3을 뽑아 상금 행을 만든다. 같은 주를 두 번
--- 정산해도 on conflict 로 한 번만 들어간다.
+-- 이 순위의 주간 캔 보상 (1위 10캔 ~ 100위 1캔, 그 밖은 0).
+-- 클라이언트의 Ranks.WEEKLY_CANS 와 같은 값이어야 한다.
+create or replace function public.week_cans(rnk int)
+returns int language sql immutable as $$
+	select case
+		when rnk <= 1 then 10 when rnk <= 3 then 8 when rnk <= 5 then 7
+		when rnk <= 10 then 6 when rnk <= 20 then 5 when rnk <= 30 then 4
+		when rnk <= 50 then 3 when rnk <= 75 then 2 when rnk <= 100 then 1
+		else 0 end;
+$$;
+
+-- 끝난 주의 보드에서 모드별 상위 100을 뽑아 상금 행을 만든다 (골드는 3위까지,
+-- 캔은 100위까지). 같은 주를 두 번 정산해도 on conflict 로 한 번만 들어간다.
 create or replace function public.settle_week(w int)
 returns int language plpgsql security definer set search_path = public as $$
 declare n int;
 begin
-	insert into public.rewards (user_id, week_id, mode, rank, gold)
-	select user_id, w, mode, rnk, (array[500, 300, 200])[rnk]
+	insert into public.rewards (user_id, week_id, mode, rank, gold, cans)
+	select user_id, w, mode, rnk,
+		coalesce((array[500, 300, 200])[rnk], 0), public.week_cans(rnk::int)
 	from (
 		select user_id, mode,
 			row_number() over (
 				partition by mode order by value desc, updated_at asc) as rnk
 		from public.scores where week_id = w
 	) t
-	where rnk <= 3
+	where rnk <= 100
 	on conflict (user_id, week_id, mode) do nothing;
 	get diagnostics n = row_count;
 	return n;
@@ -182,19 +199,22 @@ end $$;
 -- 미청구 상금을 모두 받아 합계를 돌려준다. 순위 판정은 이미 끝나 있으므로
 -- 클라이언트가 할 수 있는 일은 "받기"뿐이다.
 create or replace function public.claim_rewards()
-returns int language plpgsql security definer set search_path = public as $$
-declare total int;
+returns json language plpgsql security definer set search_path = public as $$
+declare out json;
 begin
 	with c as (
 		update public.rewards set claimed_at = now()
 		where user_id = auth.uid() and claimed_at is null
-		returning gold
+		returning gold, cans
 	)
-	select coalesce(sum(gold), 0) into total from c;
-	return total;
+	select json_build_object(
+			'gold', coalesce(sum(gold), 0), 'cans', coalesce(sum(cans), 0))
+		into out from c;
+	return out;
 end $$;
 
 revoke execute on function public.settle_week(int) from public, anon, authenticated;
+revoke execute on function public.week_cans(int) from public, anon;
 grant execute on function public.claim_rewards() to authenticated;
 
 

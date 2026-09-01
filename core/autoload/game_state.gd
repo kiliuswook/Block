@@ -11,7 +11,9 @@ const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — 시작부터 지급되는 첫 캐릭터 (첫 키캡 한 바퀴를 공짜로 갖고 시작)
-##  keycap — 그 캐릭터의 키캡 A~Z를 한 바퀴 모으면 해금.
+##  keycap — 그 캐릭터의 키캡 A~Z를 한 바퀴 모으면 해금 (골드 뽑기).
+##  can — 유니크 캐릭터("unique": true). 조건은 keycap과 같지만 그 키캡은
+##        **통조림 캔 뽑기로만** 나온다 — 골드 뽑기 풀에는 아예 안 들어간다.
 ## 해금 뒤에도 한 바퀴를 더 모을 때마다 등급이 오른다 (등급 1~4, 파츠 해금).
 ## Per-cat stat multipliers (1.0 = baseline cream):
 ##  speed — run speed / jump — jump velocity / dash — dash speed & cooldown
@@ -33,11 +35,11 @@ const CATS: Array[Dictionary] = [
 		"trait": "TRAIT_DREAMER",
 		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
 	{"id": "wizard", "char": "char05", "name": "CAT_WIZARD", "body": Color("f0e2d0"),
-		"ear": Color("5a4038"), "unlock": {"type": "keycap"},
+		"ear": Color("5a4038"), "unique": true, "unlock": {"type": "can"},
 		"trait": "TRAIT_MAGIC",
 		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
 	{"id": "gray", "char": "char06", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
-		"unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
+		"unique": true, "unlock": {"type": "can"}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
 	# ▼▼▼ [임시 · 진짜 아트가 나오면 통째로 제거] 자리를 채우는 임시 캐릭터 24종 ▼▼▼
 	# 목표 30종 중 컨셉 시트가 있는 건 위 6종뿐이라, 나머지는 시트 파츠를 빌려
@@ -143,6 +145,18 @@ const KEYCAP_GACHA_MAX := 10
 const KEYCAP_PICK_SIZE := 5
 const KEYCAP_PICK_MARKUP := 1.5
 
+## 뽑기 종류 — 상점의 세 열이 이 값 하나로 갈린다 (풀·값·재화가 전부 다르다).
+##   RANDOM/PICK — 골드로 뽑는다. 유니크가 아닌 냥이만 나온다.
+##   CAN         — 통조림 캔으로 뽑는다. **유니크 냥이 1종을 걸고** 그 냥이만 나온다.
+const GACHA_RANDOM := 0
+const GACHA_PICK := 1
+const GACHA_CAN := 2
+
+## 캔 뽑기 값 (장당 1캔, 10연차는 한 캔 깎아 준다).
+## 유니크 냥이 1마리 만렙 = 26 × 4 = 104장 ≈ 94캔.
+const KEYCAP_CAN_PRICE := 1
+const KEYCAP_CAN_BULK_PRICE := 9
+
 ## 나만의 캐릭터(커스텀 슬롯). 슬롯 1은 CATS의 "mycat", 2번부터는 "mycat2"…
 ## 캐릭터 페이지의 "+" 타일이 슬롯을 하나씩 연다 (UI 문서 20~21p).
 const MYCAT_ID := "mycat"
@@ -153,6 +167,9 @@ const MYCAT_SLOT_MAX := 3
 ## 백지 몸통의 기본값과 "없음"만 처음부터 열려 있다 (CustomCat.free_options).
 const PART_PRICES: Array[int] = [200, 400, 800, 1500]
 const PART_COLOR_PRICE := 150
+## 유니크 파츠(CustomCat 카탈로그의 "u": true)는 골드로 살 수 없다 —
+## 값은 희귀도별 **캔** 개수다. 캔은 주간 랭킹 보상으로만 들어온다.
+const PART_CAN_PRICES: Array[int] = [5, 8, 15, 25]
 
 var mode: int = MODE_CLASSIC
 var best_height: int = 0
@@ -167,6 +184,10 @@ var gold_earned: int = 0  # 누적 획득 골드 — 쓴 것과 무관한 총합
 var gacha_drawn: int = 0  # 키캡 가챠로 뽑은 누적 장수 (업적용)
 var achv: Array = []  # 이미 해금한 업적 id — Achv가 소유, 재해금 방지용
 var gold: int = 0
+## 통조림 캔 — 고양이 간식. **주간 랭킹 보상으로만** 들어오는 두 번째 재화다.
+## 쓰는 곳은 둘뿐: 유니크 냥이의 키캡 뽑기, 유니크 파츠 구매.
+var cans: int = 0
+var cans_earned: int = 0  # 누적 획득 캔 (업적·표시용)
 var selected_cat: String = "cream"
 var nickname: String = ""  # leaderboard name — defaults to 냥이-XXXX on first run
 ## 사용자가 랭킹 화면에서 직접 정한 이름인가. 거짓이면 플랫폼 계정 이름
@@ -181,6 +202,8 @@ var cloud_rev: int = 0
 var keycaps: Dictionary = {}  # 캐릭터별 키캡: {cat id: {"A".."Z" -> 개수}}
 ## 선택 뽑기에 걸어 둔 냥이 id들 (최대 KEYCAP_PICK_SIZE) — 뽑기 화면에서 유지된다.
 var gacha_pick: Array = []
+## 캔 뽑기에 걸어 둔 유니크 냥이 1종 ("" = 아직 안 골랐다).
+var gacha_can_pick: String = ""
 # 캐릭터별 커스터마이징: 냥이 id -> {부위 key: 옵션 index}
 var cat_custom: Dictionary = {}
 ## 골드로 산 파츠 {부위 key: [옵션 index, ...]} — 캐릭터가 아니라 계정 단위다.
@@ -319,11 +342,15 @@ func reset_all() -> void:
 	classic_level_best = 0
 	gold = 0
 	gold_earned = 0
+	cans = 0
+	cans_earned = 0
 	gacha_drawn = 0
 	selected_cat = "cream"
 	weekly = {}
 	weekly_claimed = 0
 	keycaps = {}
+	gacha_pick = []
+	gacha_can_pick = ""
 	cat_custom = {}
 	parts_owned = {}
 	custom_slots = 1
@@ -390,6 +417,23 @@ func spend_gold(amount: int) -> bool:
 	if gold < amount:
 		return false
 	gold -= amount
+	save_game()
+	return true
+
+
+## 통조림 캔을 적립한다 — 부르는 곳은 주간 랭킹 시상(Ranks)뿐이다.
+func add_cans(add: int, persist := true) -> void:
+	cans += add
+	if add > 0:
+		cans_earned += add
+	if persist:
+		save_game()
+
+
+func spend_cans(amount: int) -> bool:
+	if cans < amount:
+		return false
+	cans -= amount
 	save_game()
 	return true
 
@@ -496,30 +540,52 @@ func has_keycap(cat_id: String, letter: String) -> bool:
 
 
 # --- 키캡 가챠 (상점) ------------------------------------------------------------
-## 인게임 드랍은 없다 — 키캡은 상점에서 골드로 뽑는다.
+## 인게임 드랍은 없다 — 키캡은 상점에서 뽑는다. 뽑기는 세 종류이고, 종류 하나가
+## 풀·값·재화를 한꺼번에 정한다 (GACHA_RANDOM / GACHA_PICK / GACHA_CAN).
 
 
-## 키캡을 n장 뽑는다. 뽑기는 두 종류다:
-##  · 랜덤 뽑기 (pick 비움) — 아직 만렙이 아닌 냥이 전체에서 균등 랜덤
+## 이 뽑기가 캔으로 사는가 (거짓이면 골드).
+func gacha_uses_cans(mode: int) -> bool:
+	return mode == GACHA_CAN
+
+
+## 유니크 냥이인가 — 키캡이 캔 뽑기에서만 나오는 냥이.
+func is_unique_cat(id: String) -> bool:
+	return bool(get_cat(id).get("unique", false))
+
+
+## 유니크 냥이 목록 (캔 뽑기에 걸 수 있는 후보).
+func unique_cats() -> Array:
+	var out: Array = []
+	for cat in keycap_cats():
+		if bool(cat.get("unique", false)):
+			out.append(cat)
+	return out
+
+
+## 키캡을 n장 뽑는다. mode가 풀과 재화를 정한다:
+##  · GACHA_RANDOM — 골드. 유니크가 아닌 냥이 전체에서 균등 랜덤
 ##    (잠긴 냥이 포함 — 아무나 먼저 완성한 순서대로 합류한다).
-##  · 선택 뽑기 (pick = 냥이 id 배열) — 그 냥이들만 나온다. 대신 값이 비싸다.
+##  · GACHA_PICK — 골드. 걸어 둔 냥이들만 나온다. 대신 값이 비싸다.
+##  · GACHA_CAN — 통조림 캔. 걸어 둔 **유니크 냥이 1종**만 나온다.
 ## 중복은 나오지 않는다 — 뽑을 때마다 풀에서 만렙 냥이를 걸러 내고, 냥이마다
 ## 이번 바퀴에 비어 있는 글자에서만 고른다. 남은 키캡보다 많이 부르면 남은
 ## 만큼으로 줄여서(그 장수 값만) 뽑는다.
 ## 반환: [{"cat": id, "letter": "A", "fresh": true, "grade_up": bool}, ...]
 ##       (중복이 없으니 fresh는 늘 참 — 연출 코드 호환용으로 남겨 둔다)
-## 골드가 모자라거나 풀이 비면 빈 배열.
-func draw_keycaps(n: int, pick: Array = []) -> Array:
-	n = mini(clampi(n, 1, KEYCAP_GACHA_MAX), gacha_capacity(pick))
+## 재화가 모자라거나 풀이 비면 빈 배열.
+func draw_keycaps(n: int, mode: int = GACHA_RANDOM) -> Array:
+	n = mini(clampi(n, 1, KEYCAP_GACHA_MAX), gacha_capacity(mode))
 	if n <= 0:
 		return []
-	var paid := keycap_price(n, not pick.is_empty())
-	if not spend_gold(paid):
+	var cans_mode := gacha_uses_cans(mode)
+	var paid := keycap_price(n, mode)
+	if not (spend_cans(paid) if cans_mode else spend_gold(paid)):
 		return []
 	var out: Array = []
 	for i in n:
 		# 방금 만렙이 된 냥이는 다음 장부터 빠진다 (= 중복 방지).
-		var pool := gacha_pool(pick)
+		var pool := gacha_pool(mode)
 		if pool.is_empty():
 			break
 		var cat_id := pool[randi() % pool.size()]
@@ -532,8 +598,11 @@ func draw_keycaps(n: int, pick: Array = []) -> Array:
 				"grade_up": cat_grade(cat_id) > before})
 	# 풀이 도중에 비면 부른 장수보다 적게 나온다 — 못 받은 몫은 돌려준다.
 	if out.size() < n:
-		var due := keycap_price(out.size(), not pick.is_empty()) if not out.is_empty() else 0
-		gold += paid - due
+		var due := keycap_price(out.size(), mode) if not out.is_empty() else 0
+		if cans_mode:
+			cans += paid - due
+		else:
+			gold += paid - due
 	gacha_drawn += out.size()
 	save_game()
 	Achv.check()  # 키캡·등급·누적 뽑기 업적
@@ -542,18 +611,27 @@ func draw_keycaps(n: int, pick: Array = []) -> Array:
 
 ## 이번 뽑기에서 캡슐에 들어가는 냥이들 — 어느 쪽이든 **아직 만렙이 아닌**
 ## 냥이만 들어간다 (중복 키캡은 나오지 않으므로 다 모은 냥이는 뽑을 게 없다).
-## 선택 뽑기는 걸어 둔 냥이 중 그런 냥이만, 랜덤 뽑기는 전체 중 그런 냥이만.
-func gacha_pool(pick: Array = []) -> Array[String]:
+## 유니크 냥이는 캔 뽑기에만, 나머지는 골드 뽑기에만 들어간다.
+func gacha_pool(mode: int = GACHA_RANDOM) -> Array[String]:
 	var pool: Array[String] = []
-	if not pick.is_empty():
-		for cid in pick:
+	if mode == GACHA_CAN:
+		if gacha_can_pick != "" and is_unique_cat(gacha_can_pick) \
+				and cat_grade(gacha_can_pick) < KEYCAP_GRADE_MAX:
+			pool.append(gacha_can_pick)
+		return pool
+	if mode == GACHA_PICK:
+		for cid in gacha_pick:
 			var id := str(cid)
 			if get_cat(id).is_empty() or is_custom_cat(id) or id in pool:
+				continue
+			if is_unique_cat(id):
 				continue
 			if cat_grade(id) < KEYCAP_GRADE_MAX:
 				pool.append(id)
 		return pool
 	for cat in keycap_cats():
+		if bool(cat.get("unique", false)):
+			continue
 		if cat_grade(str(cat.id)) < KEYCAP_GRADE_MAX:
 			pool.append(str(cat.id))
 	return pool
@@ -575,62 +653,74 @@ func keycaps_left(id: String) -> int:
 
 
 ## 이번 뽑기 풀에 남아 있는 키캡 총량 — 중복이 없으니 이보다 많이는 못 뽑는다.
-func gacha_capacity(pick: Array = []) -> int:
+func gacha_capacity(mode: int = GACHA_RANDOM) -> int:
 	var left := 0
-	for id in gacha_pool(pick):
+	for id in gacha_pool(mode):
 		left += keycaps_left(id)
 	return left
 
 
-## 선택 뽑기에 걸 수 있는 냥이인가 — 만렙(A~Z 전부 수집)이면 고를 수 없다.
+## 뽑기에 걸 수 있는 냥이인가 — 만렙(A~Z 전부 수집)이면 고를 수 없다.
 func can_pick_gacha(id: String) -> bool:
 	return cat_grade(id) < KEYCAP_GRADE_MAX
 
 
-## 선택 뽑기를 돌리려면 걸어 둬야 하는 냥이 수. 고를 수 있는 냥이가
+## 골드 선택 뽑기를 돌리려면 걸어 둬야 하는 냥이 수. 고를 수 있는 냥이가
 ## KEYCAP_PICK_SIZE보다 적게 남으면 그만큼만 요구한다.
 func gacha_pick_need() -> int:
 	var pickable := 0
 	for cat in keycap_cats():
+		if bool(cat.get("unique", false)):
+			continue
 		if can_pick_gacha(str(cat.id)):
 			pickable += 1
 	return mini(KEYCAP_PICK_SIZE, pickable)
 
 
-## 걸어 둔 선택 뽑기 목록에서 만렙이 된 냥이를 걷어 낸다. 바뀌면 참.
+## 걸어 둔 뽑기 목록에서 만렙이 된 냥이를 걷어 낸다 (캔 뽑기의 1종도 함께).
+## 바뀌면 참.
 func prune_gacha_pick() -> bool:
 	var kept: Array = []
 	for cid in gacha_pick:
-		if can_pick_gacha(str(cid)):
+		if can_pick_gacha(str(cid)) and not is_unique_cat(str(cid)):
 			kept.append(str(cid))
-	if kept.size() == gacha_pick.size():
+	var drop_can := gacha_can_pick != "" and not can_pick_gacha(gacha_can_pick)
+	if kept.size() == gacha_pick.size() and not drop_can:
 		return false
 	gacha_pick = kept
+	if drop_can:
+		gacha_can_pick = ""
 	save_game()
 	return true
 
 
 ## n장 값 — KEYCAP_GACHA_BULK장 묶음은 묶음값으로 계산하고 나머지는 낱장값이다.
-## 선택 뽑기는 겨냥하는 대가로 KEYCAP_PICK_MARKUP배.
-func keycap_price(n: int, pick := false) -> int:
+## 골드 선택 뽑기는 겨냥하는 대가로 KEYCAP_PICK_MARKUP배. 캔 뽑기는 캔 개수다.
+func keycap_price(n: int, mode: int = GACHA_RANDOM) -> int:
 	n = clampi(n, 1, KEYCAP_GACHA_MAX)
+	if mode == GACHA_CAN:
+		return (n / KEYCAP_GACHA_BULK) * KEYCAP_CAN_BULK_PRICE \
+				+ (n % KEYCAP_GACHA_BULK) * KEYCAP_CAN_PRICE
 	var base := (n / KEYCAP_GACHA_BULK) * KEYCAP_GACHA_BULK_PRICE
 	base += (n % KEYCAP_GACHA_BULK) * KEYCAP_GACHA_PRICE
-	return int(ceil(base * KEYCAP_PICK_MARKUP)) if pick else base
+	return int(ceil(base * KEYCAP_PICK_MARKUP)) if mode == GACHA_PICK else base
 
 
-## 지금 골드로 살 수 있는 최대 장수 ("최대" 버튼). 묶음값이 낱장값보다 싸서
+## 지금 지갑으로 살 수 있는 최대 장수 ("최대" 버튼). 묶음값이 낱장값보다 싸서
 ## 값이 장수에 비례하지 않으므로 위에서부터 훑는다. 남은 키캡이 그보다 적으면
 ## 거기서 멈춘다 (중복이 없으니 그 이상은 뽑히지 않는다). 못 사면 1.
-func keycap_max_draws(pick := false) -> int:
-	if pick and gacha_pick.is_empty():
+func keycap_max_draws(mode: int = GACHA_RANDOM) -> int:
+	if mode == GACHA_PICK and gacha_pick.is_empty():
 		return 1  # 걸어 둔 냥이가 없으면 선택 뽑기는 돌지 않는다
-	var cap := mini(KEYCAP_GACHA_MAX,
-			gacha_capacity(gacha_pick if pick else []))
+	if mode == GACHA_CAN and gacha_can_pick == "":
+		return 1
+	var purse := cans if gacha_uses_cans(mode) else gold
+	var cap := mini(KEYCAP_GACHA_MAX, gacha_capacity(mode))
 	for n in range(cap, 1, -1):
-		if keycap_price(n, pick) <= gold:
+		if keycap_price(n, mode) <= purse:
 			return n
 	return 1
+
 
 
 ## 이번 바퀴에서 비어 있는 글자 중 하나 — 중복은 절대 나오지 않는다.
@@ -837,7 +927,12 @@ func part_unlocked(key: String, idx: int) -> bool:
 	return part_free(key, idx) or part_owned(key, idx)
 
 
-## 이 옵션의 값 (0 = 이미 열려 있음).
+## 유니크 파츠인가 — 골드가 아니라 통조림 캔으로만 사는 옵션.
+func part_can(key: String, idx: int) -> bool:
+	return CustomCat.is_unique_option(key, idx)
+
+
+## 이 옵션의 값 (0 = 이미 열려 있음). 단위는 part_can()이 참이면 캔, 아니면 골드.
 func part_price(key: String, idx: int) -> int:
 	if part_unlocked(key, idx):
 		return 0
@@ -851,14 +946,21 @@ func part_price(key: String, idx: int) -> int:
 		return 0
 	var r: int = clampi(int((opts[idx] as Dictionary).get("r", 0)), 0,
 			PART_PRICES.size() - 1)
-	return PART_PRICES[r]
+	return PART_CAN_PRICES[r] if part_can(key, idx) else PART_PRICES[r]
 
 
-## 파츠 한 칸을 산다 (골드가 모자라면 false — 지갑은 그대로).
+## 이 옵션을 지금 살 수 있는가 (지갑에 값이 있는가).
+func can_afford_part(key: String, idx: int) -> bool:
+	var price := part_price(key, idx)
+	return (cans if part_can(key, idx) else gold) >= price
+
+
+## 파츠 한 칸을 산다 (재화가 모자라면 false — 지갑은 그대로).
 func buy_part(key: String, idx: int) -> bool:
 	if part_unlocked(key, idx):
 		return true
-	if not spend_gold(part_price(key, idx)):
+	var price := part_price(key, idx)
+	if not (spend_cans(price) if part_can(key, idx) else spend_gold(price)):
 		return false
 	var owned: Array = parts_owned.get(key, [])
 	owned.append(idx)
@@ -987,6 +1089,8 @@ func save_dict() -> Dictionary:
 		"gacha_drawn": gacha_drawn,
 		"achv": achv,
 		"gold": gold,
+		"cans": cans,
+		"cans_earned": cans_earned,
 		"selected_cat": selected_cat,
 		"nickname": nickname,
 		"nick_custom": nick_custom,
@@ -995,6 +1099,7 @@ func save_dict() -> Dictionary:
 		"weekly_claimed": weekly_claimed,
 		"keycaps": keycaps,
 		"gacha_pick": gacha_pick,
+		"gacha_can_pick": gacha_can_pick,
 		"cat_custom": cat_custom,
 		"parts_owned": parts_owned,
 		"custom_slots": custom_slots,
@@ -1033,6 +1138,8 @@ func load_game() -> void:
 		if got is Array:
 			achv = got
 		gold = int(data.get("gold", 0))
+		cans = int(data.get("cans", 0))
+		cans_earned = int(data.get("cans_earned", cans))
 		selected_cat = str(data.get("selected_cat", "cream"))
 		nickname = str(data.get("nickname", ""))
 		nick_custom = bool(data.get("nick_custom", false))
@@ -1068,8 +1175,13 @@ func load_game() -> void:
 				var id := str(cid)
 				if id in gacha_pick or get_cat(id).is_empty() or is_custom_cat(id):
 					continue
+				if is_unique_cat(id):
+					continue  # 유니크 냥이는 골드 선택 뽑기에 걸 수 없다
 				gacha_pick.append(id)
 			gacha_pick.resize(mini(gacha_pick.size(), KEYCAP_PICK_SIZE))
+		gacha_can_pick = str(data.get("gacha_can_pick", ""))
+		if gacha_can_pick != "" and not is_unique_cat(gacha_can_pick):
+			gacha_can_pick = ""
 		var cst: Variant = data.get("cat_custom", {})
 		if cst is Dictionary:
 			cat_custom = {}

@@ -301,13 +301,18 @@ func fetch_board(mode_key: String, week: int, count: int) -> Array:
 
 
 ## 서버가 정산해 둔 지난 주 상금을 받는다 — 순위 판정은 서버가 이미 끝냈고
-## 여기서는 미청구분 합계를 돌려받을 뿐이다. 없으면 0.
-func claim_rewards() -> int:
+## 여기서는 미청구분 합계를 돌려받을 뿐이다. {"gold": n, "cans": n}.
+## 구버전 서버(캔 이전)는 숫자 하나만 돌려주므로 골드로 읽는다.
+func claim_rewards() -> Dictionary:
 	if not await ensure_auth():
-		return 0
+		return {"gold": 0, "cans": 0}
 	var res := await _api(HTTPClient.METHOD_POST, "/rest/v1/rpc/claim_rewards", "{}")
 	var data: Variant = res.get("data")
-	return int(data) if data is float or data is int else 0
+	if data is Dictionary:
+		return {"gold": int(data.get("gold", 0)), "cans": int(data.get("cans", 0))}
+	if data is float or data is int:
+		return {"gold": int(data), "cans": 0}
+	return {"gold": 0, "cans": 0}
 
 
 ## 설정 > 게임 초기화: 보드에서 내 행을 전부 지운다 (RLS가 내 것만 허용).

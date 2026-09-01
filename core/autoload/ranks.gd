@@ -16,7 +16,7 @@ extends Node
 ## 어느 쪽이든 UI는 `entries()` / `my_rank()`만 보면 된다.
 
 signal board_loaded(ok: bool)
-signal weekly_reward(gold: int)  # last week's top-3 payout landed
+signal weekly_reward(gold: int, cans: int)  # last week's payout landed
 
 enum Backend { OFFLINE, HTTP, STEAM, SERVER }
 
@@ -37,6 +37,16 @@ const STEAM_FETCH := 50
 const WEEK_ANCHOR := 313200  # unix time of Monday 1970-01-05 00:00 KST
 const WEEK_LEN := 604800
 const WEEKLY_REWARDS := [500, 300, 200]  # rank 1..3 gold
+## 통조림 캔 — 주간 랭킹 **100위까지** 차등 지급한다 (1위 10캔 ~ 100위 1캔).
+## 골드와 달리 캔은 이 자리 말고는 들어올 곳이 없다 (유니크 냥이·유니크 파츠 전용).
+## 줄 하나 = {그 순위까지, 캔}. weekly_cans()가 위에서부터 훑는다.
+const WEEKLY_CANS := [
+	{"to": 1, "cans": 10}, {"to": 3, "cans": 8}, {"to": 5, "cans": 7},
+	{"to": 10, "cans": 6}, {"to": 20, "cans": 5}, {"to": 30, "cans": 4},
+	{"to": 50, "cans": 3}, {"to": 75, "cans": 2}, {"to": 100, "cans": 1},
+]
+## 캔 시상을 확인하려면 보드 상위 이만큼을 받아 봐야 한다 (= 100위까지).
+const CAN_RANKS := 100
 
 ## Offline placeholder crowd: until the backend goes live, boards are filled
 ## with these bot entries (deterministic per mode) plus the real local record.
@@ -261,26 +271,51 @@ func _rollover(data: Dictionary) -> void:
 	data["week"] = wk
 
 
-## Pays out last week's top-3 prizes for every mode I placed in. Runs after
-## any fetch; each finished week is checked exactly once per save.
+## 이 순위(1-based)의 주간 캔 보상. 100위 밖이면 0.
+static func weekly_cans(rank: int) -> int:
+	for row: Dictionary in WEEKLY_CANS:
+		if rank <= int(row.to):
+			return int(row.cans)
+	return 0
+
+
+## 이 순위의 주간 골드 보상 (상위 3위까지). 밖이면 0.
+static func weekly_gold(rank: int) -> int:
+	return WEEKLY_REWARDS[rank - 1] if rank >= 1 and rank <= WEEKLY_REWARDS.size() else 0
+
+
+## 지갑에 넣고 알린다 — 세 백엔드가 모두 이 한 곳으로 모인다.
+func _pay(gold: int, cans: int) -> void:
+	if gold <= 0 and cans <= 0:
+		return
+	if gold > 0:
+		GameState.add_currency(gold)
+	if cans > 0:
+		GameState.add_cans(cans)
+	weekly_reward.emit(gold, cans)
+
+
+## Pays out last week's prizes for every mode I placed in (골드는 3위까지,
+## 캔은 100위까지). Runs after any fetch; each finished week is checked
+## exactly once per save.
 func _claim_rewards() -> void:
 	var lw := int(board.get("lw_week", -1))
 	if lw < 0 or lw <= GameState.weekly_claimed:
 		return
 	var gold := 0
+	var cans := 0
 	for m: String in MODES:
 		var list: Array = board.get("lw_" + m, [])
 		list = list.filter(func(e: Variant) -> bool: return e is Dictionary)
 		list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			return int(a.get("v", 0)) > int(b.get("v", 0)))
-		for i in mini(3, list.size()):
+		for i in mini(CAN_RANKS, list.size()):
 			if str(list[i].get("id")) == GameState.player_id:
-				gold += WEEKLY_REWARDS[i]
+				gold += weekly_gold(i + 1)
+				cans += weekly_cans(i + 1)
 	GameState.weekly_claimed = lw
 	GameState.save_game()
-	if gold > 0:
-		GameState.add_currency(gold)
-		weekly_reward.emit(gold)
+	_pay(gold, cans)
 
 
 ## 랭킹 화면이 지금 보고 있는 보드 하나를 불러온다. HTTP 백엔드는 blob이 통째로
@@ -340,30 +375,29 @@ func _refresh_server() -> void:
 ## 미청구 상금을 받아 지갑에 넣기만 한다 — 클라이언트가 순위를 읽지 않으므로
 ## 주차를 넘기거나 순위를 지어내서 상금을 타낼 자리가 없다.
 func _claim_rewards_server() -> void:
-	var gold := await Cloud.claim_rewards()
-	if gold > 0:
-		GameState.add_currency(gold)
-		weekly_reward.emit(gold)
+	var due := await Cloud.claim_rewards()
+	_pay(int(due.get("gold", 0)), int(due.get("cans", 0)))
 
 
-## 스팀 주간 시상: 지난주 보드의 상위 3명 안에 내가 있으면 보상을 준다.
-## 한 주에 한 번, 랭킹 화면을 열었을 때만 확인한다.
+## 스팀 주간 시상: 지난주 보드에서 내 순위를 찾아 골드(3위까지)와
+## 캔(100위까지)을 준다. 한 주에 한 번, 랭킹 화면을 열었을 때만 확인한다.
 func _claim_rewards_steam() -> void:
 	var lw := week_id() - 1
 	if lw <= GameState.weekly_claimed:
 		return
 	var gold := 0
+	var cans := 0
 	var mine := my_id()
 	for m: String in LIVE_MODES:
-		var list: Array = await Platform.fetch_board(board_name(m, true, lw), 3)
-		for i in mini(3, list.size()):
+		var list: Array = await Platform.fetch_board(board_name(m, true, lw),
+				CAN_RANKS)
+		for i in mini(CAN_RANKS, list.size()):
 			if str(list[i].get("id")) == mine:
-				gold += WEEKLY_REWARDS[i]
+				gold += weekly_gold(i + 1)
+				cans += weekly_cans(i + 1)
 	GameState.weekly_claimed = lw
 	GameState.save_game()
-	if gold > 0:
-		GameState.add_currency(gold)
-		weekly_reward.emit(gold)
+	_pay(gold, cans)
 
 
 ## Refreshes the whole board; listeners get board_loaded(ok). Viewing also

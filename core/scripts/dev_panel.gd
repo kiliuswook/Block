@@ -21,6 +21,9 @@ const TAB_NAMES := ["업적 (Achievements)", "리더보드 (Leaderboards)", "치
 
 ## 치트 탭의 골드 지급 단위.
 const GOLD_GRANTS := [1000, 10000, 100000, 1000000]
+## 통조림 캔은 주간 랭킹 보상으로만 들어와서 개발 중에는 한 주를 기다려야 한다 —
+## 캔 뽑기·유니크 파츠를 바로 만져 보려고 두는 치트.
+const CAN_GRANTS := [10, 50, 200]
 
 var _tab := 0  # 0 = 업적, 1 = 리더보드, 2 = 치트
 var _fetched := false  # 이번에 연 뒤 보드를 한 번 받아 왔는가
@@ -238,7 +241,7 @@ func _frac(cur: int, goal: int) -> String:
 
 ## 개발 중에 상점·뽑기를 마음껏 돌려 보려고 두는 재화 치트.
 func _build_cheats() -> void:
-	_note.text = "지금 골드: %s  ·  누적 획득: %s  —  개발용 치트라 세이브에 그대로 들어간다 (출시 빌드에서는 패널째로 빠진다)" % [_comma(GameState.gold), _comma(GameState.gold_earned)]
+	_note.text = "지금 골드: %s  ·  캔: %s  —  개발용 치트라 세이브에 그대로 들어간다 (출시 빌드에서는 패널째로 빠진다)" % [_comma(GameState.gold), _comma(GameState.cans)]
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	_body.add_child(row)
@@ -254,8 +257,22 @@ func _build_cheats() -> void:
 		GameState.gold = 0
 		GameState.save_game()
 		_refresh_wallet()))
+	var row3 := HBoxContainer.new()
+	row3.add_theme_constant_override("separation", 8)
+	_body.add_child(row3)
+	for amount: int in CAN_GRANTS:
+		var add := amount
+		row3.add_child(_tool_btn("+ %d 캔" % add, UiKit.CAN_DEEP, func() -> void:
+			GameState.add_cans(add)
+			_refresh_wallet()))
+	row3.add_child(_tool_btn("캔 0 으로", UiKit.RED_DEEP, func() -> void:
+		GameState.cans = 0
+		GameState.save_game()
+		_refresh_wallet()))
 	_body.add_child(_kv("골드", _comma(GameState.gold)))
 	_body.add_child(_kv("누적 획득 골드", _comma(GameState.gold_earned)))
+	_body.add_child(_kv("통조림 캔", _comma(GameState.cans)))
+	_body.add_child(_kv("누적 획득 캔", _comma(GameState.cans_earned)))
 
 
 ## 치트로 재화를 바꾼 뒤 패널의 골드 표시와 타이틀의 유저 HUD(지갑)를 다시 그린다.

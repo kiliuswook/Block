@@ -419,9 +419,16 @@ func _pick(key: String, idx: int) -> void:
 	changed.emit()
 
 
+## 잠긴 옵션의 값 한 조각 — 유니크 파츠는 캔, 나머지는 골드로 표기한다.
+func _price_text(key: String, idx: int) -> String:
+	var n := _gold(GameState.part_price(key, idx))
+	return tr("CC_PRICE_CAN").format({"cans": n}) if GameState.part_can(key, idx) \
+			else tr("CC_PRICE").format({"gold": n})
+
+
 ## 잠긴 옵션 한 줄 안내 — 값과, 원래 어느 냥이의 파츠였는지.
 func _lock_text(key: String, idx: int) -> String:
-	var line := tr("CC_PRICE").format({"gold": _gold(GameState.part_price(key, idx))})
+	var line := _price_text(key, idx)
 	var hint := GameState.part_unlock_hint(key, idx)
 	if not hint.is_empty():
 		var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
@@ -502,15 +509,24 @@ func _open_buy(key: String, idx: int) -> void:
 	_ask_idx = idx
 	var price := GameState.part_price(key, idx)
 	var name := tr(str(part.name)) if part.get("type") == "color" 			else str((part.opts as Array)[idx].name)
+	var cans_buy := GameState.part_can(key, idx)
 	_ask_lbl.text = "%s
 
 %s
 %s" % [
-			tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)}),
+			tr("CC_BUY_ASK_CAN").format({"name": name, "cans": _gold(price)})
+					if cans_buy
+					else tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)}),
 			_lock_text(key, idx),
-			tr("CC_WALLET").format({"gold": _gold(GameState.gold)})]
+			tr("CC_WALLET_CAN").format({"cans": _gold(GameState.cans)})
+					if cans_buy
+					else tr("CC_WALLET").format({"gold": _gold(GameState.gold)})]
 	_ask_buy.text = tr("CC_BUY")
-	_ask_buy.disabled = GameState.gold < price
+	_ask_buy.disabled = not GameState.can_afford_part(key, idx)
+	# 유니크 파츠는 캔으로 산다 — 확인 버튼 색까지 갈라 둔다.
+	UiKit.style_button(_ask_buy,
+			UiKit.CAN if cans_buy else UiKit.GOLD,
+			UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP, INK, 21, 14)
 	_ask.visible = true
 	_layout_ask()
 	_ask.move_to_front()
@@ -538,9 +554,11 @@ func _confirm_buy() -> void:
 		_close_ask()
 		return
 	var price := GameState.part_price(key, idx)
+	var cans_buy := GameState.part_can(key, idx)
 	if not GameState.buy_part(key, idx):
 		Sfx.play("error")
-		_flavor = tr("CC_NO_GOLD").format({"gold": _gold(price)})
+		_flavor = tr("CC_NO_CANS").format({"cans": _gold(price)}) if cans_buy \
+				else tr("CC_NO_GOLD").format({"gold": _gold(price)})
 		_flavor_col = UiKit.RED_DEEP
 		_refresh_flavor()
 		return
@@ -552,8 +570,9 @@ func _confirm_buy() -> void:
 	# 산 파츠는 그 자리에서 바로 입는다.
 	GameState.set_custom_part(_cat_id, key, idx)
 	Achv.unlock(Achv.CUSTOM_CAT)
-	_flavor = tr("CC_BOUGHT").format({"gold": _gold(price)})
-	_flavor_col = UiKit.GOLD_DEEP
+	_flavor = tr("CC_BOUGHT_CAN").format({"cans": _gold(price)}) if cans_buy \
+			else tr("CC_BOUGHT").format({"gold": _gold(price)})
+	_flavor_col = UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP
 	_refresh()
 	changed.emit()
 
@@ -680,23 +699,30 @@ func _make_swatch(key: String, idx: int, col: Color, selected: bool,
 			face.draw_arc(Vector2(SWATCH, SWATCH) / 2.0, SWATCH * 0.32, 0.0, TAU, 28,
 					PREVIEW_COL if previewing else UiKit.WHITE, 4.0)
 		if locked:
-			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0 - 8.0))
-			_draw_price(face, Vector2(8.0, SWATCH - 10.0),
-					GameState.part_price(key, idx), 12))
+			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0 - 8.0), 1.0,
+					GameState.part_can(key, idx))
+			_draw_price(face, Vector2(8.0, SWATCH - 10.0), key, idx, 12))
 	b.add_child(face)
 	return b
 
 
-## 잠긴 옵션의 값 — 골드 색 작은 글씨.
-func _draw_price(ci: CanvasItem, at: Vector2, price: int, fs := 13) -> void:
-	ci.draw_string(ThemeDB.fallback_font, at,
-			tr("CC_PRICE").format({"gold": _gold(price)}),
-			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UiKit.GOLD_DEEP)
+## 잠긴 옵션의 값 — 골드는 금색, 유니크 파츠는 캔 아이콘 + 은빛 글씨.
+func _draw_price(ci: CanvasItem, at: Vector2, key: String, idx: int,
+		fs := 13) -> void:
+	if not GameState.part_can(key, idx):
+		ci.draw_string(ThemeDB.fallback_font, at, _price_text(key, idx),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UiKit.GOLD_DEEP)
+		return
+	UiKit.can_icon(ci, at + Vector2(fs * 0.4, -fs * 0.35), fs * 1.15)
+	ci.draw_string(ThemeDB.fallback_font, at + Vector2(fs, 0.0),
+			str(GameState.part_price(key, idx)),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, UiKit.CAN_DEEP)
 
 
 ## 잠금 뱃지 — 자물쇠 하나. sc로 스와치/타일 크기에 맞춘다.
-func _draw_lock(ci: CanvasItem, at: Vector2, sc := 1.0) -> void:
-	var col := UiKit.GOLD_DEEP
+## 유니크 파츠는 캔으로만 열리므로 자물쇠도 은빛이다.
+func _draw_lock(ci: CanvasItem, at: Vector2, sc := 1.0, can_lock := false) -> void:
+	var col := UiKit.CAN_DEEP if can_lock else UiKit.GOLD_DEEP
 	ci.draw_rect(Rect2(at + Vector2(-9.0, -2.0) * sc, Vector2(18.0, 15.0) * sc), col)
 	ci.draw_arc(at + Vector2(0.0, -3.0) * sc, 6.0 * sc, PI, TAU, 10, col, 3.0 * sc)
 
@@ -724,8 +750,9 @@ func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 				_skin(key, idx) if (previewing or not locked)
 				else _shadow(_skin(key, idx)))
 		if locked:
-			_draw_lock(face, Vector2(TILE.x - 22.0, 24.0), 0.9)
-			_draw_price(face, Vector2(9.0, 24.0), GameState.part_price(key, idx))
+			_draw_lock(face, Vector2(TILE.x - 22.0, 24.0), 0.9,
+					GameState.part_can(key, idx))
+			_draw_price(face, Vector2(9.0, 24.0), key, idx)
 		var font := ThemeDB.fallback_font
 		var fs := UiKit.fit_size(font, opt_name, TILE.x - 10.0, 15)
 		var w := font.get_string_size(opt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

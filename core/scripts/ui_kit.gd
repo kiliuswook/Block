@@ -26,6 +26,11 @@ const PURPLE_DEEP := Color("7038c0")
 const RED := Color("ef5f45")
 const RED_DEEP := Color("c53a24")
 const PINK := Color("f9a9a0")  # 볼터치
+## 통조림 캔 — 주간 랭킹 보상으로만 들어오는 두 번째 재화. 골드(금)와 확실히
+## 갈라 보이도록 차가운 은빛 + 붉은 라벨을 쓴다.
+const CAN := Color("cfd8e3")
+const CAN_DEEP := Color("8794a6")
+const CAN_LABEL := Color("e05a49")
 
 const MUTED := Color(0.17, 0.16, 0.2, 0.55)  # 보조 텍스트 (흰 패널 위)
 const SOFT := Color(0.17, 0.16, 0.2, 0.35)  # 더 흐린 보조 텍스트
@@ -285,3 +290,29 @@ static func fit_size(font: Font, text: String, width: float, size: int,
 			-1, size).x > width:
 		size -= 1
 	return size
+
+
+## 통조림 캔 아이콘 — 재화 표시가 늘 같은 그림이 되도록 여기 한 곳에서 그린다.
+## `at`은 캔의 중심, `h`는 캔 높이 (폭은 h * 0.78).
+static func can_icon(ci: CanvasItem, at: Vector2, h: float,
+		outline := true) -> void:
+	var w := h * 0.78
+	var body := Rect2(at.x - w / 2.0, at.y - h / 2.0 + h * 0.12, w, h * 0.82)
+	var lid := Vector2(w / 2.0, h * 0.15)
+	var ink := Color(INK, 1.0 if outline else 0.0)
+	ci.draw_rect(body, CAN)
+	# 라벨 띠 — 캔이라는 걸 한눈에 알게 하는 붉은 가로줄.
+	ci.draw_rect(Rect2(body.position.x, at.y - h * 0.12, w, h * 0.34), CAN_LABEL)
+	# 세로 하이라이트 (금속 광택은 늘 왼쪽 위에서).
+	ci.draw_rect(Rect2(body.position.x + w * 0.16, body.position.y,
+			w * 0.13, body.size.y), Color(1, 1, 1, 0.35))
+	ellipse(ci, Vector2(at.x, body.end.y), lid, CAN_DEEP)
+	ellipse(ci, Vector2(at.x, body.position.y), lid, WHITE)
+	if outline:
+		ci.draw_rect(body, ink, false, maxf(1.5, h * 0.06))
+		var pts := PackedVector2Array()
+		for i in 25:
+			var a := TAU * i / 24.0
+			pts.append(Vector2(at.x, body.position.y)
+					+ Vector2(cos(a) * lid.x, sin(a) * lid.y))
+		ci.draw_polyline(pts, ink, maxf(1.5, h * 0.06))

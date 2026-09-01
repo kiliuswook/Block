@@ -35,6 +35,11 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst._open_gacha()
 				inst._open_gacha_pick())
+	# 캔 뽑기 — 유니크 냥이 1종을 거는 오버레이.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_gacha_can.png",
+			func(inst: Node) -> void:
+				inst._open_gacha()
+				inst._open_gacha_can())
 	# 10연차 캡슐이 굴러 나오는 중간 프레임. 뽑기는 진짜 저장을 건드리므로
 	# 지갑·키캡을 스냅샷 떠 두고 캡처가 끝나면 그대로 되돌린다.
 	var gold_before := GameState.gold
@@ -110,6 +115,9 @@ func _ready() -> void:
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_rewards.png",
 			func(inst: Node) -> void: _view_cat(inst, "cream"))
 	GameState.keycaps = saved_caps
+	# 유니크 냥이 — 키캡 게이지가 은빛이고 "캔 뽑기 전용" 안내가 붙는다.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_unique.png",
+			func(inst: Node) -> void: _view_cat(inst, "wizard"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_cream.png",
 			func(inst: Node) -> void: _view_cat(inst, "cream"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_feature.png",
@@ -126,6 +134,13 @@ func _ready() -> void:
 				inst._customizer._refresh()
 				# 잠긴 파츠를 누른 상태 — 입혀 보여 주면서 값을 묻는 구매 확인창
 				inst._customizer._pick("eyes", 3))
+	# 유니크 파츠 — 골드가 아니라 통조림 캔으로 사는 확인창 (눈 줄의 "별눈").
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_unique.png",
+			func(inst: Node) -> void:
+				_view_cat(inst, "mycat")
+				inst._customizer._cur = 5
+				inst._customizer._refresh()
+				inst._customizer._pick("eyes", 4))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_replay.png",
 			func(inst: Node) -> void:
 				var rep := {"v": 1, "mode": 1, "cat": "gray", "rows": 20, "level": 1,

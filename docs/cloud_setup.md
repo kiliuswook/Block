@@ -61,7 +61,7 @@
 - `scores` — 보드. 행 하나 = (나, 모드, 주차). **주차 `-1`이 누적 보드**고 주간은 그 주차 번호다. 지난 주 보드는 밀어 옮기지 않고 그대로 남는다
 - `saves` — 세이브 백업 한 행 (`rev`가 큰 쪽이 최신)
 - `rewards` — 주간 상금. **쓰기 정책이 없어서 정산 함수만 행을 만들 수 있다**
-- `settle_week(w)` / `claim_rewards()` — 정산 · 청구
+- `settle_week(w)` / `claim_rewards()` — 정산 · 청구 (`week_cans(rank)` = 캔 배분표)
 - cron 두 개 — 일요일 15:05 UTC(= 월요일 00:05 KST) 정산, 15:20 UTC 오래된 주간 행 정리
 
 > `create extension pg_cron`에서 권한 오류가 나면 **Database → Extensions**에서 `pg_cron`을 먼저 켜고 다시 실행한다.
@@ -97,5 +97,9 @@
 
 - **주차 기준은 서버 시계다.** `week_id()` SQL 함수의 `313200`(월요일 1970-01-05 00:00 KST)과 `604800`은 클라이언트 `core/autoload/ranks.gd`의 `WEEK_ANCHOR`/`WEEK_LEN`과 **같은 값이어야 한다** — 한쪽만 바꾸면 주간 보드가 어긋난다
 - **상금 금액**은 `settle_week()`의 `array[500, 300, 200]`과 클라이언트 `Ranks.WEEKLY_REWARDS`가 같아야 한다
+- **통조림 캔**은 `week_cans(rank)`(1위 10캔 ~ 100위 1캔)과 클라이언트 `Ranks.WEEKLY_CANS`가 같아야 한다.
+  `claim_rewards()`는 이제 숫자가 아니라 `{"gold": n, "cans": n}` JSON을 돌려준다 — **캔 이전에
+  스키마를 이미 올렸다면 schema.sql을 다시 Run 할 것**(`rewards.cans` 열 추가 + 두 함수 교체가
+  `add column if not exists` / `create or replace`라 그대로 다시 돌려도 안전하다)
 - 정산을 손으로 돌려 보려면 SQL Editor에서 `select public.settle_week(public.week_id() - 1);` (같은 주를 두 번 돌려도 상금은 한 번만 들어간다)
 - 모드를 추가하면 `scores.mode`의 `check` 제약과 `Ranks.MODES`를 같이 늘린다

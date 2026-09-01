@@ -1,7 +1,8 @@
 extends CanvasLayer
 ## 상단 고정 유저 HUD — "내가 누구이고 얼마나 컸는가"를 한 장의 카드로.
 ##
-## 이름(스팀 페르소나 → 없으면 닉네임) · 계정 레벨 + 칭호 · 경험치 바 · 골드.
+## 이름(스팀 페르소나 → 없으면 닉네임) · 계정 레벨 + 칭호 · 경험치 바 ·
+## 지갑(통조림 캔 + 골드).
 ## 타이틀과 인게임이 **같은 스크립트, 같은 자리**를 쓴다 — 화면이 바뀌어도
 ## 유저 정보는 늘 좌상단 같은 카드에 있다는 것이 이 HUD의 전부다.
 ##
@@ -167,7 +168,8 @@ func _draw_card() -> void:
 	_draw_avatar(ci, badge)
 	var x0 := badge.end.x + 14.0
 	var right := w - 18.0
-	# 윗줄 오른쪽: 골드. 지갑은 이 HUD 하나뿐이라 다른 화면은 이걸 다시 그리지 않는다.
+	# 윗줄 오른쪽: 지갑(캔 + 골드). 지갑은 이 HUD 하나뿐이라 다른 화면은 이걸
+	# 다시 그리지 않는다. 캔은 골드 왼쪽에 아이콘 + 개수로 붙는다.
 	var gold_text := "%s G" % _commas(gold_shown())
 	var gold_size := UiKit.fit_size(font, gold_text, (right - x0) * 0.45, 25)
 	var gold_w := font.get_string_size(gold_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
@@ -175,6 +177,15 @@ func _draw_card() -> void:
 	ci.draw_string(font, Vector2(right - gold_w, 37.0), gold_text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, gold_size, UiKit.GOLD_DEEP)
 	_gold_rect = Rect2(right - gold_w, 37.0 - gold_size, gold_w, gold_size)
+	var can_text := _commas(GameState.cans)
+	var can_size := UiKit.fit_size(font, can_text, (right - x0) * 0.2, 22)
+	var can_w := font.get_string_size(can_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			can_size).x
+	var can_x := right - gold_w - 14.0 - can_w
+	ci.draw_string(font, Vector2(can_x, 36.0), can_text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, can_size, UiKit.INK)
+	UiKit.can_icon(ci, Vector2(can_x - 13.0, 29.0), 22.0)
+	var purse_w := gold_w + can_w + 40.0  # 지갑이 먹는 폭 (이름이 쓸 자리를 뺀다)
 	if _gain_a > 0.0 and _gain_text != "":
 		var gw := font.get_string_size(_gain_text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 				22).x
@@ -182,7 +193,7 @@ func _draw_card() -> void:
 				_gain_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 22,
 				Color(UiKit.GOLD_DEEP, clampf(_gain_a, 0.0, 1.0)))
 	# 윗줄 왼쪽: 이름.
-	var name_room := right - gold_w - 14.0 - x0
+	var name_room := right - purse_w - 14.0 - x0
 	var who := display_name()
 	ci.draw_string(font, Vector2(x0, 37.0), who, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			UiKit.fit_size(font, who, name_room, 25), UiKit.INK)

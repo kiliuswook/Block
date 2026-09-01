@@ -4,7 +4,7 @@
 > 각 항목의 자세한 절차는 링크된 체크리스트에 있다. 끝낸 항목은 `[x]`로 바꾸고,
 > "📤 줄 것"에 적힌 값을 나한테 주면 내가 코드에 넣고 검증한다.
 >
-> 마지막 갱신: 2026-08-31
+> 마지막 갱신: 2026-09-01
 
 ---
 
@@ -20,6 +20,8 @@
 - [ ] ① Supabase 프로젝트 생성 (무료, Northeast Asia/Seoul 권장)
 - [ ] ② Authentication → **Anonymous sign-ins 켜기** (캡차는 켜지 말 것)
 - [ ] ③ SQL Editor에 `server/supabase/schema.sql` 붙여넣고 Run
+      (⚠ **이미 올린 적이 있어도 다시 Run 할 것** — 2026-09-01 통조림 캔 보상이 붙어
+      `rewards.cans` 열과 `settle_week`/`claim_rewards`가 바뀌었다. 다시 돌려도 안전하다)
 - [ ] ④ Project Settings → API 에서 **Project URL** + **anon public key** 확인
 
 **📤 나한테 줄 것**: `Project URL`, `anon public key` 두 개
