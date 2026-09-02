@@ -270,7 +270,7 @@ func _build_sounds() -> void:
 	_add_tone(b, 0.24, 0.3, 1318.5, 1318.5, 0.22, TRIANGLE, 2.5)
 	_add_tone(b, 0.24, 0.36, 1760.0, 1760.0, 0.12, SQUARE, 3.0)
 	_add_tone(b, 0.0, 0.5, 0.0, 0.0, 0.07, NOISE, 2.0)
-	_sounds["goldrush"] = _wav(b)
+	_sounds["fever"] = _wav(b)
 	# Milestone ding (every 10 floors).
 	b = _buf(0.45)
 	_add_tone(b, 0.0, 0.35, 659.25, 659.25, 0.2, TRIANGLE)

@@ -22,6 +22,9 @@ const SWATCH := 72.0  # 색 스와치
 const RARITY_INK: Array[Color] = [
 	Color(0.17, 0.16, 0.2, 0.75), UiKit.CYAN_DEEP, UiKit.PURPLE_DEEP, UiKit.GOLD_DEEP,
 ]
+const ASK_PAD := 28.0  # 구매 확인창 카드 안쪽 여백
+const ASK_GAP := 12.0  # 확인창 글 줄 간격
+const ASK_BTN_H := 56.0  # 확인창 버튼 높이
 const PREVIEW_COL := Color("2f9cc4")  # 잠긴 파츠 "입혀 보는 중" 표시
 
 var _cat_id := "mycat"  # 지금 꾸미는 중인 캐릭터
@@ -43,12 +46,18 @@ var _grid_w := 900.0
 var _flavor := ""  # 마지막 선택/안내 한 줄
 var _flavor_col := UiKit.MUTED
 ## 파츠 구매 확인창 — 잠긴 파츠를 누르면 값을 보여 주고 살지 묻는다.
+## 꾸미기 패널은 캐릭터 카드 안쪽 한 칸이라 좁다 — 확인창은 패널이 아니라
+## **화면 전체**를 덮는 제 CanvasLayer 위에 서고, 카드 높이는 글 줄 수를 재서 정한다.
+var _ask_layer: CanvasLayer
 var _ask: Control
-var _ask_lbl: Label
+var _ask_title: Label  # 「이름」을 n G에 살까냥?
+var _ask_hint: Label  # 원래 어느 냥이의 파츠였나 (없으면 접는다)
+var _ask_wallet: Label  # 가진 골드/캔
 var _ask_buy: Button
 var _ask_no: Button
 var _ask_key := ""
 var _ask_idx := -1
+var _ask_rect := Rect2()  # 확인창 카드 자리 (_layout_ask가 재서 넣는다)
 
 
 func _ready() -> void:
@@ -452,19 +461,19 @@ func _gold(n: int) -> String:
 
 
 func _build_ask() -> void:
+	# 패널 안에 갇히면 카드가 뒤 타일과 겹쳐 보인다 — 화면 전체를 덮는 층에 올린다.
+	_ask_layer = CanvasLayer.new()
+	_ask_layer.layer = 6  # 상단 고정 유저 HUD(5) 위
+	_ask_layer.visible = false
+	add_child(_ask_layer)
 	_ask = Control.new()
-	_ask.visible = false
-	add_child(_ask)
+	_ask_layer.add_child(_ask)
 	_ask.draw.connect(func() -> void:
 		_ask.draw_rect(Rect2(Vector2.ZERO, _ask.size), Color(0.09, 0.13, 0.18, 0.55))
-		UiKit.panel_box(UiKit.WHITE, 22, 0.0).draw(_ask.get_canvas_item(), _ask_card()))
-	_ask_lbl = Label.new()
-	_ask_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_ask_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_ask_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_ask_lbl.add_theme_font_size_override("font_size", 18)
-	_ask_lbl.add_theme_color_override("font_color", INK)
-	_ask.add_child(_ask_lbl)
+		UiKit.panel_box(UiKit.WHITE, 22, 0.0).draw(_ask.get_canvas_item(), _ask_rect))
+	_ask_title = _ask_label(22, INK)
+	_ask_hint = _ask_label(17, UiKit.MUTED)
+	_ask_wallet = _ask_label(18, UiKit.GOLD_DEEP)
 	_ask_buy = Button.new()
 	UiKit.style_button(_ask_buy, UiKit.GOLD, UiKit.GOLD_DEEP, INK, 21, 14)
 	_ask_buy.pressed.connect(_confirm_buy)
@@ -474,30 +483,65 @@ func _build_ask() -> void:
 	UiKit.btn_ghost(_ask_no, 21)
 	_ask_no.pressed.connect(_close_ask)
 	_ask.add_child(_ask_no)
+	# 캐릭터 페이지를 닫으면 확인창도 같이 내린다 (CanvasLayer는 부모가 숨어도 그려진다).
+	visibility_changed.connect(func() -> void:
+		if not is_visible_in_tree():
+			_close_ask())
 	_layout_ask()
 
 
-## 확인창 카드 자리 (패널 한가운데).
+func _ask_label(fs: int, col: Color) -> Label:
+	var l := Label.new()
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", col)
+	_ask.add_child(l)
+	return l
+
+
+## 줄 수를 재서 카드 높이를 정한다 — 글이 길어져도 버튼 줄과 겹치지 않게.
 func _ask_card() -> Rect2:
-	var w := minf(430.0, maxf(240.0, size.x - 40.0))
-	var h := 236.0
-	return Rect2(((size - Vector2(w, h)) / 2.0).floor(), Vector2(w, h))
+	var vp := _ask.size if _ask.size.x > 0.0 else Vector2(1080.0, 1920.0)
+	var w := clampf(vp.x - 120.0, 320.0, 560.0)
+	var inner := w - ASK_PAD * 2.0
+	var h := ASK_PAD
+	for lbl: Label in [_ask_title, _ask_hint, _ask_wallet]:
+		if lbl.text.is_empty():
+			continue
+		lbl.size.x = inner
+		h += _ask_text_h(lbl) + ASK_GAP
+	h += ASK_BTN_H + ASK_PAD
+	return Rect2(((vp - Vector2(w, h)) / 2.0).floor(), Vector2(w, h))
+
+
+func _ask_text_h(lbl: Label) -> float:
+	return float(maxi(lbl.get_line_count(), 1)) * float(lbl.get_line_height())
 
 
 func _layout_ask() -> void:
 	if _ask == null:
 		return
 	_ask.position = Vector2.ZERO
-	_ask.size = size
-	var card := _ask_card()
-	_ask_lbl.position = card.position + Vector2(18.0, 18.0)
-	_ask_lbl.size = Vector2(card.size.x - 36.0, card.size.y - 92.0)
-	var bw := (card.size.x - 54.0) / 2.0
-	var by := card.position.y + card.size.y - 68.0
-	_ask_buy.position = Vector2(card.position.x + 18.0, by)
-	_ask_buy.size = Vector2(bw, 50.0)
-	_ask_no.position = Vector2(card.position.x + 36.0 + bw, by)
-	_ask_no.size = Vector2(bw, 50.0)
+	_ask.size = _ask.get_viewport_rect().size
+	_ask_rect = _ask_card()
+	var card := _ask_rect
+	var inner := card.size.x - ASK_PAD * 2.0
+	var y := card.position.y + ASK_PAD
+	for lbl: Label in [_ask_title, _ask_hint, _ask_wallet]:
+		lbl.visible = not lbl.text.is_empty()
+		if not lbl.visible:
+			continue
+		lbl.position = Vector2(card.position.x + ASK_PAD, y)
+		lbl.size = Vector2(inner, _ask_text_h(lbl))
+		y += lbl.size.y + ASK_GAP
+	var bw := (inner - 16.0) / 2.0
+	var by := card.position.y + card.size.y - ASK_PAD - ASK_BTN_H
+	_ask_buy.position = Vector2(card.position.x + ASK_PAD, by)
+	_ask_buy.size = Vector2(bw, ASK_BTN_H)
+	_ask_no.position = Vector2(card.position.x + ASK_PAD + bw + 16.0, by)
+	_ask_no.size = Vector2(bw, ASK_BTN_H)
 	_ask.queue_redraw()
 
 
@@ -510,26 +554,23 @@ func _open_buy(key: String, idx: int) -> void:
 	var price := GameState.part_price(key, idx)
 	var name := tr(str(part.name)) if part.get("type") == "color" 			else str((part.opts as Array)[idx].name)
 	var cans_buy := GameState.part_can(key, idx)
-	_ask_lbl.text = "%s
-
-%s
-%s" % [
-			tr("CC_BUY_ASK_CAN").format({"name": name, "cans": _gold(price)})
-					if cans_buy
-					else tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)}),
-			_lock_text(key, idx),
-			tr("CC_WALLET_CAN").format({"cans": _gold(GameState.cans)})
-					if cans_buy
-					else tr("CC_WALLET").format({"gold": _gold(GameState.gold)})]
+	# 값은 제목 줄이 말한다 — 가운데 줄은 "원래 어느 냥이의 파츠였나"만 (중복 제거).
+	_ask_title.text = tr("CC_BUY_ASK_CAN").format({"name": name, "cans": _gold(price)}) 			if cans_buy else tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)})
+	var hint := GameState.part_unlock_hint(key, idx)
+	_ask_hint.text = "" if hint.is_empty() else tr("CC_FROM").format(
+			{"name": tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))})
+	var afford := GameState.can_afford_part(key, idx)
+	_ask_wallet.text = tr("CC_WALLET_CAN").format({"cans": _gold(GameState.cans)}) 			if cans_buy else tr("CC_WALLET").format({"gold": _gold(GameState.gold)})
+	_ask_wallet.add_theme_color_override("font_color",
+			(UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP) if afford else UiKit.RED_DEEP)
 	_ask_buy.text = tr("CC_BUY")
-	_ask_buy.disabled = not GameState.can_afford_part(key, idx)
+	_ask_buy.disabled = not afford
 	# 유니크 파츠는 캔으로 산다 — 확인 버튼 색까지 갈라 둔다.
 	UiKit.style_button(_ask_buy,
 			UiKit.CAN if cans_buy else UiKit.GOLD,
 			UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP, INK, 21, 14)
-	_ask.visible = true
+	_ask_layer.visible = true
 	_layout_ask()
-	_ask.move_to_front()
 	# 사기 전에 입혀 본 모습을 보여 준다 (저장되지 않는다).
 	_preview_sel[key] = idx
 	Sfx.play("click")
@@ -538,7 +579,9 @@ func _open_buy(key: String, idx: int) -> void:
 
 
 func _close_ask() -> void:
-	_ask.visible = false
+	if _ask_layer == null or not _ask_layer.visible:
+		return
+	_ask_layer.visible = false
 	if _ask_key != "":
 		_preview_sel.erase(_ask_key)
 	_ask_key = ""
@@ -563,7 +606,7 @@ func _confirm_buy() -> void:
 		_refresh_flavor()
 		return
 	Sfx.play("buy")
-	_ask.visible = false
+	_ask_layer.visible = false
 	_ask_key = ""
 	_ask_idx = -1
 	_preview_sel.erase(key)

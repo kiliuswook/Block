@@ -216,10 +216,18 @@ func _ready() -> void:
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
 	# 골드러시: 게이지가 반쯤 찬 평상시 · 발동 중(금빛 우물 + 금이 박힌 스택) ·
 	# 기록선(자기 최고 높이에 걸린 금색 점선).
-	await _capture("res://core/scenes/main.tscn", OUT + "/endless_rush_gauge.png",
-			func(inst: Node) -> void: _seed_rush(inst, false))
-	await _capture("res://core/scenes/main.tscn", OUT + "/endless_rush.png",
-			func(inst: Node) -> void: _seed_rush(inst, true))
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_fever_gauge.png",
+			func(inst: Node) -> void: _seed_fever(inst, false))
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_fever.png",
+			func(inst: Node) -> void: _seed_fever(inst, true))
+	# 피버가 끝난 직후 — 발밑에 우물 폭을 막은 암반(지워지지도 부서지지도 않는다).
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_fever_floor.png",
+			func(inst: Node) -> void:
+				_seed_fever(inst, true)
+				var b: Node = inst.get_node("Board")
+				b._fever_step(EscapeBoard.FEVER_TIME, b.lava_y - 400.0)
+				b._age_fx(0.4)
+				b.queue_redraw())
 	await _capture("res://core/scenes/main.tscn", OUT + "/pause_settings.png",
 			func(inst: Node) -> void:
 				inst.settings_panel.open(false))
@@ -252,10 +260,10 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
-	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_rush.png",
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_fever.png",
 			func(inst: Node) -> void:
 				inst.get_node("TouchControls").visible = true
-				_seed_rush(inst, true))
+				_seed_fever(inst, true))
 	GameState.mode = GameState.MODE_CLASSIC
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_classic.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
@@ -282,9 +290,9 @@ func _ready() -> void:
 
 ## 골드 블록 캡처용 상태: 쌓인 금 몇 칸 + 지금 떨어지는 블록에 실린 금 +
 ## 방금 터진 금의 튐 연출.
-## 무한의 계단 골드러시 한 컷. `on`이면 발동 중(금빛 우물 · 금이 박힌 스택),
+## 무한의 계단 피버타임 한 컷. `on`이면 발동 중(무지개 우물 · 코인 비 · 속도선),
 ## 아니면 게이지가 반쯤 찬 평상시 + 기록선이 걸린 모습이다.
-func _seed_rush(inst: Node, on: bool) -> void:
+func _seed_fever(inst: Node, on: bool) -> void:
 	var b: Node = inst.get_node("Board")
 	GameState.best_height = 26
 	EventBus.height_changed.emit(11)
@@ -292,15 +300,15 @@ func _seed_rush(inst: Node, on: bool) -> void:
 		for x in range(EscapeBoard.COLS):
 			if (x + y) % 3 != 0:
 				b.grid[Vector2i(x, y)] = Board.PIECES[(x + y) % 7]
-				if (x * 3 + y) % 5 == 0 and on:
-					b.ore[Vector2i(x, y)] = true
 	if on:
-		b._rush_gain(EscapeBoard.RUSH_MAX)
-		b._rush_step(EscapeBoard.RUSH_TIME * 0.4, b.lava_y - 400.0)
-		b.rush_flash = 0.0  # 발동 섬광은 지나갔다 — 금빛 우물만 남는다
+		b._fever_gain(EscapeBoard.FEVER_MAX)
+		# 잘게 나눠 흘려야 코인 비가 하늘부터 발밑까지 고르게 깔린다.
+		for _i in 24:
+			b._fever_step(EscapeBoard.FEVER_TIME * 0.4 / 24.0, b.lava_y - 400.0)
+		b.fever_flash = 0.0  # 발동 섬광은 지나갔다 — 물든 우물만 남는다
 	else:
-		b._rush_gain(EscapeBoard.RUSH_MAX * 0.55)
-		b.rush_near = 0.8
+		b._fever_gain(EscapeBoard.FEVER_MAX * 0.55)
+		b.fever_near = 0.8
 	b.queue_redraw()
 
 

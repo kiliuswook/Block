@@ -109,6 +109,12 @@ func rect() -> Rect2:
 func _physics_process(delta: float) -> void:
 	if not alive or not board.playing or board.is_paused:
 		return
+	if board.fever_on():
+		# 피버타임: 중력도 블록도 없다. 저 혼자 솟구치고, 조작은 좌우뿐 —
+		# 별을 훑으러 다니라고 남겨 둔 폭이다.
+		_fever_motion(delta)
+		queue_redraw()
+		return
 	squash_timer = maxf(squash_timer - delta, 0.0)
 	# 머리 위 블록: 놀라는 건 즉시, 푸는 건 천천히 — 스쳐 지나가도 여운이 남는다.
 	scare = maxf(board.overhead_threat(rect()), scare - delta * SCARE_EASE)
@@ -116,6 +122,27 @@ func _physics_process(delta: float) -> void:
 	_handle_input(delta)
 	_apply_motion(delta)
 	queue_redraw()
+
+
+## 피버타임 상승: 위로는 보드가 정한 속도로 일정하게, 좌우만 조작이 먹는다.
+## 벽 안쪽으로만 가둬 두고 블록 충돌은 아예 재지 않는다 — 스택을 뚫고 오른다.
+func _fever_motion(delta: float) -> void:
+	squash_timer = 0.0
+	scare = 0.0
+	jolt = maxf(jolt - delta / JOLT_TIME, 0.0)
+	dash_timer = 0.0
+	knockback_timer = 0.0
+	on_floor = false
+	coyote_timer = 0.0
+	wall_dir = 0
+	wall_jumps_left = 1
+	var axis := Input.get_axis("move_left", "move_right")
+	if axis != 0.0:
+		facing = int(signf(axis))
+	velocity = Vector2(axis * RUN_SPEED * stat_speed * board.FEVER_STEER, -board.fever_rise())
+	position += velocity * delta
+	position.x = clampf(position.x, SIZE / 2.0,
+			board.COLS * board.CELL - SIZE / 2.0)
 
 
 ## 옆에서 블록이 쿵 하고 박혔다 — 몸이 한 번 튄다 (escape_board가 부른다).
@@ -267,6 +294,14 @@ func _draw() -> void:
 		skin_id = GameState.selected_cat
 	var skin: Dictionary = GameState.cat_skin(skin_id)
 	var trail: Color = skin.get("body", BODY_COLOR)
+	# 피버 상승 잔상: 지나온 자리에 몸이 길게 늘어져 남는다 — 속도를 몸으로 말한다.
+	if board.fever_on():
+		var speed := board.fever_rise()
+		var stretch := clampf(speed / board.FEVER_RISE, 0.0, 1.0)
+		for i in range(1, 6):
+			var ghost := body
+			ghost.position.y += float(i) * SIZE * 0.42 * stretch
+			draw_rect(ghost, Color(trail, (0.30 - float(i) * 0.05) * stretch))
 	if dash_timer > 0.0:
 		draw_rect(body.grow(5.0), Color(trail, 0.22))
 		for i in range(1, 4):

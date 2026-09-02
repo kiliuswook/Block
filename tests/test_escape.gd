@@ -214,8 +214,8 @@ func _ready() -> void:
 	b2._update_endless(0.016)
 	_check(not p2.alive, "touching lava is death")
 
-	# Endless line clears: the stack stays floating (no collapse) and the lava
-	# is shoved back down.
+	# Endless line clears: 지운 줄은 빈자리로 남지 않는다 — 받칠 것을 잃은 덩어리가
+	# 아래로 내려앉고(_settle_grid), 용암은 뒤로 밀린다.
 	b2.grid.clear()
 	b2.cracked.clear()
 	for x in range(EscapeBoard.COLS):
@@ -227,10 +227,37 @@ func _ready() -> void:
 	var endless_cleared: int = b2._clear_lines()
 	_check(endless_cleared == 1, "endless full row clears")
 	_check(not b2.grid.has(Vector2i(0, 6)), "cleared row is gone")
-	_check(b2.grid.has(Vector2i(4, 5)), "endless clear leaves the stack floating")
-	_check(b2.cracked.has(Vector2i(4, 5)), "endless clear keeps the crack in place")
+	var landed := Vector2i(4, b2.rows - 1)
+	_check(not b2.grid.has(Vector2i(4, 5)), "endless clear does not leave a floating block")
+	_check(b2.grid.has(landed), "the unsupported block settles onto the floor")
+	_check(b2.cracked.has(landed), "the crack rides down with it")
 	b2._endless_line_reward(endless_cleared)
 	_check(b2.lava_y > lava_pushed_from, "line clear shoves the lava down")
+
+	# 덩어리째 내려앉기: 떨어져 나온 섬만 모양 그대로 아래로 앉고,
+	# 옆으로 이어져 받쳐진 발판은 밑이 한 칸 뚫려도 버틴다.
+	var floor_y: int = b2.rows - 1
+	b2.grid.clear()
+	b2.cracked.clear()
+	b2.ore.clear()
+	for x in range(EscapeBoard.COLS):
+		b2.grid[Vector2i(x, floor_y)] = "O"
+	b2.grid[Vector2i(2, floor_y - 4)] = "T"
+	b2.grid[Vector2i(3, floor_y - 4)] = "T"
+	b2.ore[Vector2i(3, floor_y - 4)] = true
+	_check(b2._settle_grid() == 3, "the floating island falls until it rests")
+	_check(b2.grid.has(Vector2i(2, floor_y - 1)) and b2.grid.has(Vector2i(3, floor_y - 1)),
+			"the island keeps its shape on the way down")
+	_check(b2.ore.has(Vector2i(3, floor_y - 1)), "gold rides down with its cell")
+	_check(b2._settle_grid() == 0, "a settled field does not move again")
+	b2.grid.clear()
+	b2.ore.clear()
+	for x in range(EscapeBoard.COLS):
+		b2.grid[Vector2i(x, floor_y)] = "O"
+		b2.grid[Vector2i(x, floor_y - 1)] = "O"
+	b2.grid.erase(Vector2i(4, floor_y))
+	_check(b2._settle_grid() == 0, "a bridge held from the side keeps its hole")
+	_check(not b2.grid.has(Vector2i(4, floor_y)), "the broken cell stays empty")
 
 	GameState.mode = GameState.MODE_CLASSIC
 
@@ -574,52 +601,109 @@ func _ready() -> void:
 	b8.add_child(cam8)
 	add_child(b8)
 	b8.start_game()
-	_check(not b8.rush_on() and is_equal_approx(b8.rush_gauge, 0.0),
-			"rush: a run starts with the gauge empty")
+	# [테스트용 시작 게이지(FEVER_DEBUG_START)가 걸려 있어도 나머지 단언이 흔들리지
+	# 않게, 판정한 뒤 곧바로 0으로 비운다. 출시 전 상수를 0.0으로 되돌리면 그대로다.]
+	_check(not b8.fever_on() and is_equal_approx(b8.fever_gauge, EscapeBoard.FEVER_DEBUG_START),
+			"fever: a run starts with the gauge at its configured start")
+	b8.fever_gauge = 0.0
 	# 시간만 흘려서는 절대 차지 않는다 — 실력이 터뜨리는 게이지다.
-	var feet_safe: float = b8.lava_y - EscapeBoard.RUSH_NEAR_DIST - 10.0
-	b8._rush_step(1.0, feet_safe)
-	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: idling never charges the gauge")
+	var feet_safe: float = b8.lava_y - EscapeBoard.FEVER_NEAR_DIST - 10.0
+	b8._fever_step(1.0, feet_safe)
+	_check(is_equal_approx(b8.fever_gauge, 0.0), "fever: idling never charges the gauge")
 	# 발끝 세이브: 용암에 붙어 있는 동안만 찬다.
-	b8._rush_step(1.0, b8.lava_y - 10.0)
-	_check(b8.rush_gauge > 0.0, "rush: hugging the lava charges the gauge")
-	# 줄 클리어가 주 수입원 — 4줄 한 방이 게이지 절반을 넘긴다.
-	b8.rush_gauge = 0.0
+	b8._fever_step(1.0, b8.lava_y - 10.0)
+	_check(b8.fever_gauge > 0.0, "fever: hugging the lava charges the gauge")
+	# 무한의 주 수입원은 오르기다 — 최고 높이를 갱신한 칸만큼 찬다.
+	b8.fever_gauge = 0.0
+	b8.best_height = 0
+	var climb_feet: float = b8.rows * EscapeBoard.CELL - 10.0 * EscapeBoard.CELL
+	b8._track_height(climb_feet)
+	_check(b8.best_height == 10, "fever: climbing sets the run's height record")
+	_check(is_equal_approx(b8.fever_gauge, 10.0 * EscapeBoard.FEVER_CLIMB_GAIN),
+			"fever: climbing charges the gauge per new cell")
+	# 되돌아 내려갔다 올라오는 구간은 값을 치르지 않는다 (파밍 금지).
+	var climbed: float = b8.fever_gauge
+	b8._track_height(climb_feet + 4.0 * EscapeBoard.CELL)
+	b8._track_height(climb_feet)
+	_check(is_equal_approx(b8.fever_gauge, climbed), "fever: re-climbing old ground pays nothing")
+	# 블록을 직접 부수는 것도 무한의 동사라 게이지가 찬다.
+	b8.fever_gauge = 0.0
+	var brk := Vector2i(3, b8.rows - 2)
+	b8.grid[brk] = "T"
+	b8.cracked[brk] = true
+	b8.break_cell_in_rect(b8._cell_rect(brk))
+	_check(is_equal_approx(b8.fever_gauge, EscapeBoard.FEVER_BREAK_GAIN),
+			"fever: breaking a block charges the gauge")
+	# 줄 클리어는 드물지만 여전히 크다 — 4줄 한 방이 게이지 절반을 넘긴다.
+	b8.fever_gauge = 0.0
 	b8.combo = 1
 	b8._endless_line_reward(4)
-	_check(b8.rush_gauge > EscapeBoard.RUSH_MAX * 0.5, "rush: a tetris fills over half")
-	# 만땅이면 발동: 용암이 밀려나고 금 확률이 뛴다.
-	var rush_lava_before: float = b8.lava_y
-	b8._rush_gain(EscapeBoard.RUSH_MAX)
-	_check(b8.rush_on(), "rush: a full gauge triggers the rush")
-	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: the gauge empties on trigger")
-	_check(b8.lava_y > rush_lava_before, "rush: triggering shoves the lava back down")
-	b8._rush_gain(EscapeBoard.RUSH_MAX)
-	_check(is_equal_approx(b8.rush_gauge, 0.0), "rush: charging is off while the rush runs")
-	# 발동 중에는 블록마다 금이 박혀 나온다 (평소 10% → 75%).
-	var ore_pieces := 0
-	for i in 40:
-		b8._spawn_piece()
-		if b8.piece_ore >= 0:
-			ore_pieces += 1
-	_check(ore_pieces > 20, "rush: gold shows up in most pieces while it runs")
-	# 종료: 필드에 남은 금이 한 칸씩 순차로 터진다.
-	b8.grid[Vector2i(2, 18)] = "O"
-	b8.grid[Vector2i(3, 18)] = "O"
-	b8.ore[Vector2i(2, 18)] = true
-	b8.ore[Vector2i(3, 18)] = true
-	var gold_before: int = b8.ore_gold
-	b8._rush_step(EscapeBoard.RUSH_TIME, feet_safe)
-	_check(not b8.rush_on(), "rush: it ends when the timer runs out")
-	_check(not b8.rush_pop.is_empty() or b8.ore.is_empty(),
-			"rush: the leftover gold is queued to blow")
-	for i in 10:
-		b8._rush_pop_step(EscapeBoard.RUSH_POP_STEP)
-	_check(b8.ore.is_empty(), "rush: the queue empties the field of gold")
-	_check(b8.ore_gold == gold_before + 2 * EscapeBoard.ORE_VALUE,
-			"rush: the blow-out pays full value per cell")
-	_check(is_equal_approx(b8.rush_gauge, 0.0),
-			"rush: the blow-out does not recharge the gauge")
+	_check(b8.fever_gauge > EscapeBoard.FEVER_MAX * 0.5, "fever: a tetris fills over half")
+	# 만땅이면 발동: 용암이 밀려나고 상승 경로에 별이 깔린다.
+	var fever_lava_before: float = b8.lava_y
+	b8._fever_gain(EscapeBoard.FEVER_MAX)
+	_check(b8.fever_on(), "fever: a full gauge triggers the fever")
+	_check(is_equal_approx(b8.fever_gauge, 0.0), "fever: the gauge empties on trigger")
+	_check(b8.lava_y > fever_lava_before, "fever: triggering shoves the lava back down")
+	_check(b8.fever_coins.size() > 10, "fever: the sky is seeded with coins on trigger")
+	b8._fever_gain(EscapeBoard.FEVER_MAX)
+	_check(is_equal_approx(b8.fever_gauge, 0.0), "fever: charging is off while the fever runs")
+	# 상승 속도는 0에서 출발해 FEVER_ACCEL_TIME에 걸쳐 최고 속도까지 붙는다.
+	_check(is_equal_approx(b8.fever_rise(), 0.0), "fever: the rise starts from a standstill")
+	b8.fever_time = EscapeBoard.FEVER_TIME - EscapeBoard.FEVER_ACCEL_TIME
+	_check(is_equal_approx(b8.fever_rise(), EscapeBoard.FEVER_RISE),
+			"fever: the rise ramps up to full speed")
+	# 비: 시간이 흐르면 코인이 더 태어나고, 있던 코인은 아래로 떨어진다.
+	var coins_before: int = b8.fever_coins.size()
+	var first_y: float = (b8.fever_coins[0][0] as Vector2).y
+	b8._fever_rain(0.5)
+	_check(b8.fever_coins.size() > coins_before, "fever: coins keep pouring from the sky")
+	_check((b8.fever_coins[0][0] as Vector2).y > first_y, "fever: coins fall downward")
+	var coin_gold_before: int = b8.ore_gold
+	p8.position = (b8.fever_coins[0][0] as Vector2)
+	b8._fever_collect()
+	_check(b8.fever_coins[0][2], "fever: touching a coin takes it")
+	_check(b8.ore_gold == coin_gold_before + EscapeBoard.FEVER_COIN_GOLD,
+			"fever: a coin pays gold")
+	_check(b8.fever_rise() > EscapeBoard.FEVER_RISE, "fever: a coin speeds the rise up")
+	for _i in 40:
+		b8._fever_drop_coin(p8.position.y)
+	for st: Array in b8.fever_coins:
+		st[2] = false
+		p8.position = st[0] as Vector2
+		b8._fever_collect()
+	_check(b8.fever_boost <= EscapeBoard.FEVER_BOOST_MAX + 0.0001,
+			"fever: the boost is capped so every run climbs about the same")
+	# 종료: 발밑에 착지 바닥이 깔린다 — 오른 만큼 도로 떨어져 죽으면 안 된다.
+	p8.position = Vector2(5.0 * EscapeBoard.CELL, -40.0 * EscapeBoard.CELL)
+	b8._fever_step(EscapeBoard.FEVER_TIME, feet_safe)
+	_check(not b8.fever_on(), "fever: it ends when the timer runs out")
+	_check(b8.fever_coins.is_empty(), "fever: the coin rain is cleared on the way out")
+	# 착지 바닥은 우물 폭을 **구멍 없이** 막은 암반이다.
+	var pad_row := int(ceil((p8.position.y + Player.SIZE / 2.0) / EscapeBoard.CELL))
+	var filled := 0
+	var anchored := 0
+	for x in EscapeBoard.COLS:
+		if b8.grid.has(Vector2i(x, pad_row)):
+			filled += 1
+		if b8.anchor.has(Vector2i(x, pad_row)):
+			anchored += 1
+	_check(filled == EscapeBoard.COLS, "fever: a full-width solid floor is laid under the cat")
+	_check(anchored == EscapeBoard.COLS, "fever: the whole floor is anchored bedrock")
+	_check(is_equal_approx(b8.fever_gauge, 0.0), "fever: the gauge stays empty after the fever")
+	# 꽉 찬 줄이지만 지워지지 않는다 — 벌어 준 높이를 지키는 바닥이다.
+	_check(b8._clear_lines() == 0, "fever: the bedrock row is never line-cleared")
+	_check(b8.grid.has(Vector2i(0, pad_row)), "fever: bedrock survives a clear pass")
+	# 부수려 해도 부서지지 않는다.
+	var hit: bool = b8.break_cell_in_rect(b8._cell_rect(Vector2i(3, pad_row)).grow(-8.0))
+	_check(not hit and b8.grid.has(Vector2i(3, pad_row)), "fever: bedrock cannot be broken")
+	# 우물 바닥에 닿지 않은 섬이지만 앵커라 _settle_grid()가 떨어뜨리지 않는다.
+	b8._settle_grid()
+	var still := 0
+	for x in EscapeBoard.COLS:
+		if b8.grid.has(Vector2i(x, pad_row)):
+			still += 1
+	_check(still == EscapeBoard.COLS, "fever: the anchored floor does not settle away")
 	b8.queue_free()
 
 	GameState.save_game()

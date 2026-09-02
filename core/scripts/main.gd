@@ -8,7 +8,7 @@ const GOLD := Color(1.0, 0.85, 0.35)
 const UiKit := preload("res://core/scripts/ui_kit.gd")
 const SETTINGS_PANEL := preload("res://core/scripts/settings_panel.gd")
 const GOAL_METER := preload("res://core/scripts/goal_meter.gd")
-const RUSH_METER := preload("res://core/scripts/rush_meter.gd")
+const FEVER_METER := preload("res://core/scripts/fever_meter.gd")
 const USER_HUD := preload("res://core/scripts/user_hud.gd")
 const PIECE_FLYER := preload("res://core/scripts/piece_flyer.gd")
 ## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
@@ -46,7 +46,7 @@ var record_broken := false
 var height_tween: Tween
 var record_tween: Tween
 var goal_meter: Control  # classic: the LINES goal drawn as a rack of tiles
-var rush_meter: Control  # endless: the gold-rush gauge
+var fever_meter: Control  # endless: the fever-time gauge
 # Gold already paid out this run.
 var gold_awarded := 0
 var xp_awarded := 0  # 이 판이 이미 지급한 계정 경험치 (중복 지급 방지)
@@ -99,8 +99,8 @@ func _ready() -> void:
 	if endless:
 		# 설명 문구는 두지 않는다 — 계기판만 남긴다 (스테이지 모드와 같은 규칙).
 		goal_label.visible = false
-		_build_rush_meter()
-		EventBus.goldrush_changed.connect(_on_goldrush)
+		_build_fever_meter()
+		EventBus.fever_changed.connect(_on_fever)
 	height_label.pivot_offset = height_label.size / 2.0
 	milestone_label.pivot_offset = milestone_label.size / 2.0
 	if get_viewport_rect().size.y > get_viewport_rect().size.x:
@@ -438,11 +438,11 @@ func _layout_stat_column() -> void:
 		val.size = Vector2(HUD_COL_W, ceilf(fs * 1.25))
 		val.pivot_offset = val.size / 2.0
 		y += val.size.y + HUD_ROW_GAP
-		if val == height_label and rush_meter != null:
+		if val == height_label and fever_meter != null:
 			# 골드러시 게이지는 큰 층수 바로 아래 — 이 판의 리듬을 읽는 줄이다.
-			rush_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 8.0)
-			rush_meter.size = Vector2(HUD_COL_W - 40.0, 50.0)
-			y = rush_meter.position.y + rush_meter.size.y + HUD_ROW_GAP
+			fever_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 8.0)
+			fever_meter.size = Vector2(HUD_COL_W - 40.0, 50.0)
+			y = fever_meter.position.y + fever_meter.size.y + HUD_ROW_GAP
 		if val == lines_label and goal_meter != null:
 			# 타일 랙은 LINES 숫자에 딸린 줄이라 바로 아래 붙인다.
 			goal_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 10.0)
@@ -471,7 +471,7 @@ func _build_hud_cards() -> void:
 		var col: Array = [$UI/NextTitle, $UI/NextPreview, score_title, score_label,
 				level_title, level_label, lines_title, lines_label, height_title,
 				height_label, best_title, best_label, goal_label, goal_meter,
-				rush_meter]
+				fever_meter]
 		# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
 		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
 	if help_label.visible and help_label.text != "":
@@ -489,10 +489,10 @@ func _build_hud_cards() -> void:
 func _build_hud_cards_portrait() -> void:
 	hud_groups.append({"nodes": [$UI/NextTitle, $UI/NextPreview], "w": 0.0})
 	hud_groups.append({"nodes": [height_title, height_label], "w": 0.0})
-	if rush_meter != null:
+	if fever_meter != null:
 		# 골드러시 게이지는 NEXT 카드 아래 — 우물(x 220~860) 왼쪽 여백이라
 		# 판을 가리지 않고, 엄지에서도 먼 자리다.
-		hud_groups.append({"nodes": [rush_meter], "w": 0.0})
+		hud_groups.append({"nodes": [fever_meter], "w": 0.0})
 	# 오른쪽 열 — 우물(x 220~860) 바깥에 서므로 카드가 판을 가리지 않는다.
 	# 기록 갱신 줄(★ NEW RECORD!)은 열보다 넓어 카드에 넣지 않고 그대로 띄운다.
 	var right: Array = [best_title, best_label, score_title, score_label,
@@ -633,18 +633,18 @@ func _fit_board() -> void:
 
 ## 골드러시 게이지. 가로 화면의 자리는 `_layout_stat_column()`이 큰 층수 바로
 ## 아래로 잡고, 세로 화면만 여기서 따로 배치한다(NEXT 카드 아래 왼쪽 여백).
-func _build_rush_meter() -> void:
-	rush_meter = RUSH_METER.new()
-	$UI.add_child(rush_meter)
+func _build_fever_meter() -> void:
+	fever_meter = FEVER_METER.new()
+	$UI.add_child(fever_meter)
 	var vp := get_viewport_rect().size
 	if vp.y > vp.x:
-		rush_meter.position = Vector2(40.0, 292.0)
-		rush_meter.size = Vector2(196.0, 50.0)
+		fever_meter.position = Vector2(40.0, 292.0)
+		fever_meter.size = Vector2(196.0, 50.0)
 
 
-## 골드러시가 터진 순간에만 화면을 한 번 밝힌다 (게이지가 차는 동안은 조용히).
-func _on_goldrush(_gauge: float, time_left: float) -> void:
-	if time_left >= EscapeBoard.RUSH_TIME - 0.001:
+## 피버타임이 터진 순간에만 화면을 한 번 밝힌다 (게이지가 차는 동안은 조용히).
+func _on_fever(_gauge: float, time_left: float) -> void:
+	if time_left >= EscapeBoard.FEVER_TIME - 0.001:
 		_screen_flash(0.28)
 
 

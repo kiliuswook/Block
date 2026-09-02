@@ -1,7 +1,7 @@
 extends Control
-## 무한의 계단 골드러시 게이지. 평소에는 다음 러시까지 얼마나 찼는지를(줄 클리어·
-## 콤보·금 캐기·발끝 세이브로만 찬다) 보여 주고, 발동 중에는 같은 바가 금색으로
-## 가득 차 남은 시간만큼 줄어든다. 계기판의 다른 줄과 같이 흰 카드 위에 서므로
+## 무한의 계단 피버타임 게이지. 평소에는 다음 피버까지 얼마나 찼는지를(오르기·
+## 블록 부수기·발끝 세이브·줄 클리어로만 찬다) 보여 주고, 발동 중에는 같은 바가
+## 남은 6초만큼 줄어든다. 계기판의 다른 줄과 같이 흰 카드 위에 서므로
 ## 글자는 잉크/골드다 — 어두운 배경용 크림색 + 외곽선은 쓰지 않는다.
 
 const UiKit := preload("res://core/scripts/ui_kit.gd")
@@ -17,7 +17,7 @@ var _pulse := 0.0
 
 
 func _ready() -> void:
-	EventBus.goldrush_changed.connect(_on_changed)
+	EventBus.fever_changed.connect(_on_changed)
 	set_process(false)
 
 
@@ -44,10 +44,10 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var on := time_left > 0.0
 	var font := ThemeDB.fallback_font
-	var label := tr("HUD_GOLDRUSH") if on else tr("HUD_RUSH_GAUGE")
+	var label := tr("HUD_FEVER") if on else tr("HUD_FEVER_GAUGE")
 	var col := UiKit.GOLD if on else Color(UiKit.INK, 0.55)
 	if on:
-		# 발동 중엔 제목이 맥동한다 — 남은 10초가 눈에 띄어야 한다.
+		# 발동 중엔 제목이 맥동한다 — 남은 시간이 눈에 띄어야 한다.
 		col.a = 0.65 + 0.35 * sin(_pulse * 9.0)
 	draw_string(font, Vector2(0.0, CAPTION_H - 6.0), label,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 22, col)

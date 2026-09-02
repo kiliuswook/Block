@@ -49,24 +49,44 @@ const LAVA_SPEED_STEP := 2.0
 const LAVA_SPEED_MAX := 45.0
 const LAVA_MAX_GAP := 980.0  # lava never trails the player by more than this
 const LAVA_PUSH := [0, 2, 5, 9, 15]  # endless: lava shoved down this many cells per clear size
-# --- 골드러시 (무한의 계단 전용 스파이크) --------------------------------------
+# --- 피버타임 (무한의 계단 전용 스파이크) --------------------------------------
 # 무한의 계단은 처음부터 끝까지 같은 리듬으로 조여 오기만 해서 "판이 뒤집히는
-# 순간"이 없었다. 골드러시가 그 자리다. 게이지는 **시간으로는 절대 차지 않고**
-# 줄 클리어·콤보·금 캐기·용암 발끝 세이브로만 찬다 — 운이 아니라 실력이
-# 터뜨린다. 발동하면 용암이 멎고 블록마다 금이 박혀 나오며, 끝나는 순간 필드에
-# 남은 금이 아래에서부터 한 칸씩 순차로 터진다: 그래서 러시 중에는 "지금 캘까,
-# 쌓아 둘까"라는 판단이 하나 더 생긴다.
-const RUSH_MAX := 100.0
-const RUSH_LINE_GAIN := [0.0, 8.0, 20.0, 36.0, 60.0]  # 한 번에 지운 줄 수만큼
-const RUSH_COMBO_GAIN := 5.0  # 콤보 한 단계마다 얹는다
-const RUSH_ORE_GAIN := 6.0  # 금 한 칸을 직접 깨서 캤다
-const RUSH_NEAR_GAIN := 12.0  # 발끝 세이브: 용암에 붙어 있는 동안 초당
-const RUSH_NEAR_DIST := CELL * 1.5  # 발과 용암이 이보다 가까우면 "발끝"
-const RUSH_TIME := 10.0  # 발동 지속 (초)
-const RUSH_ORE_CHANCE := 0.75  # 발동 중 블록에 금이 박힐 확률
-const RUSH_LAVA_PUSH := 6  # 발동 순간 용암을 이만큼(칸) 밀어낸다
-const RUSH_POP_STEP := 0.09  # 종료 폭발: 금 한 칸이 터지는 간격
-const RUSH_FLASH_TIME := 0.5  # 발동 순간의 금빛 섬광
+# 순간"이 없었다. 피버타임이 그 자리다. 게이지는 **시간으로는 절대 차지 않고**
+# 무한에서 실제로 하는 짓 — 올라가기·블록 부수기·용암 발끝 세이브, 그리고
+# (드물지만) 줄 클리어로만 찬다: 운이 아니라 실력이 터뜨린다.
+#
+# 발동하면 고양이가 중력도 블록도 무시하고 **저 혼자 솟구친다**. 짧고, 안전하고,
+# 화려하다 — 조여 오던 판이 잠깐 통째로 사라지는 기분 전환이 이 연출의 전부다.
+# 상승 경로에는 별이 지그재그로 깔려서, 좌우로 잘 훑으면 조금 더 높이 간다
+# (`FEVER_BOOST_MAX`만큼 = 최대 3할 남짓. 가만히 있어도 대부분은 비슷하게 오른다).
+# 끝나는 순간 발밑에 착지 발판을 깔아 준다 — 안 그러면 오른 만큼 도로 떨어져
+# 용암에 빠지므로, "안전하게 벌었다"는 약속이 깨진다.
+const FEVER_MAX := 100.0
+const FEVER_CLIMB_GAIN := 3.0  # 최고 높이를 새로 갱신한 칸마다 (주 수입원)
+const FEVER_BREAK_GAIN := 3.0  # 일반 블록을 직접 부쉈다 (대시·머리 박기)
+const FEVER_LINE_GAIN := [0.0, 8.0, 20.0, 36.0, 60.0]  # 한 번에 지운 줄 수만큼
+const FEVER_COMBO_GAIN := 5.0  # 콤보 한 단계마다 얹는다
+const FEVER_ORE_GAIN := 6.0  # 금 한 칸을 직접 깨서 캤다
+const FEVER_NEAR_GAIN := 18.0  # 발끝 세이브: 용암에 붙어 있는 동안 초당
+const FEVER_NEAR_DIST := CELL * 2.2  # 발과 용암이 이보다 가까우면 "발끝"
+const FEVER_TIME := 3.4  # 발동 지속 (초) — 짧게 끊어야 기분 전환으로 남는다
+const FEVER_RISE := 560.0  # 최고 상승 속도 (px/s) ≈ 8.75칸/초
+const FEVER_ACCEL_TIME := 0.5  # 이만큼에 걸쳐 최고 속도까지 붙는다 (가속이 있어야 빠르게 느낀다)
+const FEVER_ZOOM := 0.94  # 발동 중 카메라를 살짝 당긴다 — 시야가 좁아지면 더 빨라 보인다
+const FEVER_STEER := 1.35  # 상승 중 좌우 조작 배율 (별을 훑으러 다닐 만큼)
+const FEVER_COIN_RATE := 16.0  # 하늘에서 쏟아지는 코인 수 (초당)
+const FEVER_COIN_SEED := 14  # 발동 순간 하늘에 미리 깔아 두는 코인 수 (첫 프레임부터 비가 온다)
+const FEVER_COIN_FALL := 300.0  # 코인 낙하 속도 (px/s) — 솟는 고양이와 마주 달려 더 빨라 보인다
+const FEVER_COIN_SPREAD := 0.36  # 소나기 줄기가 좌우로 흔들리는 폭 (우물 폭 대비)
+const FEVER_COIN_R := 22.0  # 먹는 판정 반지름
+const FEVER_COIN_BOOST := 0.02  # 코인 하나마다 붙는 상승 속도 (비율)
+const FEVER_BOOST_MAX := 0.35  # 다 주워도 여기까지 — "대부분 비슷하게" 오른다
+const FEVER_COIN_GOLD := 8  # 코인 하나의 골드
+const FEVER_LAVA_PUSH := 6  # 발동 순간 용암을 이만큼(칸) 밀어낸다
+const FEVER_FLASH_TIME := 0.5  # 발동 순간의 섬광
+# [테스트용 · 출시 전 0.0으로 되돌릴 것] 판을 시작할 때 게이지를 이만큼 채워 두면
+# 피버 발동·종료 연출을 몇 수 만에 확인할 수 있다.
+const FEVER_DEBUG_START := 90.0
 # Classic level-clear shutter (Atari B-type): a steel curtain rolls down over
 # the well, paying a bonus for every empty row it passes at the top, holds shut
 # while the next level's board is dealt behind it, then rolls back up.
@@ -101,6 +121,10 @@ const FX_MAX := 200  # 먼지·파편 총량 상한 (웹 빌드 프레임 보호
 var grid := {}  # Vector2i -> piece type
 var cracked := {}  # Vector2i -> true; first break hit cracks, second destroys
 var ore := {}  # Vector2i -> true; 금이 박힌 칸 (grid와 나란히 간다)
+# 피버가 공중에 깔아 준 바닥. `_unsupported_cells()`가 이 칸을 품은 덩어리를
+# "받쳐져 있다"고 쳐 준다 — 우물 바닥에 닿지 않는 섬이라, 앵커가 없으면 다음
+# `_settle_grid()`에 통째로 떨어져 애써 벌어 준 높이가 날아간다.
+var anchor := {}  # Vector2i -> true (grid·cracked·ore와 나란히 옮겨 다닌다)
 var piece_ore := -1  # 지금 떨어지는 블록에서 금이 박힌 칸 번호 (-1 = 없음)
 var ore_gold := 0  # 이 판에 골드 블록으로 번 골드
 var ore_fx: Array = []  # [중심 좌표, 경과 시간, 값] — 금이 튀는 연출
@@ -166,6 +190,7 @@ var shake_amt := 0.0
 var shake_t := 0.0
 var hitstop := 0.0  # 이 시간 동안 판이 멎는다 (임팩트가 눈에 박히게)
 var slide_off := 0.0  # 떨어지는 블록의 가로 잔여 오프셋 (칸 단위, 0으로 수렴)
+var rise_off := 0.0  # 회전 월킥의 세로 잔여 오프셋 (칸 단위, 0으로 수렴)
 var spin_off := 0.0  # 회전 잔여 각도 (rad, 0으로 수렴)
 var spin_pop := 0.0  # 회전 직후의 테두리 섬광 (0..1)
 var land_squash := 0.0  # 착지 눌림 (0..1)
@@ -182,13 +207,16 @@ var banner_age := BANNER_TIME
 var banner_y := 0.0
 var combo := 0  # 연속 줄 클리어 — 못 지운 락에서 끊긴다
 
-# --- 골드러시 상태 (`_fx_reset()`이 전부 비운다) -------------------------------
-var rush_gauge := 0.0  # 0 ~ RUSH_MAX
-var rush_time := 0.0  # 남은 발동 시간 (0 = 꺼짐)
-var rush_near := 0.0  # 발끝 세이브 근접도 0..1 — 용암 위 열기 연출에 쓴다
-var rush_pop: Array = []  # 종료 폭발 대기열 (아래 칸부터)
-var rush_pop_t := 0.0
-var rush_flash := 0.0  # 발동 순간의 금빛 섬광 (초)
+# --- 피버타임 상태 (`_fx_reset()`이 전부 비운다) -------------------------------
+var fever_gauge := 0.0  # 0 ~ FEVER_MAX
+var fever_time := 0.0  # 남은 발동 시간 (0 = 꺼짐)
+var fever_near := 0.0  # 발끝 세이브 근접도 0..1 — 용암 위 열기 연출에 쓴다
+var fever_boost := 0.0  # 이번 피버에 별로 벌어들인 상승 속도 (비율, 0~FEVER_BOOST_MAX)
+var fever_coins: Array = []  # [pos, age, taken, vel, spin] — 하늘에서 쏟아지는 골드 코인
+var fever_coin_acc := 0.0  # 코인 생성 누적기 (FEVER_COIN_RATE)
+var fever_streaks: Array = []  # [x, y, len, speed] — 아래로 흐르는 속도선
+var fever_phase := 0.0  # 연출용 누적 시간
+var fever_flash := 0.0  # 발동 순간의 섬광 (초)
 
 @onready var player: Player = $Player
 @onready var cam: Camera2D = get_node_or_null("Cam")
@@ -200,6 +228,7 @@ func start_game() -> void:
 	grid.clear()
 	cracked.clear()
 	ore.clear()
+	anchor.clear()
 	ore_fx.clear()
 	ore_gold = 0
 	piece_ore = -1
@@ -241,6 +270,7 @@ func start_game() -> void:
 	EventBus.lines_changed.emit(0)
 	EventBus.level_changed.emit(level)
 	EventBus.height_changed.emit(0)
+	EventBus.fever_changed.emit(fever_gauge / FEVER_MAX, 0.0)  # [테스트용 시작 게이지 반영]
 	if mode == Mode.CLASSIC:
 		_classic_announce_level()
 	queue_redraw()
@@ -285,20 +315,23 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 	run_time += delta  # only ticks while the board is actually being played
-	if Input.is_action_just_pressed("rotate_cw"):
-		_try_rotate(1)
-	if Input.is_action_just_pressed("rotate_ccw"):
-		_try_rotate(-1)
-	if piece_type != "":
-		match piece_state:
-			PieceState.TRACKING:
-				_track(delta)
-			PieceState.FALLING:
-				_fall(delta)
-			PieceState.LANDED:
-				_landed(delta)
-	if mode == Mode.ENDLESS and playing:
-		_step_loose(delta)
+	# 피버타임 동안은 판이 통째로 멎는다 — 조각도, 굴러다니는 덩어리도. 조여 오던
+	# 것이 잠깐 사라지는 것이 이 6초의 전부라, 위에서 뭐가 내려오면 안 된다.
+	if not fever_on():
+		if Input.is_action_just_pressed("rotate_cw"):
+			_try_rotate(1)
+		if Input.is_action_just_pressed("rotate_ccw"):
+			_try_rotate(-1)
+		if piece_type != "":
+			match piece_state:
+				PieceState.TRACKING:
+					_track(delta)
+				PieceState.FALLING:
+					_fall(delta)
+				PieceState.LANDED:
+					_landed(delta)
+		if mode == Mode.ENDLESS and playing:
+			_step_loose(delta)
 	_rec_tick(delta)
 	if mode == Mode.ENDLESS:
 		_update_endless(delta)
@@ -317,18 +350,22 @@ func _fx_reset() -> void:
 	shake_t = 0.0
 	hitstop = 0.0
 	slide_off = 0.0
+	rise_off = 0.0
 	spin_off = 0.0
 	spin_pop = 0.0
 	land_squash = 0.0
 	fall_from = 0
 	hard_drop_rows = 0
 	combo = 0
-	rush_gauge = 0.0
-	rush_time = 0.0
-	rush_near = 0.0
-	rush_pop.clear()
-	rush_pop_t = 0.0
-	rush_flash = 0.0
+	fever_gauge = FEVER_DEBUG_START  # [테스트용] 평소엔 0.0
+	fever_time = 0.0
+	fever_near = 0.0
+	fever_boost = 0.0
+	fever_phase = 0.0
+	fever_coins.clear()
+	fever_coin_acc = 0.0
+	fever_streaks.clear()
+	fever_flash = 0.0
 	banner_key = ""
 	banner_age = BANNER_TIME
 	trails.clear()
@@ -350,6 +387,7 @@ func _age_fx(delta: float) -> void:
 	break_fx = break_fx.filter(func(fx: Array) -> bool: return fx[1] < BREAK_FX_TIME)
 	_age_ore_fx(delta)
 	slide_off = move_toward(slide_off, 0.0, delta / SLIDE_TIME)
+	rise_off = move_toward(rise_off, 0.0, delta / SLIDE_TIME)
 	spin_off = move_toward(spin_off, 0.0, delta * SPIN_SPEED)
 	spin_pop = maxf(spin_pop - delta * 7.0, 0.0)
 	land_squash = maxf(land_squash - delta / LAND_SQUASH_TIME, 0.0)
@@ -554,25 +592,38 @@ func _update_endless(delta: float) -> void:
 	var bottom_sy := vp.y - 60.0 if vp.x > vp.y else vp.y - 540.0
 	var cam_floor := rows * CELL - (bottom_sy - vp.y / 2.0) / view_zoom
 	cam.position.y = minf(player.position.y - cam_offset, cam_floor)
+	# 피버 동안 카메라를 살짝 당긴다 — 시야가 좁아지면 같은 속도도 더 빨라 보인다.
+	var want_zoom := view_zoom / (FEVER_ZOOM if fever_on() else 1.0)
+	cam.zoom = cam.zoom.lerp(Vector2(want_zoom, want_zoom), clampf(delta * 6.0, 0.0, 1.0))
 	# Lava creeps up from below; it also keeps pace with the player so a
 	# fast climber can never leave it arbitrarily far behind.
 	lava_phase += delta
 	# 골드러시가 도는 동안 용암은 멎는다 — 10초짜리 숨통이자, 낮게 파고들어 금을
 	# 캘 수 있는 유일한 창이다. (낙하 속도는 건드리지 않는다: 느려지면 긴장이
 	# 죽고, 빨라지면 벌 수가 없다.)
-	if not rush_on():
+	if not fever_on():
 		lava_y -= _lava_speed() * delta
 	lava_y = minf(lava_y, player.position.y + LAVA_MAX_GAP)
 	var feet := player.position.y + Player.SIZE / 2.0
 	if feet > lava_y:
 		_kill_player()
 		return
-	_rush_step(delta, feet)
+	_fever_step(delta, feet)
+	_track_height(feet)
+
+
+## 발 높이를 층수로 재서 이 판의 기록을 갱신한다. 새로 오른 칸만큼 점수와
+## 골드러시 게이지를 준다 — 내려갔다 다시 올라오는 구간은 값을 치르지 않으니
+## 파밍도, 시간 충전도 되지 않는다.
+func _track_height(feet: float) -> void:
 	var h := int(round((rows * CELL - feet) / CELL))
-	if h > best_height:
-		_add_score((h - best_height) * HEIGHT_SCORE)
-		best_height = h
-		EventBus.height_changed.emit(best_height)
+	if h <= best_height:
+		return
+	var gained := h - best_height
+	_add_score(gained * HEIGHT_SCORE)
+	_fever_gain(FEVER_CLIMB_GAIN * float(gained))
+	best_height = h
+	EventBus.height_changed.emit(best_height)
 
 
 func rect_hits_solid(r: Rect2) -> bool:
@@ -997,87 +1048,214 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 	return true
 
 
-# --- 골드러시 -------------------------------------------------------------------
+# --- 피버타임 -------------------------------------------------------------------
 
 
-## 지금 골드러시가 돌고 있는가 (계기판·금 확률·용암 정지가 이 값을 본다).
-func rush_on() -> bool:
-	return rush_time > 0.0
+## 지금 피버타임이 돌고 있는가 (플레이어 상승·블록 정지·연출이 이 값을 본다).
+func fever_on() -> bool:
+	return fever_time > 0.0
 
 
-## 게이지 충전. 무한의 계단에서, 러시가 돌고 있지 않을 때만 찬다 — 가만히 있어서
-## 차는 길은 어디에도 없다.
-func _rush_gain(amount: float) -> void:
-	if mode != Mode.ENDLESS or not playing or rush_on() or amount <= 0.0:
+## 지금 프레임의 상승 속도 (px/s). 별을 훑은 만큼 붙는다 — player.gd가 읽는다.
+## 발동 직후 FEVER_ACCEL_TIME에 걸쳐 최고 속도까지 붙는다: 처음부터 등속으로
+## 올라가면 아무리 빨라도 "빠르다"가 아니라 "그냥 그런 속도"로 읽힌다.
+func fever_rise() -> float:
+	var t := clampf((FEVER_TIME - fever_time) / FEVER_ACCEL_TIME, 0.0, 1.0)
+	return FEVER_RISE * (1.0 + fever_boost) * (t * t * (3.0 - 2.0 * t))
+
+
+## 게이지 충전. 무한의 계단에서, 피버가 돌고 있지 않을 때만 찬다 — 가만히 있어서
+## 차는 길은 어디에도 없다. (피버 중 솟구쳐 오른 높이가 다음 피버를 채우면
+## 무한 연쇄가 되므로, 발동 중에는 문이 닫혀 있는 것이 중요하다.)
+func _fever_gain(amount: float) -> void:
+	if mode != Mode.ENDLESS or not playing or fever_on() or amount <= 0.0:
 		return
-	if not rush_pop.is_empty():
-		return  # 종료 폭발이 자기 게이지를 다시 채우면 러시가 끊기지 않는다
-	rush_gauge = minf(rush_gauge + amount, RUSH_MAX)
-	EventBus.goldrush_changed.emit(rush_gauge / RUSH_MAX, 0.0)
-	if rush_gauge >= RUSH_MAX:
-		_rush_start()
+	fever_gauge = minf(fever_gauge + amount, FEVER_MAX)
+	EventBus.fever_changed.emit(fever_gauge / FEVER_MAX, 0.0)
+	if fever_gauge >= FEVER_MAX:
+		_fever_start()
 
 
-## 발동: 용암을 한 번 크게 밀어내고 10초간 금이 쏟아진다.
-func _rush_start() -> void:
-	rush_gauge = 0.0
-	rush_time = RUSH_TIME
-	rush_flash = RUSH_FLASH_TIME
-	lava_y += RUSH_LAVA_PUSH * CELL
+## 발동: 용암을 한 번 크게 밀어내고, 고양이가 솟구칠 별길을 깐다.
+func _fever_start() -> void:
+	fever_gauge = 0.0
+	fever_time = FEVER_TIME
+	fever_flash = FEVER_FLASH_TIME
+	fever_boost = 0.0
+	fever_phase = 0.0
+	lava_y += FEVER_LAVA_PUSH * CELL
+	_fever_seed_coins()
+	fever_streaks.clear()
 	shake(16.0)
 	_freeze(0.08)
 	GameState.haptic(0.9, 0.25)
-	banner_key = "FX_GOLDRUSH"
+	banner_key = "FX_FEVER"
 	banner_age = 0.0
 	banner_y = player.position.y - CELL * 1.6 if player else rows * CELL * 0.4
-	Sfx.play("goldrush")
-	EventBus.goldrush_changed.emit(0.0, rush_time)
+	Sfx.play("fever")
+	EventBus.fever_changed.emit(0.0, fever_time)
 
 
-## 매 프레임: 남은 시간을 깎고, 발끝 세이브를 재고, 종료 폭발을 흘린다.
-func _rush_step(delta: float, feet: float) -> void:
-	rush_flash = maxf(rush_flash - delta, 0.0)
+## 하늘에서 골드가 쏟아진다. 발동 순간 화면 위쪽에 미리 한 움큼 깔아 두어
+## 첫 프레임부터 비가 오고, 그 뒤로는 `_fever_rain()`이 초당 FEVER_COIN_RATE개씩
+## 흘려 보낸다.
+func _fever_seed_coins() -> void:
+	fever_coins.clear()
+	fever_coin_acc = 0.0
+	var top := _fever_sky_top()
+	var bottom := player.position.y - CELL * 2.0
+	for i in FEVER_COIN_SEED:
+		var y := lerpf(bottom, top, (float(i) + randf()) / float(FEVER_COIN_SEED))
+		_fever_drop_coin(y)
+
+
+## 카메라 위쪽 가장자리(월드 y) — 코인이 태어나는 하늘. 카메라가 없으면(테스트)
+## 아래로 그리는 거리만큼 위로 잡는다.
+func _fever_sky_top() -> float:
+	if cam:
+		return cam.position.y - get_viewport_rect().size.y * 0.5 / maxf(cam.zoom.y, 0.05) - CELL
+	return player.position.y - view_below
+
+
+## 코인 하나를 y 높이에 떨어뜨린다. 셋 중 둘은 좌우로 흔들리는 소나기 줄기를
+## 따르고(훑으러 움직일 이유), 하나는 우물 폭 어디에나 — 가만히 있어도 몇 개는 온다.
+func _fever_drop_coin(y: float) -> void:
+	var w := COLS * CELL
+	var x: float
+	if randf() < 0.66:
+		var mid := w * 0.5 + sin(fever_phase * 1.7) * w * FEVER_COIN_SPREAD
+		x = clampf(mid + randfn(0.0, CELL * 0.8), CELL * 0.4, w - CELL * 0.4)
+	else:
+		x = CELL * 0.4 + randf() * (w - CELL * 0.8)
+	var vel := Vector2(randfn(0.0, 30.0), FEVER_COIN_FALL * (0.8 + randf() * 0.5))
+	fever_coins.append([Vector2(x, y), 0.0, false, vel, randf() * TAU])
+
+
+## 매 프레임: 새 코인을 하늘에 흘리고, 있는 코인을 떨어뜨리고, 화면 아래로
+## 지나간 것은 치운다.
+func _fever_rain(delta: float) -> void:
+	fever_coin_acc += FEVER_COIN_RATE * delta
+	var top := _fever_sky_top()
+	while fever_coin_acc >= 1.0:
+		fever_coin_acc -= 1.0
+		_fever_drop_coin(top - randf() * CELL * 2.0)
+	var floor_y := player.position.y + view_below
+	var kept: Array = []
+	for st in fever_coins:
+		st[1] += delta
+		if st[2]:
+			if st[1] < 0.35:
+				kept.append(st)
+			continue
+		var vel := st[3] as Vector2
+		st[0] = (st[0] as Vector2) + vel * delta
+		st[4] = (st[4] as float) + delta * 7.0
+		if (st[0] as Vector2).y < floor_y:
+			kept.append(st)
+	fever_coins = kept
+
+
+## 매 프레임: 남은 시간을 깎고, 발끝 세이브를 재고, 별을 줍고, 연출을 흘린다.
+func _fever_step(delta: float, feet: float) -> void:
+	fever_flash = maxf(fever_flash - delta, 0.0)
+	fever_phase += delta
 	# 발끝 세이브 — 용암에 바짝 붙어 있는 동안만 게이지가 찬다. 안전하게만
-	# 올라가면 러시는 영영 안 터진다: 위험을 감수할 이유를 만드는 자리다.
+	# 올라가면 피버는 영영 안 터진다: 위험을 감수할 이유를 만드는 자리다.
 	var gap := lava_y - feet
-	rush_near = clampf(1.0 - gap / RUSH_NEAR_DIST, 0.0, 1.0) if gap > 0.0 else 0.0
-	if rush_near > 0.0:
-		_rush_gain(RUSH_NEAR_GAIN * delta)
-	if rush_on():
-		rush_time = maxf(rush_time - delta, 0.0)
-		EventBus.goldrush_changed.emit(0.0, rush_time)
-		if rush_time <= 0.0:
-			_rush_end()
-	_rush_pop_step(delta)
-
-
-## 종료: 필드에 남은 금을 아래에서부터 한 칸씩 터뜨린다. 러시 중에 캐지 않고
-## 쌓아 둔 금이 여기서 한꺼번에 돌아오는 것이 이 연출의 전부다.
-func _rush_end() -> void:
-	rush_pop = ore.keys()
-	rush_pop.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.y > b.y)
-	rush_pop_t = 0.0
-	rush_near = 0.0
-	EventBus.goldrush_changed.emit(0.0, 0.0)
-
-
-func _rush_pop_step(delta: float) -> void:
-	if rush_pop.is_empty():
+	fever_near = clampf(1.0 - gap / FEVER_NEAR_DIST, 0.0, 1.0) if gap > 0.0 else 0.0
+	if fever_near > 0.0:
+		_fever_gain(FEVER_NEAR_GAIN * delta)
+	if not fever_on():
 		return
-	rush_pop_t -= delta
-	while rush_pop_t <= 0.0 and not rush_pop.is_empty():
-		rush_pop_t += RUSH_POP_STEP
-		_bank_ore(rush_pop.pop_front() as Vector2i, ORE_VALUE)
-		shake(3.0)
+	fever_time = maxf(fever_time - delta, 0.0)
+	EventBus.fever_changed.emit(0.0, fever_time)
+	_fever_rain(delta)
+	_fever_collect()
+	_fever_streak_step(delta)
+	if fever_time <= 0.0:
+		_fever_end()
+
+
+## 몸이 닿은 코인을 줍는다: 상승 속도가 조금 붙고 골드가 지갑으로 날아간다.
+func _fever_collect() -> void:
+	var c := player.position
+	var got := 0
+	for st in fever_coins:
+		if st[2]:
+			continue
+		if c.distance_to(st[0] as Vector2) > FEVER_COIN_R + Player.SIZE * 0.5:
+			continue
+		st[2] = true
+		st[1] = 0.0
+		got += 1
+		fever_boost = minf(fever_boost + FEVER_COIN_BOOST, FEVER_BOOST_MAX)
+		ore_gold += FEVER_COIN_GOLD
+		GameState.add_currency(FEVER_COIN_GOLD, false)
+		EventBus.ore_collected.emit(FEVER_COIN_GOLD, st[0] as Vector2)  # 보드 로컬 좌표
+		_add_score(FEVER_COIN_GOLD)
+	if got > 0:
+		GameState.haptic(0.3, 0.08)
+		# 주울수록 음이 올라간다 — 연속으로 주워 담는 리듬이 들린다.
+		Sfx.play("coin", 1.0 + 0.03 * float(mini(ore_gold / FEVER_COIN_GOLD, 24)))
+
+
+## 아래로 흐르는 속도선을 흘려 보낸다 — "빠르게 오르고 있다"를 말하는 연출.
+func _fever_streak_step(delta: float) -> void:
+	for st in fever_streaks:
+		st[1] += st[3] * delta
+	fever_streaks = fever_streaks.filter(
+			func(st: Array) -> bool: return st[1] < player.position.y + view_below)
+	if fever_streaks.size() < 64:
+		for _i in 7:
+			var x := randf() * COLS * CELL
+			var y := player.position.y - view_below - randf() * CELL * 8.0
+			# 길이·속도를 넓게 흩어 놓으면 층이 생겨 깊이감이 난다.
+			fever_streaks.append([x, y, CELL * (1.4 + randf() * 3.4), 1700.0 + randf() * 1500.0])
+
+
+## 종료: 발밑에 착지 발판을 깔고 판을 돌려준다. 발판이 없으면 오른 만큼 도로
+## 떨어져 용암에 빠지므로 "안전하게 벌었다"는 약속이 깨진다.
+func _fever_end() -> void:
+	fever_time = 0.0
+	fever_near = 0.0
+	fever_coins.clear()
+	fever_streaks.clear()
+	_fever_lay_floor()
+	shake(6.0)
+	GameState.haptic(0.5, 0.15)
+	EventBus.fever_changed.emit(0.0, 0.0)
+
+
+## 착지 바닥: 고양이 발밑에 **우물 폭 전체를 막은 암반**을 깐다. 3칸짜리
+## 발판은 수십 칸 상공에 뜬 작은 섬이라 한 발만 헛디디면 그대로 추락이었다 —
+## 피버가 벌어 준 높이가 통째로 날아가면 "안전하게 벌었다"는 약속이 깨진다.
+## 구멍 없이 꽉 채우고, 대신 `anchor`에 올려 **지워지지도 부서지지도 않게** 한다
+## (`_clear_lines()`는 앵커가 낀 줄을 건너뛰고, `break_cell_in_rect()`는 거절한다).
+func _fever_lay_floor() -> void:
+	var feet := player.position.y + Player.SIZE / 2.0
+	# 발끝이 걸친 줄이 아니라 그 **바로 아래** 줄이다 — 발끝 줄에 깔면 몸이 바닥에
+	# 파묻힌 채 깨어나 그대로 깔림 판정이 난다.
+	var row := int(ceil(feet / CELL))
+	var body := player.rect()
+	var laid: Array = []
+	for x in COLS:
+		var c := Vector2i(x, row)
+		if grid.has(c) or _cell_rect(c).intersects(body):
+			continue
+		grid[c] = Board.PIECES[randi() % Board.PIECES.size()]
+		anchor[c] = true
+		laid.append(c)
+	if not laid.is_empty():
+		lock_flash.append([laid, 0.0, Color(1.0, 0.95, 0.7)])
+		_spawn_dust(Vector2((COLS * CELL) * 0.5, float(row) * CELL), 14, 1.0)
 
 
 ## Endless: line clears fight the lava — every clear shoves it back down,
 ## scaling steeply with multi-line clears.
-## Height itself is never lost: _clear_lines leaves gaps instead of collapsing.
 func _endless_line_reward(cleared: int) -> void:
 	lava_y += LAVA_PUSH[cleared] * CELL
 	# 줄 클리어가 골드러시 게이지의 주 수입원이다 — 4줄 한 방이면 절반이 넘는다.
-	_rush_gain(RUSH_LINE_GAIN[cleared] + RUSH_COMBO_GAIN * float(maxi(combo - 1, 0)))
+	_fever_gain(FEVER_LINE_GAIN[cleared] + FEVER_COMBO_GAIN * float(maxi(combo - 1, 0)))
 
 
 # --- Classic level (arcade B-type) ------------------------------------------------
@@ -1333,7 +1511,9 @@ func _clear_lines() -> int:
 	for y in rows:
 		var full := true
 		for x in range(COLS):
-			if not grid.has(Vector2i(x, y)):
+			var c := Vector2i(x, y)
+			# 피버 암반이 낀 줄은 절대 지워지지 않는다 — 벌어 준 높이를 지키는 바닥이다.
+			if not grid.has(c) or anchor.has(c):
 				full = false
 				break
 		if full:
@@ -1346,12 +1526,13 @@ func _clear_lines() -> int:
 		row_flash.append([y, 0.0])
 		banner_y += float(y) * CELL
 	banner_y = banner_y / full_rows.size() + CELL * 0.5
-	# Endless keeps the stack floating: cleared rows become open gaps instead of
-	# dropping everything above, so a clear never costs the climb its height.
+	# 고정 우물은 줄 단위로 통째 내린다. 무한은 줄만 비우고, 뒤에서 _settle_grid()가
+	# 받칠 것을 잃은 덩어리만 내려앉힌다 (떠 있는 발판 모양을 그대로 지킨다).
 	var collapse := mode != Mode.ENDLESS
 	var new_grid := {}
 	var new_cracked := {}
 	var new_ore := {}
+	var new_anchor := {}
 	for c in grid:
 		if c.y in full_rows:
 			break_fx.append([c, 0.0])
@@ -1370,10 +1551,127 @@ func _clear_lines() -> int:
 			new_cracked[dest] = true
 		if ore.has(c):
 			new_ore[dest] = true
+		if anchor.has(c):
+			new_anchor[dest] = true
 	ore = new_ore
 	grid = new_grid
 	cracked = new_cracked
+	anchor = new_anchor
+	if not collapse:
+		_settle_grid()
 	return full_rows.size()
+
+
+# --- 무한: 사라진 칸 메우기 -----------------------------------------------------
+## 블록이 사라진 자리를 빈 구멍으로 남겨 두지 않는다 — 받칠 것을 잃은 칸 덩어리가
+## 아래로 내려앉는다. 덩어리 = 상하좌우로 이어진 칸 묶음이라 칸이 따로 흘러내리지
+## 않고 발판이 통째로 내려온다. 줄 클리어와 블록 파괴가 같은 길로 모인다.
+
+
+## 이어진 칸 묶음들 (4방향 연결).
+func _grid_components() -> Array:
+	var seen := {}
+	var comps: Array = []
+	for start: Vector2i in grid:
+		if seen.has(start):
+			continue
+		seen[start] = true
+		var comp: Array = []
+		var stack: Array = [start]
+		while not stack.is_empty():
+			var c: Vector2i = stack.pop_back()
+			comp.append(c)
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0),
+					Vector2i(0, 1), Vector2i(0, -1)]:
+				var q: Vector2i = c + d
+				if grid.has(q) and not seen.has(q):
+					seen[q] = true
+					stack.append(q)
+		comps.append(comp)
+	return comps
+
+
+## 지금 받쳐 주는 것이 없는 칸들 (바닥에 닿았거나, 받쳐진 덩어리 위에 얹힌
+## 덩어리는 제외). 지지는 덩어리를 타고 위로 번진다.
+func _unsupported_cells() -> Dictionary:
+	var comps := _grid_components()
+	var owner := {}
+	for i in comps.size():
+		for c: Vector2i in comps[i]:
+			owner[c] = i
+	var held: Array[bool] = []
+	held.resize(comps.size())
+	for i in comps.size():
+		for c: Vector2i in comps[i]:
+			# 우물 바닥에 닿았거나, 피버가 깔아 준 앵커 바닥을 품고 있다.
+			if c.y >= rows - 1 or anchor.has(c):
+				held[i] = true
+				break
+	var spread := true
+	while spread:
+		spread = false
+		for i in comps.size():
+			if held[i]:
+				continue
+			for c: Vector2i in comps[i]:
+				var below: Vector2i = c + Vector2i(0, 1)
+				if owner.has(below) and held[owner[below]]:
+					held[i] = true
+					spread = true
+					break
+	var out := {}
+	for i in comps.size():
+		if held[i]:
+			continue
+		for c: Vector2i in comps[i]:
+			out[c] = true
+	return out
+
+
+## 뜬 덩어리를 한 칸씩 다 같이 내려 모두 받쳐질 때까지 앉힌다.
+## 반환값은 내려간 칸 수(0이면 그대로). 떨어진 자리에는 착지 연출이 붙는다.
+func _settle_grid() -> int:
+	var drop := 0
+	var sunk := {}  # 내려앉은 칸 (지금 자리 기준)
+	while drop < rows:
+		var falling := _unsupported_cells()
+		if falling.is_empty():
+			break
+		var down := Vector2i(0, 1)
+		var new_grid := {}
+		var new_cracked := {}
+		var new_ore := {}
+		var new_anchor := {}
+		for c: Vector2i in grid:
+			var dest: Vector2i = c + down if falling.has(c) else c
+			new_grid[dest] = grid[c]
+			if cracked.has(c):
+				new_cracked[dest] = true
+			if ore.has(c):
+				new_ore[dest] = true
+			if anchor.has(c):
+				new_anchor[dest] = true
+		grid = new_grid
+		cracked = new_cracked
+		ore = new_ore
+		anchor = new_anchor
+		# 러시 종료 폭발 대기줄도 같이 따라간다 — 자리가 어긋나면 금값을 못 준다.
+		var next_sunk := {}
+		for c: Vector2i in sunk:
+			next_sunk[c + down if falling.has(c) else c] = true
+		for c: Vector2i in falling:
+			next_sunk[c + down] = true
+		sunk = next_sunk
+		drop += 1
+	if drop == 0:
+		return 0
+	var cells := sunk.keys()
+	if not cells.is_empty():
+		_impact(cells, Board.COLORS[grid[cells[0]]], clampf(drop * 0.18, 0.15, 0.9))
+	if playing:
+		_free_player_from_grid()  # 내려앉은 스택에 깔렸으면 밀어내거나 깔림 판정
+	queue_redraw()
+	return drop
 
 
 ## Buried by a lock/line shift with nowhere to nudge to: that is death.
@@ -1418,6 +1716,11 @@ func break_cell_in_rect(r: Rect2) -> bool:
 					best = c
 	if best.x < 0:
 		return false
+	if anchor.has(best):
+		# 피버 암반은 부서지지 않는다 — 둔탁하게 튕길 뿐.
+		shake(2.0)
+		Sfx.play("land")
+		return false
 	if ore.has(best):
 		# 골드 블록은 한 방에 터진다 — 두 번 쳐야 하면 리듬이 죽는다.
 		_break_fx_at(best, Board.COLORS[grid[best]])
@@ -1425,18 +1728,24 @@ func break_cell_in_rect(r: Rect2) -> bool:
 		grid.erase(best)
 		break_fx.append([best, 0.0])
 		_bank_ore(best, ORE_VALUE)
-		_rush_gain(RUSH_ORE_GAIN)
+		_fever_gain(FEVER_ORE_GAIN)
 		_add_score(BREAK_SCORE)
 		Sfx.play("break")
+		if mode == Mode.ENDLESS:
+			_settle_grid()  # 판 구멍을 남기지 않는다 — 위가 내려앉는다
 		queue_redraw()
 		return true
 	if cracked.has(best):
 		_break_fx_at(best, Board.COLORS[grid[best]])
 		cracked.erase(best)
 		grid.erase(best)
+		anchor.erase(best)
 		break_fx.append([best, 0.0])
 		_add_score(BREAK_SCORE)
+		_fever_gain(FEVER_BREAK_GAIN)  # 부수는 것도 무한의 동사다
 		Sfx.play("break")
+		if mode == Mode.ENDLESS:
+			_settle_grid()
 	else:
 		cracked[best] = true
 		shake(3.0)
@@ -1457,8 +1766,7 @@ func _spawn_piece() -> void:
 	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
 	piece_state = PieceState.TRACKING
 	# 금은 블록 네 칸 중 한 곳에 박힌다 — 회전해도 같은 칸을 따라간다(_try_rotate).
-	var ore_chance := RUSH_ORE_CHANCE if rush_on() else ORE_CHANCE
-	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ore_chance else -1
+	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ORE_CHANCE else -1
 	track_timer = 0.0
 	track_move_timer = 0.0
 	# Classic Tetris block out: the new piece spawns inside the stack.
@@ -1510,6 +1818,7 @@ func _try_rotate(dir: int) -> void:
 				continue
 		piece_ore = _rotate_ore_index(piece_type, piece_rot, new_rot, piece_ore)
 		slide_off = clampf(slide_off - float(target.x - piece_pos.x), -1.5, 1.5)
+		rise_off = clampf(rise_off - float(target.y - piece_pos.y), -2.5, 2.5)
 		piece_pos = target
 		piece_rot = new_rot
 		# 도형은 이미 돌아갔고, 눈에 보이는 각도만 뒤에서 따라 붙는다.
@@ -1660,6 +1969,9 @@ func _draw() -> void:
 	var show_hidden := mode == Mode.ENDLESS
 	for c in grid:
 		if show_hidden or c.y >= 0:
+			if anchor.has(c):
+				_draw_bedrock(c)
+				continue
 			_draw_cell(c, Board.COLORS[grid[c]])
 			if ore.has(c):
 				_draw_ore(_cell_rect(c).get_center())
@@ -1695,7 +2007,7 @@ func _draw() -> void:
 		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
 		_draw_lava(w)
 		_draw_near_heat(w)
-	_draw_rush_glow(w, top, h)
+	_draw_fever_glow(w, top, h)
 	if shutter_row > 0:
 		_draw_shutter(w)
 
@@ -1720,41 +2032,81 @@ func _draw_record_line(w: float) -> void:
 ## 발끝 세이브: 용암에 바짝 붙어 있는 동안 수면 위로 열기가 번진다 — 골드러시
 ## 게이지가 차고 있다는 신호이자 "지금 죽기 직전"이라는 경고를 겸한다.
 func _draw_near_heat(w: float) -> void:
-	if rush_near <= 0.0 or rush_on():
+	if fever_near <= 0.0 or fever_on():
 		return
 	var pulse := 0.55 + 0.45 * sin(lava_phase * 13.0)
 	var band := CELL * 0.7
 	for i in 4:
-		var a := rush_near * pulse * 0.26 * (1.0 - float(i) / 4.0)
+		var a := fever_near * pulse * 0.26 * (1.0 - float(i) / 4.0)
 		draw_rect(Rect2(0.0, lava_y - band * (i + 1), w, band), Color(1.0, 0.42, 0.22, a))
 
 
-## 골드러시가 도는 동안 우물이 금빛으로 달아오른다. 어두운 구덩이에 반투명
-## 금색을 넓게 깔면 잿빛 얼룩으로 보이므로, 벽 안쪽 금선과 좁은 띠로만 칠한다
-## (발동 순간의 섬광만 예외로 화면을 통째로 덮는다).
-func _draw_rush_glow(w: float, top: float, h: float) -> void:
-	if not rush_on() and rush_flash <= 0.0:
+## 피버타임 연출. 화려하게 가되 어두운 구덩이에 반투명 색을 넓게 깔면 잿빛
+## 얼룩이 되므로, 밝은 것은 전부 "선과 점"으로 그린다 — 아래로 흐르는 속도선,
+## 무지개로 도는 벽 기둥, 별. 발동 순간의 섬광만 예외로 화면을 통째로 덮는다.
+func _draw_fever_glow(w: float, top: float, h: float) -> void:
+	if not fever_on() and fever_flash <= 0.0:
 		return
 	var bottom := h + (view_below * 2.0 if mode == Mode.ENDLESS else 0.0)
-	if rush_flash > 0.0:
-		var f := rush_flash / RUSH_FLASH_TIME
-		draw_rect(Rect2(0.0, top, w, bottom - top), Color(1.0, 0.88, 0.45, 0.42 * f))
-	if not rush_on():
+	if fever_flash > 0.0:
+		var f := fever_flash / FEVER_FLASH_TIME
+		draw_rect(Rect2(0.0, top, w, bottom - top), Color(1.0, 0.72, 0.92, 0.5 * f))
+	if not fever_on():
 		return
-	var fade := clampf(rush_time / 1.2, 0.0, 1.0)  # 끝나기 직전엔 잦아든다
-	var pulse := (0.62 + 0.38 * sin(lava_phase * 9.0)) * fade
-	draw_line(Vector2(8.0, top), Vector2(8.0, bottom),
-			Color(1.0, 0.84, 0.34, 0.85 * pulse), 16.0)
-	draw_line(Vector2(w - 8.0, top), Vector2(w - 8.0, bottom),
-			Color(1.0, 0.84, 0.34, 0.85 * pulse), 16.0)
-	# 금가루가 우물 위쪽에서 천천히 내려앉는다 — 화면이 "쏟아지고 있다"고 말한다.
-	var span := bottom - top
-	for i in 26:
-		var seed := float(i) * 37.7
-		var x := fposmod(seed * 13.1, w - 20.0) + 10.0
-		var y := top + fposmod(seed * 7.3 + lava_phase * (90.0 + float(i % 5) * 26.0), span)
-		var r := 2.5 + float(i % 3)
-		draw_circle(Vector2(x, y), r, Color(1.0, 0.9, 0.5, 0.75 * fade))
+	var fade := clampf(fever_time / 0.8, 0.0, 1.0)  # 끝나기 직전엔 잦아든다
+	# 벽 기둥이 무지개로 돈다 — 색이 흐르는 것만으로 "지금은 다른 시간"이 된다.
+	for side in 2:
+		var x := 8.0 if side == 0 else w - 8.0
+		var seg := 7
+		for i in seg:
+			var t0 := top + (bottom - top) * float(i) / float(seg)
+			var t1 := top + (bottom - top) * float(i + 1) / float(seg)
+			var hue := fposmod(fever_phase * 0.8 + float(i) * 0.13 + float(side) * 0.5, 1.0)
+			draw_line(Vector2(x, t0), Vector2(x, t1),
+					Color.from_hsv(hue, 0.62, 1.0, 0.9 * fade), 16.0)
+	# 속도선: 아래로 흘러 내려가 "빠르게 오르고 있다"를 말한다.
+	for st: Array in fever_streaks:
+		var y := st[1] as float
+		draw_line(Vector2(st[0], y), Vector2(st[0], y + (st[2] as float)),
+				Color(1.0, 1.0, 1.0, 0.30 * fade), 3.0)
+	_draw_fever_coins(fade)
+
+
+## 쏟아지는 골드 코인. 아직 안 주운 것은 빙글 돌며 떨어지고(폭이 좁아졌다
+## 넓어졌다 = 옆면이 보이는 회전), 주운 것은 금빛 링이 되어 퍼진다.
+func _draw_fever_coins(fade: float) -> void:
+	for st: Array in fever_coins:
+		var at := st[0] as Vector2
+		var age := st[1] as float
+		if st[2]:
+			if age > 0.35:
+				continue
+			var t := age / 0.35
+			draw_arc(at, FEVER_COIN_R * (0.6 + t * 1.9), 0.0, TAU, 22,
+					Color(1.0, 0.95, 0.6, (1.0 - t) * 0.9), 4.0)
+			continue
+		var spin := st[4] as float
+		var wx := maxf(absf(cos(spin)), 0.18)
+		var r := FEVER_COIN_R * 0.8
+		var ink := Color(0.17, 0.16, 0.20, fade)
+		var face := Color(1.0, 0.84, 0.30, fade)
+		var rim := Color(0.86, 0.62, 0.16, fade)
+		var pts := PackedVector2Array()
+		for i in 20:
+			var ang := float(i) * TAU / 20.0
+			pts.append(at + Vector2(cos(ang) * r * wx, sin(ang) * r))
+		draw_colored_polygon(pts, face if cos(spin) >= 0.0 else rim)
+		var outline := pts.duplicate()
+		outline.append(pts[0])
+		draw_polyline(outline, ink, 2.5)
+		if wx > 0.45:
+			# 앞면일 때만 발바닥 각인 — 코인이 "냥이 골드"임을 말한다
+			var pad := Color(0.86, 0.62, 0.16, fade * clampf((wx - 0.45) * 3.0, 0.0, 1.0))
+			draw_circle(at + Vector2(0.0, r * 0.15), r * 0.30, pad)
+			for k in 3:
+				var a := -PI * 0.5 + (float(k) - 1.0) * 0.75
+				draw_circle(at + Vector2(cos(a) * wx, sin(a)) * r * 0.42, r * 0.13, pad)
+		draw_circle(at + Vector2(-r * 0.3 * wx, -r * 0.3), r * 0.16, Color(1.0, 1.0, 0.9, 0.8 * fade))
 
 
 ## Level-clear curtain: slatted steel rolling down over the well, lit from
@@ -1797,12 +2149,13 @@ func _draw_pit_background(w: float, h: float, top: float) -> void:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
 		bot_col = bot_col.lerp(Color("2a3040"), t)
-	if rush_on():
-		# 골드러시 동안은 구덩이 자체가 달아오른다 — 벽 금선만으로는 10초가
-		# 시작됐는지 눈에 안 들어온다. 끝나기 직전 1.2초에 걸쳐 식는다.
-		var g := clampf(rush_time / 1.2, 0.0, 1.0)
-		top_col = top_col.lerp(Color("5c3f0e"), 0.62 * g)
-		bot_col = bot_col.lerp(Color("2e1e05"), 0.9 * g)
+	if fever_on():
+		# 피버 동안은 구덩이 자체가 물든다 — 벽 기둥만으로는 6초가 시작됐는지
+		# 눈에 안 들어온다. 색이 천천히 돌고, 끝나기 직전 0.8초에 걸쳐 식는다.
+		var g := clampf(fever_time / 0.8, 0.0, 1.0)
+		var hue := fposmod(fever_phase * 0.25, 1.0)
+		top_col = top_col.lerp(Color.from_hsv(hue, 0.55, 0.46), 0.72 * g)
+		bot_col = bot_col.lerp(Color.from_hsv(fposmod(hue + 0.12, 1.0), 0.7, 0.2), 0.9 * g)
 	# 무한의 계단은 우물 바닥 아래(용암이 차오르는 어둠)까지 카메라에 들어온다 —
 	# 하늘 배경이 비쳐 우물이 떠 보이지 않게 바닥색으로 더 아래까지 깐다.
 	var floor_y := h + (view_below * 2.0 if mode == Mode.ENDLESS else 0.0)
@@ -1831,6 +2184,14 @@ func _draw_lava(w: float) -> void:
 	draw_polyline(points, Color("ffd27a"), 5.0)
 
 
+## SRS 회전축 — 도형이 든 박스의 한가운데다(JLSTZ/S/T/Z는 3x3, I는 4x4).
+## 칸 4개의 무게중심이 아니다: 무게중심은 회전판마다 옮겨 다녀서 그걸 축으로
+## 삼으면 도는 게 아니라 휘둘리는 것처럼 보인다.
+func _spin_pivot(t: String, pos: Vector2i) -> Vector2:
+	var half := 2.0 if t == "I" else 1.5
+	return (Vector2(pos) + Vector2.ONE * half) * CELL
+
+
 func _draw_piece() -> void:
 	var color: Color = Board.COLORS[piece_type]
 	var pulse := 0.0
@@ -1845,19 +2206,25 @@ func _draw_piece() -> void:
 		color = color.lightened(0.18 + 0.18 * pulse)
 	var cells := _cells(piece_type, piece_rot, piece_pos)
 	# 격자에는 이미 칸 단위로 박혀 있고, 눈에 보이는 것만 뒤에서 따라온다 —
-	# 가로 잔여 이동 · 회전 잔여 각도 · 착지 눌림을 변환 하나에 실어 그린다.
-	var pivot := Vector2.ZERO
-	for c: Vector2i in cells:
-		pivot += _cell_rect(c).get_center()
-	pivot /= float(maxi(cells.size(), 1))
+	# 가로·세로 잔여 이동 · 회전 잔여 각도 · 착지 눌림이 변환에 실린다.
+	# 회전은 SRS 회전축을 중심으로, 착지 눌림은 도형 한가운데를 중심으로 —
+	# 두 축이 달라서 변환을 따로 만들어 곱한다 (칸은 제자리 좌표로 그린다).
+	var pivot := _spin_pivot(piece_type, piece_pos)
+	var m := Transform2D(spin_off, Vector2.ONE, 0.0, Vector2.ZERO)
+	m = m.translated_local(-pivot).translated(pivot + Vector2(slide_off, rise_off) * CELL)
 	var sq := land_squash * land_squash
-	var sc := Vector2(1.0 + 0.22 * sq, 1.0 - 0.26 * sq)
-	draw_set_transform_matrix(Transform2D(spin_off, sc, 0.0,
-			pivot + Vector2(slide_off * CELL, 0.0)))
+	if sq > 0.0:
+		var cen := Vector2.ZERO
+		for c: Vector2i in cells:
+			cen += _cell_rect(c).get_center()
+		cen /= float(maxi(cells.size(), 1))
+		var sc := Vector2(1.0 + 0.22 * sq, 1.0 - 0.26 * sq)
+		m *= Transform2D(0.0, sc, 0.0, Vector2.ZERO).translated_local(-cen).translated(cen)
+	draw_set_transform_matrix(m)
 	for i in range(cells.size()):
 		var c: Vector2i = cells[i]
 		if mode == Mode.ENDLESS or c.y >= 0:
-			var p := Vector2(c) * CELL - pivot
+			var p := Vector2(c) * CELL
 			_draw_block(p, color)
 			if i == piece_ore:
 				_draw_ore(p + Vector2(CELL, CELL) * 0.5, color.a)
@@ -1870,7 +2237,7 @@ func _draw_piece() -> void:
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 	if piece_state == PieceState.TRACKING:
 		var remain := ceili(_track_time() - track_timer)
-		var top_left := Vector2(piece_pos) * CELL + Vector2(slide_off * CELL, 0.0)
+		var top_left := Vector2(piece_pos) * CELL + Vector2(slide_off, rise_off) * CELL
 		draw_string(ThemeDB.fallback_font, top_left + Vector2(CELL * 1.6, CELL * 1.4),
 				str(remain), HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(1, 1, 1, 0.9))
 
@@ -2187,6 +2554,22 @@ static func _paint_keycap_face(ci: CanvasItem, cap: Rect2, char_id: String) -> b
 
 func _draw_cell(c: Vector2i, color: Color) -> void:
 	_draw_block(Vector2(c) * CELL, color)
+
+
+## 피버 암반: 지워지지도 부서지지도 않는 바닥. 회청색 돌 + 금 리벳으로 "다른
+## 종류의 블록"임을 한눈에 말한다 — 부딪혀 보고 나서야 아는 건 늦다.
+func _draw_bedrock(c: Vector2i) -> void:
+	var p := Vector2(c) * CELL
+	_draw_block(p, Color(0.33, 0.33, 0.40))
+	var ink := Color(0.17, 0.16, 0.20)
+	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), ink, false, 3.0)
+	# 벽돌 줄눈 한 줄 + 네 귀퉁이 리벳
+	draw_line(p + Vector2(4.0, CELL * 0.5), p + Vector2(CELL - 4.0, CELL * 0.5), ink, 2.0)
+	draw_line(p + Vector2(CELL * 0.5, 4.0), p + Vector2(CELL * 0.5, CELL * 0.5), ink, 2.0)
+	for dx in [10.0, CELL - 10.0]:
+		for dy in [10.0, CELL - 10.0]:
+			draw_circle(p + Vector2(dx, dy), 3.2, Color(0.95, 0.80, 0.35))
+			draw_circle(p + Vector2(dx, dy), 3.2, ink, false, 1.2)
 
 
 func _draw_block(p: Vector2, color: Color) -> void:

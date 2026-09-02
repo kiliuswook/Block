@@ -17,6 +17,6 @@ signal classic_level_progress(cleared: int, quota: int)
 signal classic_level_cleared(level: int, bonus: int)
 # 무한의 계단 골드러시: 게이지가 찼거나(0..1) 발동이 돌고 있다(time_left > 0).
 # 계기판 게이지가 이걸 읽는다 — 둘 중 하나만 의미가 있어서 한 시그널로 보낸다.
-signal goldrush_changed(gauge: float, time_left: float)
+signal fever_changed(gauge: float, time_left: float)
 # 골드 블록 한 칸이 터져 지갑에 들어갔다 (at = 보드 로컬 좌표) — HUD 연출용.
 signal ore_collected(amount: int, at: Vector2)
