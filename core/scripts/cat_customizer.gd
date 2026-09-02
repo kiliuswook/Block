@@ -727,11 +727,11 @@ func _make_swatch(key: String, idx: int, col: Color, selected: bool,
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(SWATCH, SWATCH)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	# 미리보기 중인 잠긴 색은 진짜 색으로 보여 준다.
-	var face_col := col if (previewing or not locked) else Color("dfe4ea")
+	# 잠긴 색도 진짜 색으로 보여 준다 — 무슨 색인지 모르면 살 이유가 없다.
+	# 잠금 표시는 위에 얹는 자물쇠·값 판이 맡는다.
 	var deep := PREVIEW_COL if previewing \
 			else (UiKit.GOLD_DEEP if selected else Color("c9c6d0"))
-	UiKit.style_button(b, face_col, deep, INK, 15, 14)
+	UiKit.style_button(b, col, deep, INK, 15, 14)
 	b.pressed.connect(func() -> void: _pick(key, idx))
 	var face := Control.new()
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -741,10 +741,15 @@ func _make_swatch(key: String, idx: int, col: Color, selected: bool,
 			# 고른 색은 안쪽에 체크 링을 둘러 한눈에 보이게.
 			face.draw_arc(Vector2(SWATCH, SWATCH) / 2.0, SWATCH * 0.32, 0.0, TAU, 28,
 					PREVIEW_COL if previewing else UiKit.WHITE, 4.0)
-		if locked:
+		if locked and not previewing:
+			# 자물쇠·값은 어떤 색 위에서도 읽히게 흰 반투명 판을 깐다.
+			face.draw_circle(Vector2(SWATCH / 2.0, SWATCH / 2.0 - 10.0), 15.0,
+					Color(1.0, 1.0, 1.0, 0.8))
+			face.draw_rect(Rect2(4.0, SWATCH - 24.0, SWATCH - 8.0, 20.0),
+					Color(1.0, 1.0, 1.0, 0.8))
 			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0 - 8.0), 1.0,
 					GameState.part_can(key, idx))
-			_draw_price(face, Vector2(8.0, SWATCH - 10.0), key, idx, 12))
+			_draw_price(face, Vector2(8.0, SWATCH - 9.0), key, idx, 12))
 	b.add_child(face)
 	return b
 

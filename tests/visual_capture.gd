@@ -127,8 +127,18 @@ func _ready() -> void:
 	# 나만의 캐릭터 (꾸미기는 이 슬롯 전용) — 카드 안 꾸미기 패널 + 잠긴 파츠(눈 줄).
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_mycat.png",
 			func(inst: Node) -> void: _view_cat(inst, "mycat"))
+	# 잠긴 색 스와치도 제 색으로 보인다 — 자물쇠·값은 흰 반투명 판 위에.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_swatches.png",
+			func(inst: Node) -> void:
+				_view_cat(inst, "mycat")
+				inst._customizer._cur = 5
+				# 패널을 짓는 동안만 눈 색을 안 산 상태로 — 세이브에는 안 남는다.
+				_keep_owned = GameState.parts_owned.duplicate(true)
+				GameState.parts_owned.erase("eye_col")
+				inst._customizer._refresh())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_mycat_eyes.png",
 			func(inst: Node) -> void:
+				GameState.parts_owned = _keep_owned  # 위 캡처가 뺀 눈 색 되돌리기
 				_view_cat(inst, "mycat")
 				inst._customizer._cur = 5  # 눈 줄 — 모양+색을 한 패널에서 확인
 				inst._customizer._refresh()
@@ -386,6 +396,9 @@ func _seed_scare(inst: Node) -> void:
 
 
 ## 캐릭터 페이지를 열고 그 냥이를 본문에 펼친다.
+var _keep_owned := {}
+
+
 func _view_cat(inst: Node, id: String) -> void:
 	inst._open_chars()
 	inst._char_view = id

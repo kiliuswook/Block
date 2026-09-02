@@ -1012,9 +1012,15 @@ func _merge_piece(t: String, r: int, pos: Vector2i, ore_idx := -1) -> bool:
 			ore[c] = true
 		else:
 			ore.erase(c)
-		if c.y < 0:
+		if mode == Mode.ENDLESS:
+			# 무한의 계단: 우물에 천장은 없지만 화면 위 가장자리가 천장이다.
+			# 떨어지던 블록이 스폰 줄을 위로 밀어 올려 스택이 화면 밖으로 계속
+			# 자라는 일이 없게, 락되는 칸이 카메라 위 끝에 닿으면 끝낸다.
+			if float(c.y) * CELL <= _screen_top_y():
+				overflow = true
+		elif c.y < 0:
 			overflow = true
-	if overflow and mode != Mode.ENDLESS:
+	if overflow:
 		# Stack spilled over the top: the cat is buried.
 		_kill_player()
 		return false
@@ -1113,8 +1119,16 @@ func _fever_seed_coins() -> void:
 ## 아래로 그리는 거리만큼 위로 잡는다.
 func _fever_sky_top() -> float:
 	if cam:
-		return cam.position.y - get_viewport_rect().size.y * 0.5 / maxf(cam.zoom.y, 0.05) - CELL
+		return _screen_top_y() - CELL
 	return player.position.y - view_below
+
+
+## 카메라가 보여 주는 위쪽 끝(월드 y). 무한의 계단에서 스택이 여기 닿으면 끝이다.
+## 카메라가 없으면(테스트) 닿을 수 없는 높이를 돌려준다.
+func _screen_top_y() -> float:
+	if cam == null:
+		return -INF
+	return cam.position.y - get_viewport_rect().size.y * 0.5 / maxf(cam.zoom.y, 0.05)
 
 
 ## 코인 하나를 y 높이에 떨어뜨린다. 셋 중 둘은 좌우로 흔들리는 소나기 줄기를

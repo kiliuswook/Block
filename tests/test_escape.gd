@@ -189,6 +189,10 @@ func _ready() -> void:
 	b2.piece_type = "O"
 	b2.piece_rot = 0
 	b2.piece_state = b2.PieceState.FALLING
+	# 우물 위(row 0 위)는 열려 있다 — 천장은 우물이 아니라 화면 위 끝이다.
+	# 카메라를 올려 row -6이 화면 안에 들어오게 한 뒤 락한다.
+	cam2.position = Vector2(320, 200)
+	_check(b2._screen_top_y() < -6 * c, "endless: row -6 is on screen for this camera")
 	b2.piece_pos = Vector2i(0, -6)
 	b2._lock_piece()
 	_check(b2.playing, "locking above the top keeps the game running")
@@ -290,6 +294,24 @@ func _ready() -> void:
 			b4.grid[Vector2i(x, y)] = "O"
 	b4._spawn_piece()
 	_check(not b4.playing, "endless: piece spawning inside the stack ends the game")
+
+	# 무한: 락되는 블록이 화면 위 끝에 닿으면 끝 — 그 아래는 그냥 쌓인다.
+	var b5: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p5: Node2D = load("res://core/scripts/player.gd").new()
+	p5.name = "Player"
+	b5.add_child(p5)
+	var cam5 := Camera2D.new()
+	cam5.name = "Cam"
+	b5.add_child(cam5)
+	add_child(b5)
+	b5.start_game()
+	b5._update_endless(0.0)  # 카메라 자리 잡기
+	var top_row := int(floor(b5._screen_top_y() / c))
+	_check(b5._merge_piece("O", 0, Vector2i(0, top_row + 2)),
+			"endless: a piece locked below the screen top just stacks")
+	_check(b5.playing, "endless: stacking under the screen top keeps playing")
+	b5._merge_piece("O", 0, Vector2i(4, top_row))
+	_check(not b5.playing, "endless: a block locked at the screen top ends the game")
 
 	# --- Classic mode: arcade rules, cat controls ------------------------------
 	GameState.mode = GameState.MODE_CLASSIC
