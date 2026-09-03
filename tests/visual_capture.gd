@@ -268,6 +268,15 @@ func _ready() -> void:
 	GameState.mode = GameState.MODE_ENDLESS
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless.png",
 			func(inst: Node) -> void: inst.get_node("TouchControls").visible = true)
+	# 터치 컨트롤 눌린 모습 — 이동 패드 왼쪽 + 낙하 + 점프(링 퍼지는 중).
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_touch_pressed.png",
+			func(inst: Node) -> void:
+				var tc: CanvasLayer = inst.get_node("TouchControls")
+				tc.visible = true
+				tc.get_node("JumpButton").touch_index = 3
+				tc.get_node("JumpButton")._ring = 0.6
+				tc.get_node("DropButton").touch_index = 4
+				tc.get_node("MovePad")._touches[5] = -1)
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_fever.png",
 			func(inst: Node) -> void:
 				inst.get_node("TouchControls").visible = true

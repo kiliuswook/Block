@@ -113,6 +113,7 @@ func _ready() -> void:
 	$PopupLayer.move_child(piece_flyer, 0)  # 결과 팝업·설정 아래에 깔린다
 	settings_panel = SETTINGS_PANEL.new()
 	settings_panel.closed.connect(_on_settings_closed)
+	settings_panel.quit_requested.connect(_to_title)
 	$PopupLayer.add_child(settings_panel)
 	Sfx.play_bgm("game")
 	board.start_game()

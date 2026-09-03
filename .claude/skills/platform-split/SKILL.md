@@ -22,7 +22,7 @@ Cat-Tris는 저장소·Godot 프로젝트 하나에서 스팀(가로)과 모바�
 |---|---|---|
 | 해상도 | 가로 1920×1080 | **세로 1080×1920** (`.mobile` 오버라이드) |
 | 모드 | 스테이지, 무한 | 스테이지, 무한 |
-| 입력 | 키보드/패드 (+Esc 종료) | 터치 컨트롤 항상 표시 |
+| 입력 | 키보드/패드 (+Esc 종료) | 터치 컨트롤 항상 표시 (왼손 이동 패드 · 오른손 점프/회전/낙하 · ⏸) |
 | 타이틀 | `steam/ui/title_steam.tscn` | `mobile/ui/title_mobile.tscn` |
 | 게임 씬 | `core/scenes/main.tscn` | `mobile/ui/main_mobile.tscn` (main.tscn 상속) |
 | 프리셋 | `Steam` (Windows, 태그 `steam`) | `Mobile` (Android, 태그 `mobile`) |
@@ -48,7 +48,7 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 
 ### 2. HUD/인게임 UI 변경
 - `core/scenes/main.tscn`에 노드 추가/변경 후, **`mobile/ui/main_mobile.tscn`에서 세로 배치 오버라이드를 함께 갱신**할 것. 상속 씬이므로 새 노드는 자동 등장하지만 위치는 가로 기준이라 세로에서 어긋난다.
-- 세로 레이아웃 존: 보드 (220,200)~(860,1096) / 좌측 열 x 40~192 / 우측 열 x 880~1070 (탈출 HUD는 y 340부터 — 출구 벽과 겹침 방지) / 상단 중앙 y 0~150 / 터치 존 y 1450~1860.
+- 세로 레이아웃 존: 보드 (220,200)~(860,1096) / 좌측 열 x 40~192 / 우측 열 x 880~1070 (탈출 HUD는 y 340부터 — 출구 벽과 겹침 방지) / 상단 중앙 y 0~150 / 터치 존 y 1400~1920(`Deck` 바닥판).
 - 스크립트가 `visible`을 제어하는 노드는 씬 오버라이드로 숨겨도 소용없다 (main.gd가 덮어씀) — 스크립트 분기 필요.
 
 ### 3. 타이틀/메뉴 UI 변경
@@ -63,8 +63,9 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 - 모드 선택 흐름: 타이틀 `_start()` → `GameState.mode` → `main_scene` 로드. 지금 모드는 스테이지·무한 둘뿐이고 양쪽 공통이라 `title_mobile.gd`에 숨김 목록은 없다 — 한쪽 전용 모드를 다시 만들면 그때 되살린다.
 
 ### 5. 새 입력/조작 추가
-- 액션을 `project.godot` [input]에 등록하고, **모바일용 터치 버튼을 함께 추가**: `main.tscn`의 `TouchControls`에 TouchButton 노드(가로 위치) + `main_mobile.tscn`에 세로 위치 오버라이드.
-- 터치 버튼 최소 크기 ~220×140. 키보드 힌트 문구(`HelpLabel` 등)는 모바일에서 숨김 상태 유지.
+- 액션을 `project.godot` [input]에 등록하고, **모바일용 터치 버튼을 함께 추가**: `main.tscn`의 `TouchControls`에 `TouchButton` 노드(가로 위치, `icon`/`accent`/`deep`/`label` export) + `main_mobile.tscn`에 세로 위치 오버라이드. 아이콘이 필요하면 `touch_button.gd`의 `_draw_icon()`에 도형을 한 갈래 더한다(글리프 금지).
+- 배치 원칙: **왼손 = 이동 패드(`MovePad`)만, 오른손 = 점프·회전·낙하**. 원형 액션 버튼 지름 ≥170, 서로 40px 이상 띄운다(`slide_in=false`라 미끄러져 들어온 손가락은 안 받지만 원 판정에 `HIT_MARGIN` 여유가 있다). 세로 터치 존은 `Deck`(y 1400~1920) 위. 키보드 힌트 문구(`HelpLabel` 등)는 모바일에서 숨김 상태 유지.
+- 확인: `res://tests/test_touch.tscn` → `ALL TESTS PASSED`, 캡처 `m_endless.png`·`m_touch_pressed.png`.
 
 ### 6. 플랫폼 서비스 (업적·리더보드·클라우드·IAP·광고)
 - `platform/platform_base.gd`에 no-op 메서드 추가 → `steam/steam_platform.gd`·`mobile/mobile_platform.gd`에서 오버라이드 → 게임 코드는 `Platform.xxx()`만 호출.

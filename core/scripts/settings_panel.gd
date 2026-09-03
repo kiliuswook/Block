@@ -10,6 +10,7 @@ extends Control
 ## 해상도·언어·게임 초기화는 씬을 새로 여는 동작이라 타이틀에서만 노출한다.
 
 signal closed
+signal quit_requested  # 일시정지 메뉴의 `타이틀로` — 판을 버리고 나간다
 
 const UiKit := preload("res://core/scripts/ui_kit.gd")
 const KeyBinds := preload("res://core/scripts/key_binds.gd")
@@ -59,6 +60,7 @@ var _apply_btn: Button
 var _main_rows: Array[Dictionary] = []  # {"node": Control, "h": float} — 세로 배치용
 
 var _reset_btn: Button
+var _quit_btn: Button  # 인게임 일시정지에서만 뜨는 `타이틀로`
 var _reset_armed := false  # 첫 탭 = 확인 문구, 둘째 탭 = 실제 초기화
 
 # 재설정 칩: 버튼 -> {"kind": "key"/"pad", "row": 행, "group": 충돌 검사 대상 행들}
@@ -174,6 +176,17 @@ func _build_main_page() -> Control:
 	UiKit.style_button(_reset_btn, UiKit.RED, UiKit.RED_DEEP, UiKit.WHITE, 20, 14)
 	_reset_btn.pressed.connect(_on_reset_pressed)
 	page.add_child(_reset_btn)
+	# 일시정지 메뉴의 `타이틀로` — 초기화 버튼과 같은 자리(맨 아래)를 나눠 쓴다.
+	# 모바일은 인게임 화면에 타이틀 버튼이 따로 없어(⏸ 하나뿐) 이 길이 유일하다.
+	_quit_btn = Button.new()
+	_quit_btn.text = tr("SET_TO_TITLE")
+	_quit_btn.size = _reset_btn.size
+	_quit_btn.position.x = _reset_btn.position.x
+	UiKit.style_button(_quit_btn, UiKit.RED, UiKit.RED_DEEP, UiKit.WHITE, 22, 14)
+	_quit_btn.pressed.connect(func() -> void:
+		Sfx.play("click")
+		quit_requested.emit())
+	page.add_child(_quit_btn)
 	_layout_main()
 	return page
 
@@ -189,6 +202,7 @@ func _layout_main() -> void:
 		node.position.y = y
 		y += float(r.h)
 	_reset_btn.position.y = maxf(y + 14.0, _body_rect.size.y - 104.0)
+	_quit_btn.position.y = _reset_btn.position.y
 
 
 ## ◀ 값 ▶ 한 줄. 반환된 Control의 "value" 메타에 가운데 Label이 들어 있다.
@@ -661,6 +675,7 @@ func open(on_title := true) -> void:
 	_on_title = on_title
 	_sync_values()
 	_reset_btn.visible = on_title
+	_quit_btn.visible = not on_title
 	_res_row.visible = on_title and _desktop()
 	_lang_row.visible = on_title
 	_apply_btn.visible = on_title
