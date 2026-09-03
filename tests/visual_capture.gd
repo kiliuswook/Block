@@ -251,9 +251,7 @@ func _ready() -> void:
 						"경험치   +56\n레벨 업!   Lv.7   +220 G",
 						{"gold": 87, "gold_from": GameState.gold - 87,
 						"xp": 56, "xp_from": maxi(GameState.xp - 56, 0)}))
-	# --- 모바일(세로 1080×1920) 레이아웃 ---
-	get_window().size = Vector2i(540, 960)
-	get_window().content_scale_size = Vector2i(1080, 1920)
+	# --- 모바일(세로 1080×1920) 레이아웃 --- (창 크기는 _fit_window가 씬 경로로 맞춘다)
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
@@ -405,7 +403,23 @@ func _view_cat(inst: Node, id: String) -> void:
 	inst._refresh_char_page()
 
 
+## 씬 경로로 창 크기를 정한다 — mobile/ 씬은 세로 1080×1920, 나머지는 가로 1920×1080.
+## (모바일 타이틀은 _ready에서 창을 세로로 돌려놓고 되돌리지 않으므로, 캡처마다 다시 맞춘다.)
+func _fit_window(scene_path: String) -> void:
+	var want := Vector2i(1080, 1920) if scene_path.begins_with("res://mobile/") 			else Vector2i(1920, 1080)
+	var w := get_window()
+	if w.size == want and w.content_scale_size == want:
+		return
+	w.borderless = true
+	w.position = Vector2i.ZERO
+	w.size = want
+	w.content_scale_size = want
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
 func _capture(scene_path: String, out: String, setup: Callable = Callable()) -> void:
+	await _fit_window(scene_path)
 	var inst: Node = (load(scene_path) as PackedScene).instantiate()
 	get_tree().root.add_child(inst)
 	if setup.is_valid():
