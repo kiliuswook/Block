@@ -145,6 +145,13 @@ func _draw_coin(coin: Control) -> void:
 			Color(1.0, 1.0, 1.0, 0.65))  # 빛은 늘 위에서
 
 
+## 카드를 다른 자리로 옮긴다 (세로 인게임 결과 화면 — 좌상단은 ⏸ 버튼과 큰 숫자
+## 카드가 있어 위 가운데로 보낸다). 코인 과녁(`gold_target()`)도 따라간다.
+func place(pos: Vector2) -> void:
+	if is_instance_valid(_card):
+		_card.position = pos
+
+
 ## 이 카드가 차지하는 자리 — 다른 UI가 겹치지 않게 피할 때 쓴다.
 func rect() -> Rect2:
 	return Rect2() if not is_instance_valid(_card) \

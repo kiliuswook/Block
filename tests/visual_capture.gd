@@ -294,7 +294,7 @@ func _ready() -> void:
 			func(inst: Node) -> void:
 				inst.get_node("Board")._kill_player()
 				if inst.user_hud:
-					inst.user_hud.visible = true
+					inst._reveal_user_hud()
 				inst.get_node("PopupLayer/DeathPopup").open(
 						"도달 높이 23층      최고 기록 41층", true,
 						"획득   +87 G", "",

@@ -21,6 +21,15 @@ const HUD_COL_TOP := 44.0
 const HUD_ROW_GAP := 26.0  # 줄과 줄 사이
 const HUD_CAPTION_GAP := 4.0  # 제목 ↔ 숫자
 const HUD_CAPTION_H := 26.0
+# 세로 화면 오른쪽 열 — 우물(≈234~846) 오른쪽 여백에 서는 좁은 카드.
+const HUD_P_COL_X := 884.0
+const HUD_P_COL_W := 158.0
+const HUD_P_COL_TOP := 40.0
+const HUD_P_ROW_GAP := 22.0
+# 세로 화면 왼쪽 열(NEXT · 피버 게이지) — 카드 오른쪽 끝이 우물 왼쪽 벽(≈234)
+# 앞에서 멈추도록 x 30~196에 맞춘다 (main_mobile.tscn의 NEXT offset과 같은 값).
+const HUD_P_LEFT_X := 30.0
+const HUD_P_LEFT_W := 166.0
 
 @onready var board: EscapeBoard = $Board
 @onready var score_title: Label = $UI/ScoreTitle
@@ -302,8 +311,22 @@ func _on_game_over() -> void:
 	tw.tween_callback(func() -> void:
 		if not board.playing:
 			if user_hud:
-				user_hud.visible = true  # 세로 화면은 여기서 처음 뜬다
+				_reveal_user_hud()  # 세로 화면은 여기서 처음 뜬다
 			death_popup.open(stats, was_record, earned, "", xp_line, reward))
+
+
+## 결과창과 함께 유저 HUD를 띄운다. 세로 화면은 좌상단이 ⏸ 버튼 자리이고 카드
+## 폭(520)이 위쪽 큰 숫자 카드(x 340~740)까지 덮으므로, 큰 숫자 카드를 접고
+## 그 자리(위 가운데)에 HUD를 앉힌다 — 판은 이미 끝나 층수는 결과창이 보여 준다.
+func _reveal_user_hud() -> void:
+	var vp := get_viewport_rect().size
+	if vp.y > vp.x:
+		height_title.visible = false
+		height_label.visible = false
+		if is_instance_valid(hud_cards):
+			hud_cards.queue_redraw()
+		user_hud.place(Vector2((vp.x - user_hud.rect().size.x) / 2.0, USER_HUD.MARGIN.y))
+	user_hud.visible = true
 
 
 ## NEXT 카드에 예고돼 있던 블록이 방금 우물로 들어왔다: 카드에서 조각 하나가
@@ -406,11 +429,13 @@ func _ink_label(l: Label, col: Color) -> void:
 ## 다른데(무한=층 · 스테이지=LEVEL) 씬의 y를 그대로 쓰면 서로
 ## 겹치므로, 순서·글자 크기·간격을 여기서 한 번에 정해 두 모드를 같은 모양으로 만든다.
 ## 순서: NEXT → 큰 숫자 슬롯 → BEST/TOP → SCORE → (LEVEL) → LINES(+타일 랙) → 기록.
-## 세로 화면(모바일)은 계기판이 화면 곳곳에 흩어져 있어 아직 씬(main_mobile.tscn)의
-## offset이 정한다 — 여기로 합치는 건 밀린 모바일 대응 (CLAUDE.md ⛳ 목록).
+## 세로 화면(모바일)은 계기판이 세 곳으로 흩어져 있어 왼쪽 NEXT·위 큰 숫자는
+## 씬(main_mobile.tscn)의 offset이 정하고, 오른쪽 기록 열만 `_layout_stat_column_portrait()`가
+## 같은 규칙으로 쌓는다.
 func _layout_stat_column() -> void:
 	var vp := get_viewport_rect().size
 	if vp.y > vp.x:
+		_layout_stat_column_portrait()
 		return
 	var y := HUD_COL_TOP
 	# NEXT는 제목 + 미리보기 판이라 따로 쌓는다.
@@ -460,6 +485,46 @@ func _layout_stat_column() -> void:
 		goal_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 
+## 세로 화면의 오른쪽 열: NEXT와 큰 숫자는 씬(main_mobile.tscn)이 자리를 정하지만,
+## 오른쪽 기록 열은 가로와 같은 이유로(모드마다 켜지는 줄이 달라) 보이는 줄만
+## 위에서부터 쌓는다. 순서: BEST/TOP → 기록 갱신 슬롯 → SCORE → (LEVEL) → LINES(+타일 랙).
+## 예전엔 씬 좌표가 BEST와 SCORE 사이를 200px 넘게 비워 둬 카드가 길쭉하게 늘어졌다.
+func _layout_stat_column_portrait() -> void:
+	var y := HUD_P_COL_TOP
+	for row: Array in [[best_title, best_label, 44],
+			[score_title, score_label, 40],
+			[level_title, level_label, 40],
+			[lines_title, lines_label, 36]]:
+		var cap: Label = row[0]
+		var val: Label = row[1]
+		if not val.visible:
+			continue
+		var fs: int = row[2]
+		val.add_theme_font_size_override("font_size", fs)
+		cap.position = Vector2(HUD_P_COL_X, y)
+		cap.size = Vector2(HUD_P_COL_W, HUD_CAPTION_H)
+		y += HUD_CAPTION_H + HUD_CAPTION_GAP
+		val.position = Vector2(HUD_P_COL_X, y)
+		val.size = Vector2(HUD_P_COL_W, ceilf(fs * 1.25))
+		val.pivot_offset = val.size / 2.0
+		y += val.size.y + HUD_P_ROW_GAP
+		if val == best_label:
+			# 기록 갱신 줄(★ NEW RECORD!)은 판 도중에 켜진다 — 카드 폭(여백 포함)에
+			# 맞춰 자리를 미리 비워 둔다(켜질 때 카드가 자라지 않게).
+			# 글자 폭이 카드보다 넓은 번역이 와도 카드를 화면 밖으로 밀지 않게 잘라 낸다
+			# (Label은 clip_text가 아니면 글자 폭을 최소 크기로 강제한다).
+			record_label.clip_text = true
+			record_label.add_theme_font_size_override("font_size", 18)
+			record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			record_label.position = Vector2(HUD_P_COL_X - HUD_CARD_PAD.x, y - HUD_P_ROW_GAP + 2.0)
+			record_label.size = Vector2(HUD_P_COL_W + HUD_CARD_PAD.x * 2.0, 34.0)
+			y = record_label.position.y + record_label.size.y + HUD_P_ROW_GAP
+		if val == lines_label and goal_meter != null:
+			goal_meter.position = Vector2(HUD_P_COL_X, y - HUD_P_ROW_GAP + 6.0)
+			goal_meter.size = Vector2(HUD_P_COL_W, 72.0)
+			y = goal_meter.position.y + goal_meter.size.y + HUD_P_ROW_GAP
+
+
 ## 계기판 묶음마다 흰 카드를 한 장씩 깐다 (타이틀의 카드와 같은 스타일박스).
 ## 가로 화면은 오른쪽 열 하나가 통째로 한 장이고, 세로 화면은 계기판이 세 곳으로
 ## 흩어져 있어(왼쪽 NEXT · 위 큰 숫자 · 오른쪽 기록) 세 장으로 나눠 깐다.
@@ -488,19 +553,21 @@ func _build_hud_cards() -> void:
 ## 세로 화면 계기판은 자리마다 성격이 달라 카드도 세 장이다.
 ## (좌표는 mobile/ui/main_mobile.tscn의 오버라이드가 정한다 — 여기선 묶기만 한다.)
 func _build_hud_cards_portrait() -> void:
-	hud_groups.append({"nodes": [$UI/NextTitle, $UI/NextPreview], "w": 0.0})
-	hud_groups.append({"nodes": [height_title, height_label], "w": 0.0})
+	# 왼쪽 열 — NEXT와 (무한) 피버 게이지를 한 장에 담는다. 따로 두 장이면 카드
+	# 사이가 붙어 어색했고, 예전 좌표는 카드 오른쪽 끝이 우물 왼쪽 벽을 덮었다.
+	var left: Array = [$UI/NextTitle, $UI/NextPreview]
 	if fever_meter != null:
-		# 골드러시 게이지는 NEXT 카드 아래 — 우물(x 220~860) 왼쪽 여백이라
-		# 판을 가리지 않고, 엄지에서도 먼 자리다.
-		hud_groups.append({"nodes": [fever_meter], "w": 0.0})
-	# 오른쪽 열 — 우물(x 220~860) 바깥에 서므로 카드가 판을 가리지 않는다.
-	# 기록 갱신 줄(★ NEW RECORD!)은 열보다 넓어 카드에 넣지 않고 그대로 띄운다.
+		left.append(fever_meter)
+	hud_groups.append({"nodes": left, "w": 0.0})
+	hud_groups.append({"nodes": [height_title, height_label], "w": 0.0})
+	# 오른쪽 열 — 우물 바깥(x ≥ 862)에 서므로 카드가 판을 가리지 않는다.
+	# 자리는 `_layout_stat_column_portrait()`가 쌓았고, 기록 갱신 줄은 그 안에
+	# 슬롯을 비워 뒀다(`always`로 카드에 미리 넣어 켜질 때 카드가 자라지 않게).
 	var right: Array = [best_title, best_label, score_title, score_label,
 			level_title, level_label, lines_title, lines_label]
 	if goal_meter != null:
 		right.append(goal_meter)
-	hud_groups.append({"nodes": right, "w": 0.0})
+	hud_groups.append({"nodes": right, "w": 0.0, "always": [record_label]})
 
 
 func _draw_hud_cards() -> void:
@@ -639,8 +706,9 @@ func _build_fever_meter() -> void:
 	$UI.add_child(fever_meter)
 	var vp := get_viewport_rect().size
 	if vp.y > vp.x:
-		fever_meter.position = Vector2(40.0, 292.0)
-		fever_meter.size = Vector2(196.0, 50.0)
+		# NEXT 미리보기 바로 아래, 같은 카드 안 — 폭은 우물 왼쪽 벽 앞에서 멈춘다.
+		fever_meter.position = Vector2(HUD_P_LEFT_X, 288.0)
+		fever_meter.size = Vector2(HUD_P_LEFT_W, 50.0)
 
 
 ## 피버타임이 터진 순간에만 화면을 한 번 밝힌다 (게이지가 차는 동안은 조용히).
@@ -657,13 +725,9 @@ func _build_goal_meter() -> void:
 	goal_meter = GOAL_METER.new()
 	$UI.add_child(goal_meter)
 	if vp.y > vp.x:
-		# Portrait: LEVEL rides top-center, LINES moves up into the empty LEVEL
-		# slot, and the rack sits under it in the right column — 5씩 두 줄이면
-		# 좁은 열에서도 읽힌다 (한 줄 10칸은 위쪽 큰 숫자와 겹친다).
-		lines_title.position = Vector2(898.0, 440.0)
-		lines_label.position = Vector2(898.0, 468.0)
-		goal_meter.position = Vector2(898.0, 524.0)
-		goal_meter.size = Vector2(158.0, 72.0)
+		# Portrait: LEVEL rides top-center and the rack sits under LINES in the
+		# right column (자리는 `_layout_stat_column_portrait()`가 쌓는다) — 5씩
+		# 두 줄이면 좁은 열에서도 읽힌다 (한 줄 10칸은 위쪽 큰 숫자와 겹친다).
 		goal_meter.per_row = 5
 		goal_meter.centered = true
 
@@ -683,10 +747,11 @@ func _build_skip_level_button() -> void:
 		btn.position = Vector2(40.0, 132.0)
 		btn.size = Vector2(240.0, 48.0)
 	else:
-		# Portrait: down the left margin, clear of the NEXT panel and the well.
-		UiKit.btn_ghost(btn, 20)
-		btn.position = Vector2(16.0, 400.0)
-		btn.size = Vector2(200.0, 64.0)
+		# Portrait: down the left margin, clear of the NEXT card and the well.
+		# 왼쪽 여백은 카드 폭(≈210)뿐이라 글자를 줄여 잘리지 않게 한다.
+		UiKit.btn_ghost(btn, 16)
+		btn.position = Vector2(HUD_P_LEFT_X - HUD_CARD_PAD.x, 400.0)
+		btn.size = Vector2(HUD_P_LEFT_W + HUD_CARD_PAD.x * 2.0, 56.0)
 		btn.clip_text = true  # 번역이 길어도 판을 넘지 않게
 	btn.pressed.connect(func() -> void:
 		if board.classic_skip_level():
