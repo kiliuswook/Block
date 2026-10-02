@@ -18,6 +18,11 @@ const UiKit := preload("res://core/scripts/ui_kit.gd")
 const COLS := 10
 const PIT_ROWS := 20  # actual well height, every mode — standard tetris
 const CELL := 64.0
+## 가로 화면 우물 틀 (피그마): 안쪽 여백 10(우물 색) + 테 8(#121a2e), 모서리 20.
+## 화면 픽셀 기준 — 보드 배율로 나눠 그린다.
+const FRAME_PAD := 10.0
+const FRAME_W := 8.0
+const FRAME_OUT := FRAME_PAD + FRAME_W
 const TRACK_TIME_BASE := 5.0
 const TRACK_TIME_MIN := 2.0
 const TRACK_STEP := 0.07
@@ -330,7 +335,7 @@ func _process(delta: float) -> void:
 					_fall(delta)
 				PieceState.LANDED:
 					_landed(delta)
-		if mode == Mode.ENDLESS and playing:
+		if playing:
 			_step_loose(delta)
 	_rec_tick(delta)
 	if mode == Mode.ENDLESS:
@@ -508,10 +513,16 @@ func _impact(cells: Array, col: Color, power: float) -> void:
 
 ## 낙하 잔상: 지나온 자리에 블록 색 띠를 남긴다 (swept = 훑고 온 줄 수).
 func _push_trail(swept: int, strength: float) -> void:
-	if piece_type == "" or swept <= 0 or trails.size() > 24:
+	if piece_type == "":
 		return
-	trails.append([_cells(piece_type, piece_rot, piece_pos), swept,
-			Color(Board.COLORS[piece_type], strength), 0.0])
+	_push_trail_cells(_cells(piece_type, piece_rot, piece_pos), swept,
+			Board.COLORS[piece_type], strength)
+
+
+func _push_trail_cells(cells: Array, swept: int, col: Color, strength: float) -> void:
+	if swept <= 0 or trails.size() > 24:
+		return
+	trails.append([cells, swept, Color(col, strength), 0.0])
 
 
 ## 대시로 블록을 밀어냈다 — 미끄러진 만큼 잔상을 남기고 짧게 멎는다.
@@ -587,10 +598,11 @@ func _update_endless(delta: float) -> void:
 	var usable := vp.y - 490.0 if vp.y > vp.x else vp.y
 	# 화면 픽셀 거리를 카메라 줌으로 나눠 월드 거리로 바꾼다 — 줌이 1이 아니다.
 	var cam_offset := (usable / 1.5 - vp.y / 2.0) / view_zoom  # cat screen y = usable * 2/3
-	# Camera floor: at run start the pit bottom sits just above the screen
-	# bottom (landscape) / the touch zone (portrait), never behind them.
-	var bottom_sy := vp.y - 60.0 if vp.x > vp.y else vp.y - 540.0
-	var cam_floor := rows * CELL - (bottom_sy - vp.y / 2.0) / view_zoom
+	# Camera floor: at run start the bedrock floor *and the lava under it* sit
+	# just above the screen bottom (landscape) / the touch zone (portrait) —
+	# the lava has to be on screen from the first second.
+	var cam_floor := rows * CELL + LAVA_START_OFFSET + CELL * 0.6 \
+			- (_view_bottom_sy() - vp.y / 2.0) / view_zoom
 	cam.position.y = minf(player.position.y - cam_offset, cam_floor)
 	# 피버 동안 카메라를 살짝 당긴다 — 시야가 좁아지면 같은 속도도 더 빨라 보인다.
 	var want_zoom := view_zoom / (FEVER_ZOOM if fever_on() else 1.0)
@@ -671,13 +683,17 @@ func piece_hits_rect(r: Rect2) -> bool:
 
 func _track(delta: float) -> void:
 	if Input.is_action_just_pressed("soft_drop"):
-		drop_tap_time = Time.get_ticks_msec() / 1000.0
+		# 두 번 누르기 = 방금 놓은 블록을 하드드롭. 한 번 = 지금 블록을 놓는다.
+		var now := Time.get_ticks_msec() / 1000.0
+		if now - drop_tap_time <= DROP_DOUBLE_TAP and _hard_drop_loose():
+			drop_tap_time = -1e9
+			return
+		drop_tap_time = now
 		_release_piece()
 		return
 	track_timer += delta
 	track_move_timer += delta
-	if mode == Mode.ENDLESS:
-		piece_pos.y = _endless_spawn_row()
+	piece_pos.y = _spawn_row()
 	while track_move_timer >= TRACK_STEP:
 		track_move_timer -= TRACK_STEP
 		var target := _track_target()
@@ -705,18 +721,14 @@ func _track_target() -> int:
 	return clampi(pcol - 2, pcol - max_dx, pcol - min_dx)
 
 
-## The countdown ended (or the drop key sent the piece down). Endless detaches
-## the piece into [member loose] so the next one starts tracking immediately;
-## every other mode keeps the classic one-piece fall.
+## The countdown ended (or the drop key sent the piece down). Both modes detach
+## the piece into [member loose] so the next one starts tracking immediately.
 func _release_piece() -> void:
-	if mode == Mode.ENDLESS:
-		_detach_piece()
-	else:
-		_start_fall()
+	_detach_piece()
 
 
-## Endless: the tracked piece lets go and free-falls on its own — locked out
-## of rotation from here — while the next piece appears at the top right away.
+## The tracked piece lets go and free-falls on its own — locked out of
+## rotation from here — while the next piece appears at the top right away.
 func _detach_piece() -> void:
 	if _piece_collides(piece_rot, piece_pos, false):
 		_kill_player()  # true block out: the locked stack reached the spawn row
@@ -724,7 +736,8 @@ func _detach_piece() -> void:
 	if _cells_hit_loose(_cells(piece_type, piece_rot, piece_pos), -1):
 		return  # the previous piece still fills this lane — try again next frame
 	loose.append({"t": piece_type, "r": piece_rot, "p": piece_pos,
-			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0, "o": piece_ore})
+			"s": PieceState.FALLING, "ft": 0.0, "lt": 0.0, "o": piece_ore,
+			"f0": piece_pos.y})
 	if _resolve_loose_overlap(loose.size() - 1) or not playing:
 		return
 	_spawn_piece()
@@ -770,11 +783,11 @@ func _step_loose(delta: float) -> void:
 			while e.ft >= interval and playing:
 				e.ft -= interval
 				if _loose_blocked(i, Vector2i(0, 1)):
-					e.s = PieceState.LANDED
-					e.lt = 0.0
-					_impact(_loose_cells(e), Board.COLORS[e.t], 0.55)
+					_land_loose(e, 0)
 					break
 				e.p += Vector2i(0, 1)
+				if Input.is_action_pressed("soft_drop"):
+					_push_trail_cells(_loose_cells(e), 1, Board.COLORS[e.t], 0.5)
 				if _resolve_loose_overlap(i) or not playing:
 					return
 		elif e.s == PieceState.LANDED:
@@ -782,6 +795,7 @@ func _step_loose(delta: float) -> void:
 				# Shoved off a ledge (or the floor cleared): fall again.
 				e.s = PieceState.FALLING
 				e.ft = 0.0
+				e.f0 = e.p.y
 			else:
 				e.lt += delta
 				if e.lt >= LOCK_GRACE:
@@ -793,7 +807,41 @@ func _step_loose(delta: float) -> void:
 		i += 1
 
 
-## Endless dash: shoves whichever detached piece the cat slammed into.
+## 떨어져 나간 블록이 스택/바닥에 닿았다: 낙하 거리만큼 세게, 하드드롭이면 더 세게.
+func _land_loose(e: Dictionary, dropped: int) -> void:
+	e.s = PieceState.LANDED
+	e.lt = 0.0
+	e.ft = 0.0
+	var fallen := maxi(dropped, (e.p as Vector2i).y - int(e.get("f0", (e.p as Vector2i).y)))
+	var power := clampf(0.25 + fallen / 16.0, 0.25, 1.0)
+	if dropped > 0:
+		power = minf(power * 1.5, 1.0)
+	_impact(_loose_cells(e), Board.COLORS[e.t], power)
+
+
+## 두 번 누르기: 가장 최근에 놓은 블록이 아직 떨어지는 중이면 바닥까지 꽂는다.
+## 놓은 블록이 이미 앉았으면 false — 호출부가 평소처럼 지금 블록을 놓는다.
+func _hard_drop_loose() -> bool:
+	if loose.is_empty():
+		return false
+	var i := loose.size() - 1
+	var e: Dictionary = loose[i]
+	if e.s != PieceState.FALLING:
+		return false
+	var from_y: int = (e.p as Vector2i).y
+	while playing and not _loose_blocked(i, Vector2i(0, 1)):
+		e.p += Vector2i(0, 1)
+		if _resolve_loose_overlap(i) or not playing:
+			return true
+	var swept: int = (e.p as Vector2i).y - from_y
+	if swept > 0:
+		_push_trail_cells(_loose_cells(e), swept, Board.COLORS[e.t], 0.6)
+		Sfx.play("harddrop")
+	_land_loose(e, swept)
+	return true
+
+
+## Dash: shoves whichever detached piece the cat slammed into.
 func _shove_loose(dir: int, max_cells: int) -> bool:
 	var probe := player.rect()
 	probe.position.x += dir * CELL * 0.75
@@ -1121,6 +1169,23 @@ func _fever_sky_top() -> float:
 	if cam:
 		return _screen_top_y() - CELL
 	return player.position.y - view_below
+
+
+## 화면에서 우물이 실제로 보이는 아래 끝(화면 y). 세로는 터치 덱(y 1400~)이 불투명하게
+## 덮으므로 그 윗선이다.
+func _view_bottom_sy() -> float:
+	var vp := get_viewport_rect().size
+	return vp.y - 520.0 if vp.y > vp.x else vp.y - 16.0
+
+
+## 카메라가 보여 주는 아래 끝(월드 y) — 용암이 이보다 아래면 화면 밖이다.
+func _view_bottom_y() -> float:
+	if cam == null:
+		return INF
+	var vp := get_viewport_rect().size
+	# 카메라는 스무딩으로 position을 뒤따라가므로 실제로 보이는 중심을 쓴다.
+	# (전역 좌표로 나오므로 보드 로컬로 옮긴다.)
+	return to_local(cam.get_screen_center_position()).y 			+ (_view_bottom_sy() - vp.y * 0.5) / maxf(cam.zoom.y, 0.05)
 
 
 ## 카메라가 보여 주는 위쪽 끝(월드 y). 무한의 계단에서 스택이 여기 닿으면 끝이다.
@@ -1776,8 +1841,7 @@ func _spawn_piece() -> void:
 	next_type = _draw_from_bag()
 	EventBus.next_piece_changed.emit(next_type)
 	piece_rot = 0
-	var spawn_row := _endless_spawn_row() if mode == Mode.ENDLESS else 0
-	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), spawn_row)
+	piece_pos = Vector2i(clampi(int(player.position.x / CELL) - 2, 0, COLS - 4), _spawn_row())
 	piece_state = PieceState.TRACKING
 	# 금은 블록 네 칸 중 한 곳에 박힌다 — 회전해도 같은 칸을 따라간다(_try_rotate).
 	piece_ore = randi() % Board.SHAPES[piece_type][0].size() if randf() < ORE_CHANCE else -1
@@ -1795,6 +1859,25 @@ func _draw_from_bag() -> String:
 	return bag.pop_back()
 
 
+## 추적 중인 블록이 매달리는 줄. 무한은 카메라를 따라 오르고, 스테이지는 우물 맨
+## 위(0)다 — 단 방금 놓은 블록이 아직 그 자리를 지나는 중이면 그 위(우물 밖,
+## 그려지지 않는 줄)에서 기다렸다가 비는 만큼 내려온다. 그래서 새 블록이 바로 나와도
+## 앞 블록과 겹치지 않는다.
+func _spawn_row() -> int:
+	if mode == Mode.ENDLESS:
+		return _endless_spawn_row()
+	if piece_type == "":
+		return 0
+	var low := 0
+	for c: Vector2i in Board.SHAPES[piece_type][piece_rot]:
+		low = maxi(low, c.y)
+	var row := 0
+	for e: Dictionary in loose:
+		for c: Vector2i in _loose_cells(e):
+			row = mini(row, c.y - low - 1)
+	return row
+
+
 ## In endless mode the piece hovers a fixed number of cells above the camera,
 ## so it climbs along with the player. While a freshly detached piece still
 ## fills that space, the row is pushed further up so the next piece never
@@ -1810,7 +1893,8 @@ func _endless_spawn_row() -> int:
 
 
 func _try_rotate(dir: int) -> void:
-	if piece_type == "O" or not playing:
+	# 회전은 매달려 있는 동안(추적)뿐 — 떨어지기 시작한 블록은 돌릴 수 없다.
+	if piece_type == "O" or not playing or piece_state != PieceState.TRACKING:
 		return
 	var new_rot := (piece_rot + dir + 4) % 4
 	var key := "%d>%d" % [piece_rot, new_rot]
@@ -2011,16 +2095,34 @@ func _draw() -> void:
 	var border := UiKit.INK
 	var bw := 7.0
 	if mode != Mode.ENDLESS:
-		# Sealed pit: unbroken walls all around, no exits to draw.
-		draw_rect(Rect2(-bw / 2.0, -bw / 2.0, w + bw, h + bw), border, false, bw)
+		# Sealed pit: 피그마 틀 — 우물 색 안쪽 여백 + 짙은 남색 둥근 테.
+		var k := 1.0 / maxf(0.01, scale.x)
+		var pad := StyleBoxFlat.new()
+		pad.draw_center = false
+		pad.bg_color = Color(0, 0, 0, 0)
+		pad.set_border_width_all(int(ceilf(FRAME_PAD * k)))
+		pad.border_color = Color("1e2b45")
+		pad.set_corner_radius_all(int(12.0 * k))
+		draw_style_box(pad, Rect2(Vector2.ZERO, Vector2(w, h)).grow(FRAME_PAD * k))
+		var rim := StyleBoxFlat.new()
+		rim.draw_center = false
+		rim.bg_color = Color(0, 0, 0, 0)
+		rim.set_border_width_all(int(ceilf(FRAME_W * k)))
+		rim.border_color = Color("121a2e")
+		rim.set_corner_radius_all(int(20.0 * k))
+		draw_style_box(rim, Rect2(Vector2.ZERO, Vector2(w, h)).grow(FRAME_OUT * k))
 	else:
 		# 벽은 바닥 아래 어둠까지 이어진다 (배경을 그만큼 더 깔았다).
 		var wall_bottom := h + view_below * 2.0
 		draw_line(Vector2(-2, top), Vector2(-2, wall_bottom), border, bw)
 		draw_line(Vector2(w + 2, top), Vector2(w + 2, wall_bottom), border, bw)
-		draw_line(Vector2(-2, h + 2), Vector2(w + 2, h + 2), border, bw)
+		# 출발 바닥은 피버가 끝날 때 깔리는 것과 같은 암반 한 줄이다 — 그 아래가
+		# 곧 용암이라 "밑에서 차오르고 있다"가 첫 화면부터 보인다.
+		for x in COLS:
+			_draw_bedrock(Vector2i(x, rows))
 		_draw_lava(w)
 		_draw_near_heat(w)
+		_draw_lava_gauge(w)
 	_draw_fever_glow(w, top, h)
 	if shutter_row > 0:
 		_draw_shutter(w)
@@ -2157,8 +2259,9 @@ func _draw_shutter(w: float) -> void:
 ## endless mode the whole pit brightens as the climb record grows, so the
 ## height record is visible as color.
 func _draw_pit_background(w: float, h: float, top: float) -> void:
-	var top_col := Color("2a3040")
-	var bot_col := Color("0b0c12")
+	# 피그마 우물 색 #1e2b45 — 위는 그대로, 아래로 갈수록 살짝 어둡다.
+	var top_col := Color("1e2b45")
+	var bot_col := Color("131c30")
 	if mode == Mode.ENDLESS:
 		var t := clampf(best_height / 80.0, 0.0, 1.0)
 		top_col = top_col.lerp(Color("6a7186"), t)
@@ -2198,6 +2301,52 @@ func _draw_lava(w: float) -> void:
 	draw_polyline(points, Color("ffd27a"), 5.0)
 
 
+## 용암이 화면 아래로 벗어났을 때: 보이는 아래 끝에 열기 띠를 깔고, 가운데에
+## "▼ n"(발끝에서 용암까지 칸 수) 알약을 띄운다 — 멀리 있어도 늘 차오르는 중이라는
+## 것을 잊지 않게. 가까워질수록 띠가 짙어지고 빨리 뛴다.
+func _draw_lava_gauge(w: float) -> void:
+	var edge := _view_bottom_y()
+	if lava_y <= edge or player == null:
+		return
+	var z := maxf(cam.zoom.y, 0.05) if cam else 1.0
+	var px := 1.0 / z  # 화면 1px = 월드 px/z — 알약 크기를 화면 기준으로 맞춘다
+	var feet := player.position.y + Player.SIZE / 2.0
+	var cells := maxi(int(ceil((lava_y - feet) / CELL)), 1)
+	var near := clampf(1.0 - (lava_y - edge) / (CELL * 12.0), 0.0, 1.0)
+	var pulse := 0.5 + 0.5 * sin(lava_phase * (3.0 + 6.0 * near))
+	# 열기 띠: 아래 끝에서 위로 옅어지는 주황.
+	var band := 70.0 * px
+	var hot := Color(1.0, 0.45, 0.18, 0.35 + 0.3 * near + 0.15 * pulse)
+	var clear := Color(1.0, 0.45, 0.18, 0.0)
+	draw_polygon(PackedVector2Array([
+		Vector2(0, edge - band), Vector2(w, edge - band), Vector2(w, edge), Vector2(0, edge),
+	]), PackedColorArray([clear, clear, hot, hot]))
+	draw_line(Vector2(0, edge - 2.0 * px), Vector2(w, edge - 2.0 * px),
+			Color("ffd27a", 0.6 + 0.4 * pulse), 4.0 * px)
+	# 알약: 아래 화살표 + 칸 수.
+	var font := ThemeDB.fallback_font
+	var fs := int(round(34.0 * px))
+	var label := str(cells)
+	var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var ph := 56.0 * px
+	var aw := 26.0 * px
+	var pw := tw + aw + 52.0 * px
+	var pill := Rect2(Vector2(w * 0.5 - pw * 0.5, edge - ph - 16.0 * px), Vector2(pw, ph))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("6d1a0c")
+	sb.set_corner_radius_all(int(ph * 0.5))
+	sb.set_border_width_all(maxi(2, int(round(4.0 * px))))
+	sb.border_color = Color("ff8c38").lerp(Color("ffd27a"), pulse)
+	draw_style_box(sb, pill)
+	var ax := pill.position.x + 20.0 * px
+	var ay := pill.get_center().y
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(ax, ay - aw * 0.4), Vector2(ax + aw, ay - aw * 0.4), Vector2(ax + aw * 0.5, ay + aw * 0.45),
+	]), Color("ffd27a"))
+	draw_string(font, Vector2(ax + aw + 12.0 * px, ay + fs * 0.36), label,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("fff3d0"))
+
+
 ## SRS 회전축 — 도형이 든 박스의 한가운데다(JLSTZ/S/T/Z는 3x3, I는 4x4).
 ## 칸 4개의 무게중심이 아니다: 무게중심은 회전판마다 옮겨 다녀서 그걸 축으로
 ## 삼으면 도는 게 아니라 휘둘리는 것처럼 보인다.
@@ -2211,7 +2360,7 @@ func _draw_piece() -> void:
 	var pulse := 0.0
 	if piece_state == PieceState.TRACKING:
 		var t := track_timer / _track_time()
-		color.a = 0.35 + 0.4 * t
+		color.a = 0.6 + 0.3 * t  # 너무 옅으면 잉크 테와 섞여 갈색으로 보인다
 		if t > 0.7 and fmod(track_timer, 0.3) < 0.15:
 			color.a = 1.0
 	elif piece_state == PieceState.LANDED:
@@ -2249,7 +2398,8 @@ func _draw_piece() -> void:
 				draw_rect(Rect2(p, Vector2(CELL, CELL)),
 						Color(1.0, 1.0, 0.95, 0.5 * spin_pop), false, 3.0)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
-	if piece_state == PieceState.TRACKING:
+	# 스테이지 모드에서 우물 위(앞 블록이 비키길 기다리는 중)에 있을 땐 숫자도 숨긴다.
+	if piece_state == PieceState.TRACKING and (mode == Mode.ENDLESS or piece_pos.y >= 0):
 		var remain := ceili(_track_time() - track_timer)
 		var top_left := Vector2(piece_pos) * CELL + Vector2(slide_off, rise_off) * CELL
 		draw_string(ThemeDB.fallback_font, top_left + Vector2(CELL * 1.6, CELL * 1.4),
@@ -2558,7 +2708,7 @@ static func _paint_keycap_face(ci: CanvasItem, cap: Rect2, char_id: String) -> b
 	var tex: Texture2D = CatSprite.face_texture(char_id)
 	if tex == null:
 		return false
-	var src := CatSprite.FACE
+	var src := CatSprite.face_rect(char_id)
 	var w := cap.size.x * 0.92
 	var h := w * src.size.y / src.size.x
 	var at := Vector2(cap.get_center().x - w / 2.0, cap.position.y + cap.size.y * 0.05)
@@ -2586,14 +2736,20 @@ func _draw_bedrock(c: Vector2i) -> void:
 			draw_circle(p + Vector2(dx, dy), 3.2, ink, false, 1.2)
 
 
+## 블록 한 칸 (피그마 block 컴포넌트): 둥근 모서리 + 진한 외곽선 + 윗면 하이라이트.
 func _draw_block(p: Vector2, color: Color) -> void:
 	var a := color.a
-	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), color)
-	# Light always comes from above: bright top face, shaded bottom.
-	draw_rect(Rect2(p + Vector2(5.0, 3.0), Vector2(CELL - 10.0, 5.0)),
-			Color(1.0, 0.96, 0.84, 0.4 * a))
-	draw_rect(Rect2(p + Vector2(1.0, CELL - 6.0), Vector2(CELL - 2.0, 5.0)),
-			Color(0.0, 0.0, 0.0, 0.28 * a))
-	var edge := color.darkened(0.4)
+	var r := Rect2(p + Vector2(2.0, 2.0), Vector2(CELL - 4.0, CELL - 4.0))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = color
+	sb.set_corner_radius_all(int(CELL * 0.2))
+	sb.set_border_width_all(3)
+	var edge := color.darkened(0.45)
 	edge.a = a
-	draw_rect(Rect2(p + Vector2.ONE, Vector2(CELL - 2.0, CELL - 2.0)), edge, false, 2.0)
+	sb.border_color = edge
+	draw_style_box(sb, r)
+	# Light always comes from above: bright top face.
+	var hi := StyleBoxFlat.new()
+	hi.bg_color = Color(1.0, 1.0, 1.0, 0.4 * a)
+	hi.set_corner_radius_all(int(CELL * 0.12))
+	draw_style_box(hi, Rect2(p + Vector2(9.0, 7.0), Vector2(CELL - 18.0, CELL * 0.18)))

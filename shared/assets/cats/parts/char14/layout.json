@@ -1,0 +1,245 @@
+{
+ "Cat_Body_Outline": {
+  "h": 242,
+  "layer": 22,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "000000",
+  "w": 195,
+  "x": 28,
+  "y": 37
+ },
+ "Cat_Body_Pattern": {
+  "h": 215,
+  "layer": 21,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 183,
+  "x": 34,
+  "y": 57
+ },
+ "Cat_Body_SkinFill": {
+  "h": 240,
+  "layer": 20,
+  "recolor": true,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "f0c164",
+  "w": 193,
+  "x": 29,
+  "y": 38
+ },
+ "Cat_Cheek": {
+  "h": 14,
+  "layer": 50,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 112,
+  "x": 68,
+  "y": 159
+ },
+ "Cat_Eyes_Color": {
+  "h": 34,
+  "layer": 61,
+  "recolor": true,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "020000",
+  "w": 103,
+  "x": 73,
+  "y": 123
+ },
+ "Cat_Eyes_Highlight": {
+  "h": 13,
+  "layer": 62,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 12,
+  "x": 81,
+  "y": 126
+ },
+ "Cat_Feet_Outline": {
+  "h": 68,
+  "layer": 42,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "000000",
+  "w": 193,
+  "x": 29,
+  "y": 216
+ },
+ "Cat_Feet_Pawpad": {
+  "h": 38,
+  "layer": 41,
+  "recolor": true,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "fda4a4",
+  "w": 170,
+  "x": 40,
+  "y": 230
+ },
+ "Cat_Feet_SkinFill": {
+  "h": 66,
+  "layer": 40,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "fefcf1",
+  "w": 191,
+  "x": 30,
+  "y": 217
+ },
+ "Cat_Mouse": {
+  "h": 34,
+  "layer": 52,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 35,
+  "x": 107,
+  "y": 148
+ },
+ "Cat_Nose": {
+  "h": 25,
+  "layer": 53,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 15,
+  "x": 117,
+  "y": 152
+ },
+ "Cat_Prop_Belly": {
+  "h": 68,
+  "layer": 30,
+  "recolor": false,
+  "tiers": [
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 127,
+  "x": 61,
+  "y": 210
+ },
+ "Cat_Prop_Chest": {
+  "h": 58,
+  "layer": 35,
+  "recolor": false,
+  "tiers": [
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 190,
+  "x": 30,
+  "y": 171
+ },
+ "Cat_Tail_Outline": {
+  "h": 111,
+  "layer": 12,
+  "recolor": false,
+  "tiers": [
+   3
+  ],
+  "tint": "000000",
+  "w": 61,
+  "x": 210,
+  "y": 161
+ },
+ "Cat_Tail_Pattern": {
+  "h": 68,
+  "layer": 11,
+  "recolor": false,
+  "tiers": [
+   3
+  ],
+  "tint": null,
+  "w": 48,
+  "x": 217,
+  "y": 197
+ },
+ "Cat_Tail_SkinFill": {
+  "h": 109,
+  "layer": 10,
+  "recolor": false,
+  "tiers": [
+   3
+  ],
+  "tint": "865922",
+  "w": 59,
+  "x": 211,
+  "y": 162
+ },
+ "Cat_Whiskers": {
+  "h": 24,
+  "layer": 51,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 164,
+  "x": 42,
+  "y": 142
+ }
+}

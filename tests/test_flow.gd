@@ -34,7 +34,7 @@ func _ready() -> void:
 		if not GameState.is_custom_cat(str(cat.id)):
 			design += 1
 	assert(t._char_grid.get_child_count() == design, "격자에 디자인 냥이가 안 참")
-	assert(t._char_grid.columns == 5, "격자가 한 줄 5칸이 아님")
+	assert(t._char_grid.columns == t.CHAR_GRID_COLS, "격자 열 수가 상수와 다름")
 	# --- "+" 타일: 커스텀 슬롯이 하나 더 열리고, 그 슬롯이 본문에 펼쳐진다 ---
 	var slots0: int = GameState.custom_slots
 	if GameState.can_add_custom_slot():

@@ -1,0 +1,25 @@
+[gd_resource type="FontVariation" load_steps=5 format=3]
+
+; 더 굵은 글자 (UiKit.font_heavy()) — Paperlogy 7 Bold. 피그마 값 알약·강조 숫자.
+; 디자인 폰트 Paperlogy(피그마 UI kit, SIL OFL — LICENSE-Paperlogy.txt)는 한글 11,172자 + 라틴을
+; 덮는다. 빠진 글리프(터키어 ğ · 폴란드어 ł · 한자 · 가나 · 의사 로케일 악센트 등)는
+; Noto Sans KR → OS 폰트 순서로 메운다 (스팀=데스크톱 기준).
+; 웹·안드로이드처럼 시스템 폰트를 못 쓰는 타깃을 지원하게 되면
+; Noto Sans SC/TC/JP .otf를 여기 FontFile 폴백으로 추가할 것.
+
+[ext_resource type="FontFile" path="res://shared/assets/fonts/Paperlogy-7Bold.ttf" id="1_base"]
+[ext_resource type="FontFile" uid="uid://bue8x5tspsiy5" path="res://shared/assets/fonts/NotoSansKR-Regular.otf" id="2_noto"]
+
+[sub_resource type="SystemFont" id="SystemFont_latin"]
+font_names = PackedStringArray("Noto Sans", "Segoe UI", "DejaVu Sans", "Arial")
+allow_system_fallback = true
+subpixel_positioning = 1
+
+[sub_resource type="SystemFont" id="SystemFont_cjk"]
+font_names = PackedStringArray("Microsoft YaHei", "Noto Sans SC", "PingFang SC", "Microsoft JhengHei", "Noto Sans TC", "Meiryo", "Noto Sans JP", "Malgun Gothic")
+allow_system_fallback = true
+subpixel_positioning = 1
+
+[resource]
+base_font = ExtResource("1_base")
+fallbacks = Array[Font]([ExtResource("2_noto"), SubResource("SystemFont_latin"), SubResource("SystemFont_cjk")])

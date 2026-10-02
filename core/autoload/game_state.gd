@@ -41,82 +41,38 @@ const CATS: Array[Dictionary] = [
 	{"id": "gray", "char": "char06", "name": "CAT_GRAY", "body": Color("aeb6c2"), "ear": Color("7e8694"),
 		"unique": true, "unlock": {"type": "can"}, "trait": "TRAIT_HEAVYJUMP",
 		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	# ▼▼▼ [임시 · 진짜 아트가 나오면 통째로 제거] 자리를 채우는 임시 캐릭터 24종 ▼▼▼
-	# 목표 30종 중 컨셉 시트가 있는 건 위 6종뿐이라, 나머지는 시트 파츠를 빌려
-	# 색만 갈아 끼운 임시 조합이다 (정의는 CustomCat.TEMP_DEFS).
-	{"id": "tmp07", "char": "char07", "name": "CAT_TMP07", "body": Color("a9dcc3"), "ear": Color("5fae8e"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "tmp08", "char": "char08", "name": "CAT_TMP08", "body": Color("cfc0e8"), "ear": Color("8f77c4"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
-		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "tmp09", "char": "char09", "name": "CAT_TMP09", "body": Color("ffd9c2"), "ear": Color("f3a06a"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "tmp10", "char": "char10", "name": "CAT_TMP10", "body": Color("bcd8f2"), "ear": Color("6f9fd0"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
-		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
-	{"id": "tmp11", "char": "char11", "name": "CAT_TMP11", "body": Color("4a4750"), "ear": Color("26232c"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_MAGIC",
-		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
-	{"id": "tmp12", "char": "char12", "name": "CAT_TMP12", "body": Color("f6a8bb"), "ear": Color("d76b8a"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
-		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	{"id": "tmp13", "char": "char13", "name": "CAT_TMP13", "body": Color("c9a37a"), "ear": Color("8e6a4a"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "tmp14", "char": "char14", "name": "CAT_TMP14", "body": Color("7fc9c4"), "ear": Color("3f8f8f"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
-		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "tmp15", "char": "char15", "name": "CAT_TMP15", "body": Color("f7e08a"), "ear": Color("d9b53f"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "tmp16", "char": "char16", "name": "CAT_TMP16", "body": Color("9c6f9e"), "ear": Color("6b4470"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
-		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
-	{"id": "tmp17", "char": "char17", "name": "CAT_TMP17", "body": Color("fdfdfd"), "ear": Color("cfd8e3"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_MAGIC",
-		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
-	{"id": "tmp18", "char": "char18", "name": "CAT_TMP18", "body": Color("f2854a"), "ear": Color("c05a24"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
-		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	{"id": "tmp19", "char": "char19", "name": "CAT_TMP19", "body": Color("8fbf5a"), "ear": Color("5c8a30"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "tmp20", "char": "char20", "name": "CAT_TMP20", "body": Color("3b4a6b"), "ear": Color("22304a"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
-		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "tmp21", "char": "char21", "name": "CAT_TMP21", "body": Color("ff9d8a"), "ear": Color("d96a55"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "tmp22", "char": "char22", "name": "CAT_TMP22", "body": Color("c8cdd4"), "ear": Color("949aa4"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
-		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
-	{"id": "tmp23", "char": "char23", "name": "CAT_TMP23", "body": Color("7a6fd0"), "ear": Color("4d43a0"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_MAGIC",
-		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
-	{"id": "tmp24", "char": "char24", "name": "CAT_TMP24", "body": Color("fdf0a8"), "ear": Color("e8c74a"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
-		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	{"id": "tmp25", "char": "char25", "name": "CAT_TMP25", "body": Color("8a5a3c"), "ear": Color("5e3a24"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
-		"stats": {"speed": 1.0, "jump": 1.0, "dash": 1.0, "weight": 1.0, "push": 2}},
-	{"id": "tmp26", "char": "char26", "name": "CAT_TMP26", "body": Color("5aa8d8"), "ear": Color("2f6f9e"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
-		"stats": {"speed": 1.15, "jump": 1.0, "dash": 1.05, "weight": 0.9, "push": 2}},
-	{"id": "tmp27", "char": "char27", "name": "CAT_TMP27", "body": Color("ffd4e2"), "ear": Color("ec9ab6"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
-		"stats": {"speed": 0.92, "jump": 0.96, "dash": 1.0, "weight": 1.3, "push": 3}},
-	{"id": "tmp28", "char": "char28", "name": "CAT_TMP28", "body": Color("a8a45c"), "ear": Color("6f6c30"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
-		"stats": {"speed": 0.95, "jump": 1.08, "dash": 0.95, "weight": 0.95, "push": 2}},
-	{"id": "tmp29", "char": "char29", "name": "CAT_TMP29", "body": Color("d8f26a"), "ear": Color("9ac02e"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_MAGIC",
-		"stats": {"speed": 1.02, "jump": 1.02, "dash": 1.12, "weight": 0.9, "push": 3}},
-	{"id": "tmp30", "char": "char30", "name": "CAT_TMP30", "body": Color("2e3350"), "ear": Color("1b1f36"),
-		"temp": true, "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
-		"stats": {"speed": 0.94, "jump": 1.06, "dash": 0.9, "weight": 1.2, "push": 3}},
-	# ▲▲▲ [임시] 여기까지 ▲▲▲
+	# 신규 디자인 냥이 10종 (char07~char16, docs/new_cats_10.md) — 그림은 생성 컨셉을
+	# 완성 렌더로만 옮긴 것(tools/import_gen_cats.py)이라 파츠 레이어가 없다.
+	{"id": "baker", "char": "char07", "name": "CAT_BAKER", "body": Color("f6dcaa"),
+		"ear": Color("c98b4f"), "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
+		"stats": {"speed": 1.0, "jump": 1.02, "dash": 0.98, "weight": 1.05, "push": 2}},
+	{"id": "pirate", "char": "char08", "name": "CAT_PIRATE", "body": Color("b07a4a"),
+		"ear": Color("7a4f2e"), "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
+		"stats": {"speed": 0.95, "jump": 0.96, "dash": 1.05, "weight": 1.25, "push": 3}},
+	{"id": "space", "char": "char09", "name": "CAT_SPACE", "body": Color("8d9cb8"),
+		"ear": Color("6c7a96"), "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
+		"stats": {"speed": 0.98, "jump": 1.1, "dash": 0.95, "weight": 0.9, "push": 2}},
+	{"id": "ninja", "char": "char10", "name": "CAT_NINJA", "body": Color("34364a"),
+		"ear": Color("26232c"), "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
+		"stats": {"speed": 1.15, "jump": 1.02, "dash": 1.1, "weight": 0.85, "push": 2}},
+	{"id": "painter", "char": "char11", "name": "CAT_PAINTER", "body": Color("fbf6ee"),
+		"ear": Color("f0932b"), "unlock": {"type": "keycap"}, "trait": "TRAIT_BALANCED",
+		"stats": {"speed": 1.02, "jump": 1.0, "dash": 1.02, "weight": 1.0, "push": 2}},
+	{"id": "strawberry", "char": "char12", "name": "CAT_STRAWBERRY", "body": Color("f7c1cf"),
+		"ear": Color("e98aa4"), "unlock": {"type": "keycap"}, "trait": "TRAIT_DREAMER",
+		"stats": {"speed": 0.96, "jump": 1.08, "dash": 0.96, "weight": 0.92, "push": 2}},
+	{"id": "prince", "char": "char13", "name": "CAT_PRINCE", "body": Color("cdbde6"),
+		"ear": Color("9a82c4"), "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVYJUMP",
+		"stats": {"speed": 0.94, "jump": 1.05, "dash": 0.92, "weight": 1.18, "push": 3}},
+	{"id": "summer", "char": "char14", "name": "CAT_SUMMER", "body": Color("e6b872"),
+		"ear": Color("8a5a34"), "unlock": {"type": "keycap"}, "trait": "TRAIT_SPRINTER",
+		"stats": {"speed": 1.12, "jump": 0.98, "dash": 1.05, "weight": 0.95, "push": 2}},
+	{"id": "rainy", "char": "char15", "name": "CAT_RAINY", "body": Color("fbf6ee"),
+		"ear": Color("9aa3ad"), "unlock": {"type": "keycap"}, "trait": "TRAIT_MAGIC",
+		"stats": {"speed": 1.0, "jump": 1.04, "dash": 1.1, "weight": 0.9, "push": 3}},
+	{"id": "cow", "char": "char16", "name": "CAT_COW", "body": Color("fbf6ee"),
+		"ear": Color("2f2c33"), "unlock": {"type": "keycap"}, "trait": "TRAIT_HEAVY",
+		"stats": {"speed": 0.9, "jump": 0.95, "dash": 1.0, "weight": 1.32, "push": 3}},
 	# 나만의 캐릭터 — 디자인 냥이가 아니라 백지 몸통(CustomCat.BLANK_CHAR)이다.
 	# 처음부터 열려 있고 키캡을 모으지 않는다(가챠 풀·도감에서 제외).
 	# 꾸미기에 쓸 수 있는 파츠는 "해금한 디자인 냥이가 가진 파츠"뿐이다.
@@ -787,6 +743,15 @@ func cat_tier(id: String) -> int:
 	return clampi(cat_grade(id) - 1, 0, CustomCat.TIER_MAX)
 
 
+## 이 id의 냥이가 지금 있는가 (get_cat은 모르는 id에 첫 냥이를 돌려준다).
+func has_cat(id: String) -> bool:
+	for cat in CATS:
+		if cat.id == id:
+			return true
+	var n := custom_slot_no(id)
+	return n > 1 and n <= custom_slots
+
+
 func get_cat(id: String) -> Dictionary:
 	for cat in CATS:
 		if cat.id == id:
@@ -877,7 +842,8 @@ func featured_cat() -> String:
 
 
 func set_feature_cat(id: String) -> void:
-	if not is_unlocked(id):
+	# 빈 id = 대표 해제 (그러면 좌석 냥이를 따라간다).
+	if id != "" and not is_unlocked(id):
 		return
 	feature_cat = id
 	save_game()
@@ -901,15 +867,17 @@ func cat_id_for_char(char_id: String) -> String:
 
 
 # --- 나만의 캐릭터의 파츠 해금 ------------------------------------------------------
-## 파츠는 전부 디자인 냥이에게서 빌려 온다 — 그 냥이를 해금해야(그리고 그 파츠가
-## 붙는 단계까지 키캡을 모아야) 나만의 캐릭터에 쓸 수 있다.
+## 꾸미기 카탈로그는 전체 냥이 목록이 가진 파츠를 모은 것이다 (CustomCat.my_options).
+##  · 어느 냥이의 파츠 → 그 냥이를 획득(해금, 등급 1)하면 그 냥이의 파츠가 전부 열린다.
+##    파는 물건이 아니다 — 여는 길은 키캡 뽑기로 그 냥이를 데려오는 것뿐.
+##  · 어느 냥이에게도 없는 파츠 전용 옵션(히든 파츠) → 상점처럼 재화로 산다.
+##  · 백지 몸통의 기본값과 "없음"은 처음부터 열려 있다.
 
 
-## 이 출처(냥이 + 파츠 단계)가 열려 있는가. 단계 t는 등급 1+t에서 붙는다.
-## (해금 조건이 아니라 "어느 냥이의 파츠인가" 안내용으로만 남아 있다.)
+## 이 출처 냥이를 획득했는가 (파츠 단계와 상관없이 합류만 하면 된다).
 func _source_open(src: Dictionary) -> bool:
 	var cid := cat_id_for_char(str(src.get("char", "")))
-	return cid != "" and cat_grade(cid) >= 1 + int(src.get("tier", 0))
+	return cid != "" and cat_grade(cid) >= 1
 
 
 ## 처음부터 열려 있는 옵션인가 — 백지 몸통의 기본값과 "없음"은 살 필요가 없다.
@@ -917,14 +885,32 @@ func part_free(key: String, idx: int) -> bool:
 	return idx in CustomCat.free_options(key)
 
 
-## 골드로 사 둔 옵션인가.
+## 사 둔 옵션인가 (파츠 전용 옵션을 샀거나, 예전 세이브에서 산 것).
 func part_owned(key: String, idx: int) -> bool:
 	return idx in (parts_owned.get(key, []) as Array)
 
 
-## 이 부위 옵션을 쓸 수 있는가 = 기본값이거나, 골드로 샀거나.
+## 이 옵션을 가진 냥이 중 하나라도 획득했는가.
+func part_cat_open(key: String, idx: int) -> bool:
+	var srcs: Variant = CustomCat.option_sources(key, idx)
+	if not srcs is Array:
+		return false
+	for src: Dictionary in srcs:
+		if _source_open(src):
+			return true
+	return false
+
+
+## 파츠 전용 옵션인가 — 어느 냥이에게도 없어서 사야만 열리는 것 (히든 파츠 등).
+## 냥이의 파츠는 그 냥이를 획득해야 열리고, 사서 열 수는 없다.
+func part_buyable(key: String, idx: int) -> bool:
+	var srcs: Variant = CustomCat.option_sources(key, idx)
+	return srcs is Array and (srcs as Array).is_empty() and not part_free(key, idx)
+
+
+## 이 부위 옵션을 쓸 수 있는가 = 기본값 · 그 냥이를 획득 · 샀음.
 func part_unlocked(key: String, idx: int) -> bool:
-	return part_free(key, idx) or part_owned(key, idx)
+	return part_free(key, idx) or part_cat_open(key, idx) or part_owned(key, idx)
 
 
 ## 유니크 파츠인가 — 골드가 아니라 통조림 캔으로만 사는 옵션.
@@ -932,9 +918,10 @@ func part_can(key: String, idx: int) -> bool:
 	return CustomCat.is_unique_option(key, idx)
 
 
-## 이 옵션의 값 (0 = 이미 열려 있음). 단위는 part_can()이 참이면 캔, 아니면 골드.
+## 이 옵션의 값 (0 = 이미 열려 있거나, 살 수 없는 냥이 파츠).
+## 단위는 part_can()이 참이면 캔, 아니면 골드.
 func part_price(key: String, idx: int) -> int:
-	if part_unlocked(key, idx):
+	if part_unlocked(key, idx) or not part_buyable(key, idx):
 		return 0
 	var part := CustomCat.get_part(key)
 	if part.is_empty():
@@ -949,16 +936,20 @@ func part_price(key: String, idx: int) -> int:
 	return PART_CAN_PRICES[r] if part_can(key, idx) else PART_PRICES[r]
 
 
-## 이 옵션을 지금 살 수 있는가 (지갑에 값이 있는가).
+## 이 옵션을 지금 살 수 있는가 (파츠 전용이고, 지갑에 값이 있는가).
 func can_afford_part(key: String, idx: int) -> bool:
+	if not part_buyable(key, idx):
+		return false
 	var price := part_price(key, idx)
 	return (cans if part_can(key, idx) else gold) >= price
 
 
-## 파츠 한 칸을 산다 (재화가 모자라면 false — 지갑은 그대로).
+## 파츠 전용 옵션 한 칸을 산다 (냥이 파츠거나 재화가 모자라면 false — 지갑은 그대로).
 func buy_part(key: String, idx: int) -> bool:
 	if part_unlocked(key, idx):
 		return true
+	if not part_buyable(key, idx):
+		return false
 	var price := part_price(key, idx)
 	if not (spend_cans(price) if part_can(key, idx) else spend_gold(price)):
 		return false
@@ -969,11 +960,11 @@ func buy_part(key: String, idx: int) -> bool:
 	return true
 
 
-## 지금 쓸 수 있는 파츠 수 / 전체 (타일·팝업 표시용) — 산 것 + 기본값.
+## 지금 쓸 수 있는 파츠 수 / 전체 (타일·팝업 표시용).
 func my_parts_progress() -> Vector2i:
 	var open := 0
 	var total := 0
-	for part in CustomCat.parts_all():
+	for part in CustomCat.PARTS:
 		var key := str(part.key)
 		for i: int in CustomCat.my_options(key):
 			total += 1
@@ -982,7 +973,8 @@ func my_parts_progress() -> Vector2i:
 	return Vector2i(open, total)
 
 
-## 잠긴 옵션을 여는 가장 가까운 조건 — {"cat": id, "grade": n}. 없으면 빈 사전.
+## 잠긴 냥이 파츠를 여는 냥이 — {"cat": id}. 파츠 전용 옵션이면 빈 사전.
+## 여러 냥이가 같은 파츠를 가지면 골드 뽑기로 데려올 수 있는 냥이를 먼저 고른다.
 func part_unlock_hint(key: String, idx: int) -> Dictionary:
 	var srcs: Variant = CustomCat.option_sources(key, idx)
 	if not srcs is Array:
@@ -992,11 +984,8 @@ func part_unlock_hint(key: String, idx: int) -> Dictionary:
 		var cid := cat_id_for_char(str(src.get("char", "")))
 		if cid == "":
 			continue
-		var need := 1 + int(src.get("tier", 0))
-		# 이미 해금된 냥이의 다음 단계가 가장 가깝다 — 등급 차이로 고른다.
-		var gap := need - cat_grade(cid)
-		if best.is_empty() or gap < int(best.get("gap", 99)):
-			best = {"cat": cid, "grade": need, "gap": gap}
+		if best.is_empty() or (is_unique_cat(str(best.cat)) and not is_unique_cat(cid)):
+			best = {"cat": cid}
 	return best
 
 
@@ -1167,13 +1156,17 @@ func load_game() -> void:
 					var d0: Dictionary = keycaps.get(first, {})
 					d0[str(k)] = int(per)
 					keycaps[first] = d0
+			# 저장 이후 사라진 냥이(예: 임시 캐릭터 tmp07~tmp30)의 키캡은 버린다.
+			for cid: Variant in keycaps.keys():
+				if not has_cat(str(cid)):
+					keycaps.erase(cid)
 		var picked: Variant = data.get("gacha_pick", [])
 		if picked is Array:
 			gacha_pick = []
 			for cid in picked:
 				# 저장 이후 사라진 냥이 id는 흘려보낸다.
 				var id := str(cid)
-				if id in gacha_pick or get_cat(id).is_empty() or is_custom_cat(id):
+				if id in gacha_pick or not has_cat(id) or is_custom_cat(id):
 					continue
 				if is_unique_cat(id):
 					continue  # 유니크 냥이는 골드 선택 뽑기에 걸 수 없다
@@ -1231,6 +1224,8 @@ func load_game() -> void:
 			else:
 				cat_custom[cid] = kept
 		feature_cat = str(data.get("feature_cat", ""))
+		if feature_cat != "" and not has_cat(feature_cat):
+			feature_cat = ""  # 저장 이후 사라진 냥이
 		last_daily = str(data.get("last_daily", ""))
 		locale = str(data.get("locale", ""))
 		vol_master = clampf(float(data.get("vol_master", 1.0)), 0.0, 1.0)

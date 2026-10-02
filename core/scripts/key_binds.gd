@@ -116,13 +116,13 @@ static func key_name(code: int) -> String:
 		0:
 			return "—"
 		KEY_LEFT:
-			return "←"
+			return "◀"
 		KEY_RIGHT:
-			return "→"
+			return "▶"
 		KEY_UP:
-			return "↑"
+			return "▲"
 		KEY_DOWN:
-			return "↓"
+			return "▼"
 		KEY_SPACE:
 			return "SPACE"
 		KEY_SHIFT:
@@ -186,13 +186,13 @@ static func pad_name(b: Dictionary) -> String:
 		JOY_BUTTON_RIGHT_SHOULDER:
 			return "RB"
 		JOY_BUTTON_DPAD_UP:
-			return "↑"
+			return "▲"
 		JOY_BUTTON_DPAD_DOWN:
-			return "↓"
+			return "▼"
 		JOY_BUTTON_DPAD_LEFT:
-			return "←"
+			return "◀"
 		JOY_BUTTON_DPAD_RIGHT:
-			return "→"
+			return "▶"
 	return "B%d" % int(b.get("i", 0))
 
 

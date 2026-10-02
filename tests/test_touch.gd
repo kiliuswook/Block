@@ -53,7 +53,7 @@ func _ready() -> void:
 	_touch(3, false, pause.get_global_rect().get_center())
 	await _frames(2)
 	_check("pause opens settings", inst.get_node("Board").is_paused and inst.settings_panel.visible)
-	_check("pause panel shows quit", inst.settings_panel._quit_btn.visible)
+	_check("pause panel shows quit", inst.settings_panel._pause_quit.visible)
 	if _fails == 0:
 		print("ALL TESTS PASSED")
 	else:

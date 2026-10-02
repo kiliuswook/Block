@@ -1,13 +1,13 @@
 extends Control
-## Death popup: dead cat portrait, run stats and two choices —
-## restart from scratch, or back to the title.
-## The whole UI is built in code, matching the project's draw-in-code style.
+## 결과창 (피그마 "팝업_엔딩"): 제목 · 유령 냥이 그림 · 통계 판(SCORE/LEVEL/LINES) ·
+## 코인 줄 · 경험치 게이지 · [타이틀로][다시 도전]. 전부 코드로 짓는다.
 ##
 ## 보상 연출: 판이 끝나면 보상은 이미 세이브에 들어가 있지만, 화면은 그것을
-## **두 단계로 나누어** 보여 준다 — ① 골드 코인이 결과창에서 좌상단 유저 HUD의
+## **두 단계로 나누어** 보여 준다 — ① 골드 코인이 결과창에서 상단 유저 HUD의
 ## 골드로 날아가 숫자가 올라가고 ② 그다음 결과창의 경험치 게이지가 차오르며
-## 레벨업이 뜬다. 그동안 HUD는 `hold()`로 옛 값에 붙들어 두고, 끝나면 `release()`.
-## 화면을 누르면 그 단계가 즉시 끝나고 다음으로 넘어간다(버튼은 전부 건너뛴다).
+## 레벨업이 뜬다. 레벨이 올랐으면 정산 끝에 **레벨업 팝업**(피그마 "팝업_레벨업")이
+## 결과창 위로 한 번 더 뜬다. 그동안 HUD는 `hold()`로 옛 값에 붙들어 두고, 끝나면
+## `release()`. 화면을 누르면 그 단계가 즉시 끝나고 다음으로 넘어간다.
 
 signal restart_pressed
 signal title_pressed
@@ -16,25 +16,33 @@ const UiKit := preload("res://core/scripts/ui_kit.gd")
 
 const GOLD := UiKit.GOLD_DEEP
 const INK := UiKit.INK
-const XP_COL := UiKit.CYAN_DEEP  # 계정 경험치 (골드와 구분되는 하늘색)
+const XP_COL := UiKit.GAUGE
 
 ## 연출 타이밍 (초).
-const OPEN_HOLD := 0.45  # 창이 뜨고 골드가 날아가기까지
-const COIN_STEP := 0.09  # 코인 사이 간격
+const OPEN_HOLD := 0.45
+const COIN_STEP := 0.09
 const COIN_FLY := 0.5
 const COIN_MAX := 8
-const PHASE_GAP := 0.4  # 단계 사이 숨 고르기
-const XP_FILL := 1.1  # 경험치 게이지가 차는 시간
+const PHASE_GAP := 0.4
+const XP_FILL := 1.1
 
-var hud: CanvasLayer  # 좌상단 유저 HUD (main이 물려 준다 — 없으면 게이지만 돈다)
+var hud: CanvasLayer  # 상단 유저 HUD (main이 물려 준다 — 없으면 게이지만 돈다)
 
 var _panel: PanelContainer
 var _title: Label
 var _record_label: Label
-var _stats_label: Label
-var _reward_label: Label
-var _xp_gauge: Control  # 결과창 경험치 게이지 (Lv · 바 · 진행 숫자)
-var _xp_label: Label  # 계정 경험치 + 레벨업 줄
+var _stats_label: Label  # 문자열 통계 (열 통계가 없을 때)
+var _stats_box: Control  # 통계 판 (열 통계)
+var _stat_cols: Array = []  # [[제목, 값], ...]
+var _reward_label: Label  # 예전 API 호환 — 보이지 않고 코인 줄이 대신한다
+var _coin_row: Control  # "코인 +100 [coin]"
+var _xp_gauge: Control
+var _xp_label: Label
+## 레벨업 팝업.
+var _lvup: Control
+var _lvup_face: Control
+var _lvup_level := 0
+var _lvup_gold := 0
 
 var _phase := ""  # "" | "gold" | "xp" | "done"
 var _seq: Tween
@@ -42,10 +50,11 @@ var _gold_from := 0
 var _gold_to := 0
 var _xp_from := 0
 var _xp_to := 0
-var _xp_val := 0.0  # 게이지가 지금 보여 주는 누적 경험치
+var _xp_val := 0.0
 var _lv_shown := 1
-var _xp_line := ""  # 연출이 끝났을 때 남을 경험치 줄
+var _xp_line := ""
 var _levelups := 0
+var _earned_gold := 0
 
 
 func _ready() -> void:
@@ -55,8 +64,8 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 
 	var dim := ColorRect.new()
-	dim.color = Color(0.09, 0.13, 0.18, 0.55)  # 타이틀 오버레이와 같은 딤
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE  # 클릭은 스킵 처리로 넘긴다
+	dim.color = UiKit.DIM
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
@@ -66,14 +75,13 @@ func _ready() -> void:
 	add_child(center)
 
 	_panel = PanelContainer.new()
-	# 카드 위를 눌러도 연출 스킵이 먹도록 이벤트를 통과시킨다 (버튼만 STOP).
 	_panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	# 타이틀 카드와 같은 흰 패널 (두꺼운 잉크 외곽선 + 둥근 모서리).
-	var box := UiKit.panel_box(UiKit.WHITE, 28, 0.0)
-	box.content_margin_left = 64.0
-	box.content_margin_right = 64.0
-	box.content_margin_top = 36.0
-	box.content_margin_bottom = 44.0
+	_panel.custom_minimum_size = Vector2(850.0, 0.0)
+	var box := UiKit.card_box(UiKit.WHITE, 28)
+	box.content_margin_left = 40.0
+	box.content_margin_right = 40.0
+	box.content_margin_top = 44.0
+	box.content_margin_bottom = 30.0
 	_panel.add_theme_stylebox_override("panel", box)
 	center.add_child(_panel)
 
@@ -83,91 +91,105 @@ func _ready() -> void:
 	v.add_theme_constant_override("separation", 14)
 	_panel.add_child(v)
 
-	# Fallen cube cat, X-eyed and tipped over.
-	var cat := Control.new()
-	cat.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cat.custom_minimum_size = Vector2(140.0, 100.0)
-	cat.draw.connect(func() -> void:
-		cat.draw_set_transform(cat.size / 2.0 + Vector2(0.0, 10.0), 0.42, Vector2.ONE)
-		Player.paint_cat(cat, Vector2.ZERO, 72.0, 0.0, false)
-		cat.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE))
-	v.add_child(cat)
-
 	_title = Label.new()
 	_title.text = tr("POP_DEAD_TITLE")
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.add_theme_font_size_override("font_size", 52)
-	_title.add_theme_color_override("font_color", UiKit.RED_DEEP)
+	UiKit.label(_title, 44, UiKit.BROWN, true)
 	v.add_child(_title)
+
+	# 쓰러진 큐브 냥이 유령 (피그마 그림).
+	var ghost := Control.new()
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost.custom_minimum_size = Vector2(240.0, 240.0)
+	ghost.draw.connect(func() -> void:
+		var t := UiKit.tex("ghost_cat.png")
+		if t != null:
+			UiKit.draw_tex(ghost, "ghost_cat.png", Rect2(Vector2.ZERO, ghost.size))
+		else:
+			ghost.draw_set_transform(ghost.size / 2.0, 0.42, Vector2.ONE)
+			Player.paint_cat(ghost, Vector2.ZERO, 90.0, 0.0, false)
+			ghost.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE))
+	v.add_child(ghost)
 
 	_record_label = Label.new()
 	_record_label.text = tr("POP_NEW_RECORD")
 	_record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_record_label.add_theme_font_size_override("font_size", 30)
-	_record_label.add_theme_color_override("font_color", GOLD)
+	UiKit.label(_record_label, 26, GOLD, true)
 	_record_label.visible = false
 	v.add_child(_record_label)
 
+	_stats_box = Control.new()
+	_stats_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stats_box.custom_minimum_size = Vector2(600.0, 110.0)
+	_stats_box.draw.connect(_draw_stats)
+	v.add_child(_stats_box)
+
 	_stats_label = Label.new()
 	_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stats_label.add_theme_font_size_override("font_size", 26)
-	_stats_label.add_theme_color_override("font_color", UiKit.MUTED)
+	UiKit.label(_stats_label, 24, UiKit.MUTED)
+	_stats_label.visible = false
 	v.add_child(_stats_label)
 
 	_reward_label = Label.new()
-	_reward_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_reward_label.add_theme_font_size_override("font_size", 26)
-	_reward_label.add_theme_color_override("font_color", GOLD)
 	_reward_label.visible = false
 	v.add_child(_reward_label)
 
-	# 경험치 게이지 — 숫자만 던지지 않고 "얼마나 찼는가"를 눈으로 보여 준다.
+	_coin_row = Control.new()
+	_coin_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_coin_row.custom_minimum_size = Vector2(300.0, 40.0)
+	_coin_row.draw.connect(_draw_coin_row)
+	_coin_row.visible = false
+	v.add_child(_coin_row)
+
 	_xp_gauge = Control.new()
 	_xp_gauge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_xp_gauge.custom_minimum_size = Vector2(460.0, 44.0)
+	_xp_gauge.custom_minimum_size = Vector2(560.0, 30.0)
 	_xp_gauge.draw.connect(_draw_xp_gauge)
 	_xp_gauge.visible = false
 	v.add_child(_xp_gauge)
 
-	# 경험치는 골드와 다른 축이라 색도 다르다 (지갑 = 금색, 계정 레벨 = 하늘색).
 	_xp_label = Label.new()
 	_xp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_xp_label.add_theme_font_size_override("font_size", 26)
-	_xp_label.add_theme_color_override("font_color", XP_COL)
+	UiKit.label(_xp_label, 20, UiKit.TEXT)
 	_xp_label.visible = false
 	v.add_child(_xp_label)
 
-	v.add_child(_spacer(10.0))
+	v.add_child(_spacer(6.0))
 
-	var restart := _make_button(tr("POP_RESTART"), true)
-	restart.pressed.connect(func() -> void:
-		_finish_all()
-		restart_pressed.emit())
-	v.add_child(restart)
-
+	var btns := HBoxContainer.new()
+	btns.alignment = BoxContainer.ALIGNMENT_CENTER
+	btns.add_theme_constant_override("separation", 16)
+	v.add_child(btns)
 	var to_title := _make_button(tr("POP_TO_TITLE"), false)
 	to_title.pressed.connect(func() -> void:
 		_finish_all()
 		title_pressed.emit())
-	v.add_child(to_title)
+	btns.add_child(to_title)
+	var restart := _make_button(tr("POP_RETRY"), true)
+	restart.pressed.connect(func() -> void:
+		_finish_all()
+		restart_pressed.emit())
+	btns.add_child(restart)
+	_build_levelup()
 
 
-## title_text: timed modes end on the clock, not in death — a cheerier headline.
-## xp_line: 이 판이 준 계정 경험치(+레벨업). 안 주는 판은 빈 문자열.
-## reward: 보상 연출에 필요한 값 —
-##   {"gold": 이 판이 준 골드, "gold_from": 판 전 지갑,
-##    "xp": 이 판이 준 경험치, "xp_from": 판 전 누적 경험치}
-## 비어 있으면 연출 없이 줄만 띄운다 (테스트·캡처가 쓰는 예전 동작).
+## stats: 한 줄 통계 (stat_cols가 비었을 때만 보인다).
+## stat_cols: [[제목, 값], ...] — 통계 판 세 열.
+## reward: {"gold", "gold_from", "xp", "xp_from"} — 비어 있으면 연출 없이 줄만.
 func open(stats: String, new_record: bool, earned := "", title_text := "",
-		xp_line := "", reward := {}) -> void:
+		xp_line := "", reward := {}, stat_cols: Array = []) -> void:
 	_title.text = title_text if title_text != "" else tr("POP_DEAD_TITLE")
-	_title.add_theme_color_override("font_color",
-			GOLD if title_text != "" else UiKit.RED_DEEP)
+	_stat_cols = stat_cols
+	_stats_box.visible = not stat_cols.is_empty()
+	_stats_box.queue_redraw()
 	_stats_label.text = stats
+	_stats_label.visible = stat_cols.is_empty() and stats != ""
 	_record_label.visible = new_record
 	_reward_label.text = earned
+	_earned_gold = int(reward.get("gold", 0))
 	_xp_line = xp_line
 	_xp_label.text = xp_line
+	_lvup.visible = false
 	_setup_reward(earned, xp_line, reward)
 	visible = true
 	_panel.modulate.a = 0.0
@@ -180,7 +202,6 @@ func open(stats: String, new_record: bool, earned := "", title_text := "",
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_panel, "modulate:a", 1.0, 0.15)
 	if _phase == "gold":
-		# 창이 자리를 잡은 뒤에 보상 연출을 시작한다 (위 tween은 병렬이라 따로 건다).
 		_seq = create_tween()
 		_seq.tween_interval(OPEN_HOLD)
 		_seq.tween_callback(_run_gold)
@@ -189,26 +210,28 @@ func open(stats: String, new_record: bool, earned := "", title_text := "",
 func close() -> void:
 	_kill_seq()
 	_phase = ""
-	if hud:  # 연출 도중에 닫혀도 HUD가 옛 값에 붙들린 채 남지 않게
+	if hud:
 		hud.release()
+	_lvup.visible = false
 	visible = false
 
 
 # --- 보상 연출 ---------------------------------------------------------------
 
 
-## 연출을 걸지, 그냥 결과만 띄울지 정하고 시작 상태를 만든다.
 func _setup_reward(earned: String, xp_line: String, reward: Dictionary) -> void:
 	_kill_seq()
 	_levelups = 0
 	var gold: int = int(reward.get("gold", 0))
 	var xp: int = int(reward.get("xp", 0))
 	if reward.is_empty() or (gold <= 0 and xp <= 0):
-		# 연출 없음 — 예전처럼 결과 줄만 (골드·경험치가 없는 판, 캡처, 테스트).
 		_phase = "done"
-		_reward_label.visible = earned != ""
+		_coin_row.visible = earned != "" or gold > 0
+		_coin_row.queue_redraw()
 		_xp_label.visible = xp_line != ""
-		_xp_gauge.visible = false
+		_xp_gauge.visible = xp_line != ""
+		_xp_val = float(GameState.xp)
+		_xp_gauge.queue_redraw()
 		if hud:
 			hud.release()
 		return
@@ -218,8 +241,7 @@ func _setup_reward(earned: String, xp_line: String, reward: Dictionary) -> void:
 	_xp_to = _xp_from + xp
 	_xp_val = float(_xp_from)
 	_lv_shown = Account.level_at(_xp_from)
-	# 결과 줄은 각 단계가 올 때 하나씩 켠다 — 처음부터 다 보이면 연출이 뒷북이 된다.
-	_reward_label.visible = false
+	_coin_row.visible = false
 	_xp_label.visible = false
 	_xp_gauge.visible = true
 	_xp_gauge.queue_redraw()
@@ -228,14 +250,15 @@ func _setup_reward(earned: String, xp_line: String, reward: Dictionary) -> void:
 	_phase = "gold"
 
 
-## ① 골드: 코인이 결과창에서 좌상단 지갑으로 날아가고, 숫자가 따라 올라간다.
+## ① 골드: 코인이 결과창에서 지갑으로 날아가고, 숫자가 따라 올라간다.
 func _run_gold() -> void:
 	if _phase != "gold":
 		return
 	if _gold_to <= _gold_from or hud == null:
 		_run_xp()
 		return
-	_reward_label.visible = _reward_label.text != ""
+	_coin_row.visible = true
+	_coin_row.queue_redraw()
 	var total := _gold_to - _gold_from
 	var coins := clampi(total / 12 + 3, 3, COIN_MAX)
 	var from := _coin_origin()
@@ -250,7 +273,6 @@ func _run_gold() -> void:
 	_seq.tween_callback(_run_xp)
 
 
-## 코인 한 닢이 지갑에 닿을 때마다 그만큼 숫자가 올라간다.
 func _on_coin_land(nth: int, coins: int, total: int) -> void:
 	if _phase != "gold" or hud == null:
 		return
@@ -260,14 +282,14 @@ func _on_coin_land(nth: int, coins: int, total: int) -> void:
 	hud.set_gold_shown(_gold_from + int(round(float(total) * nth / coins)))
 
 
-## ② 경험치: 결과창 게이지가 차오르고, 레벨이 오르면 그 줄이 붙는다.
+## ② 경험치: 결과창 게이지가 차오르고, 레벨이 오르면 정산 끝에 레벨업 팝업.
 func _run_xp() -> void:
 	if _phase == "done":
 		return
 	_phase = "xp"
 	if hud:
 		hud.set_gold_shown(_gold_to)
-	_reward_label.visible = _reward_label.text != ""
+	_coin_row.visible = _gold_to > _gold_from or _reward_label.text != ""
 	_xp_label.text = tr("HUD_XP_EARNED").format({"xp": _xp_to - _xp_from})
 	_xp_label.visible = _xp_to > _xp_from
 	if _xp_to <= _xp_from:
@@ -290,39 +312,39 @@ func _set_xp_val(v: float) -> void:
 		_xp_gauge.queue_redraw()
 
 
-## 레벨업 — 축하 줄 + 보상 골드가 지갑으로 얹힌다 (이미 지급된 값의 표시분).
+## 레벨업 — 보상 골드가 지갑으로 얹힌다 (이미 지급된 값의 표시분).
 func _level_up(lv: int) -> void:
 	_levelups += 1
+	_lvup_level = lv
+	_lvup_gold += Account.level_reward(lv)
 	Sfx.play("record")
 	var reward := Account.level_reward(lv)
-	_xp_label.text = tr("HUD_XP_EARNED").format({"xp": _xp_to - _xp_from}) \
-			+ "\n" + tr("HUD_LEVEL_UP").format({"level": lv, "gold": reward})
-	_xp_label.visible = true
 	if hud:
 		hud.set_gold_shown(hud.gold_shown() + reward)
 		hud.pop_gain(reward)
-	# 게이지가 한 번 부풀었다 돌아온다 — "올랐다"는 감각.
 	var tw := create_tween()
 	tw.tween_property(_xp_gauge, "modulate", Color(1.4, 1.4, 1.4), 0.1)
 	tw.tween_property(_xp_gauge, "modulate", Color.WHITE, 0.25)
 
 
 ## 정산 끝 — 결과 줄을 최종본으로 맞추고 HUD를 실제 값으로 놓아 준다.
+## 레벨이 올랐으면 레벨업 팝업을 결과창 위에 띄운다.
 func _finish() -> void:
 	_kill_seq()
 	_phase = "done"
 	_xp_val = float(_xp_to)
 	if is_instance_valid(_xp_gauge):
 		_xp_gauge.queue_redraw()
-	if _xp_line != "":
-		_xp_label.text = _xp_line
-		_xp_label.visible = true
-	_reward_label.visible = _reward_label.text != ""
+	_xp_label.text = tr("HUD_XP_EARNED").format({"xp": _xp_to - _xp_from}) \
+			if _xp_to > _xp_from else _xp_line
+	_xp_label.visible = _xp_label.text != ""
+	_coin_row.visible = _gold_to > _gold_from or _reward_label.text != ""
 	if hud:
 		hud.release()
+	if _levelups > 0:
+		_open_levelup()
 
 
-## 화면 클릭 = 지금 단계 건너뛰기. 버튼은 자기 클릭을 먹으므로 여기 오지 않는다.
 func _on_gui_input(event: InputEvent) -> void:
 	var pressed: bool = (event is InputEventMouseButton and event.pressed) \
 			or (event is InputEventScreenTouch and event.pressed)
@@ -330,7 +352,6 @@ func _on_gui_input(event: InputEvent) -> void:
 		skip()
 
 
-## 지금 단계를 즉시 끝낸다 — 골드면 다 채우고 경험치 단계로, 경험치면 정산 완료로.
 func skip() -> void:
 	if _phase == "gold":
 		_kill_seq()
@@ -344,12 +365,13 @@ func skip() -> void:
 		_finish()
 
 
-## 버튼을 누르면 남은 연출은 통째로 건너뛰고 값만 제자리에 놓는다.
 func _finish_all() -> void:
 	if _phase == "gold" or _phase == "xp":
 		_kill_seq()
 		_set_xp_val(float(_xp_to))
+		_levelups = 0  # 버튼으로 나가면 레벨업 팝업은 건너뛴다
 		_finish()
+	_lvup.visible = false
 
 
 func _kill_seq() -> void:
@@ -358,45 +380,155 @@ func _kill_seq() -> void:
 	_seq = null
 
 
-## 코인이 출발하는 자리 — 결과창의 골드 줄(없으면 카드 가운데).
 func _coin_origin() -> Vector2:
-	if is_instance_valid(_reward_label) and _reward_label.visible:
-		return _reward_label.get_global_rect().get_center()
+	if is_instance_valid(_coin_row) and _coin_row.visible:
+		return _coin_row.get_global_rect().get_center()
 	return _panel.get_global_rect().get_center()
 
 
-## 결과창 경험치 게이지: [Lv.N] ▓▓▓▓░░░ 240 / 480 XP
+# --- 그리기 --------------------------------------------------------------------
+
+
+## 통계 판 — 회색 판에 세 열(제목 16 · 값 32), 사이 세로선.
+func _draw_stats() -> void:
+	var ci := _stats_box
+	var w := ci.size.x
+	var h := ci.size.y
+	UiKit.round_rect(ci, Rect2(Vector2.ZERO, ci.size), Color("f5f5f5"), 16)
+	var n := _stat_cols.size()
+	if n == 0:
+		return
+	var cw := w / n
+	for i in n:
+		var col: Array = _stat_cols[i]
+		var cx := cw * (i + 0.5)
+		UiKit.text(ci, str(col[0]), Vector2(cx, 34.0), 16, UiKit.TEXT, true, 1, cw - 16.0)
+		UiKit.text(ci, str(col[1]), Vector2(cx, 84.0), 32, UiKit.TEXT, true, 1, cw - 16.0)
+		if i > 0:
+			ci.draw_line(Vector2(cw * i, 20.0), Vector2(cw * i, h - 20.0), UiKit.PANEL_LINE,
+					2.0)
+
+
+## "코인 +100 [coin]".
+func _draw_coin_row() -> void:
+	var ci := _coin_row
+	var amount := _gold_to - _gold_from if _phase != "done" or _gold_to > _gold_from \
+			else _earned_gold
+	if amount <= 0 and _reward_label.text != "":
+		UiKit.text(ci, _reward_label.text, Vector2(ci.size.x / 2.0, 28.0), 22, GOLD, true, 1)
+		return
+	var label := tr("POP_COIN")
+	var num := "+%s" % UiKit.commas(amount)
+	var lw := UiKit.text_width(label, 22, false)
+	var nw := UiKit.text_width(num, 26, true)
+	var total := lw + 8.0 + nw + 10.0 + 30.0
+	var x := (ci.size.x - total) / 2.0
+	UiKit.text(ci, label, Vector2(x, 28.0), 22, UiKit.TEXT)
+	UiKit.text(ci, num, Vector2(x + lw + 8.0, 29.0), 26, UiKit.TEXT, true)
+	UiKit.coin_icon(ci, Vector2(x + lw + 8.0 + nw + 10.0 + 15.0, 20.0), 30.0)
+
+
+## 경험치 게이지: Lv.N [파란 바] 64 / 120 XP
 func _draw_xp_gauge() -> void:
 	var ci := _xp_gauge
-	var font := ThemeDB.fallback_font
 	var total := int(_xp_val)
 	var lv := Account.level_at(total)
 	var w: float = ci.size.x
 	var lv_text := tr("MENU_LEVEL").format({"level": lv})
-	var lv_w := font.get_string_size(lv_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
-	ci.draw_string(font, Vector2(0.0, 21.0), lv_text, HORIZONTAL_ALIGNMENT_LEFT,
-			-1, 24, XP_COL)
+	var lv_w := UiKit.text(ci, lv_text, Vector2(0.0, 22.0), 18, UiKit.TEXT, true)
 	var need := Account.xp_to_next_at(total)
-	var count := tr("MENU_LEVEL_MAX") if need <= 0 else tr("MENU_LEVEL_XP").format(
-			{"xp": Account.xp_in_level_at(total), "need": need})
-	var count_w := font.get_string_size(count, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
-	ci.draw_string(font, Vector2(w - count_w, 21.0), count,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, 20, UiKit.MUTED)
-	# 바는 HUD의 경험치 바와 같은 모양 — 같은 값을 크게 보여 주는 것뿐이다.
-	var bar := Rect2(lv_w + 14.0, 4.0, w - lv_w - 14.0 - count_w - 14.0, 18.0)
-	if bar.size.x < 40.0:
-		bar = Rect2(0.0, 26.0, w, 18.0)
-	var groove := StyleBoxFlat.new()
-	groove.bg_color = Color(UiKit.INK, 0.10)
-	groove.set_corner_radius_all(int(bar.size.y / 2.0))
-	ci.draw_style_box(groove, bar)
-	var inner := bar.grow(-3.0)
-	var fill := inner
-	fill.size.x = maxf(5.0, inner.size.x * Account.progress_at(total))
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = UiKit.CYAN
-	sb.set_corner_radius_all(int(inner.size.y / 2.0))
-	ci.draw_style_box(sb, fill)
+	var count_w := 0.0
+	if need <= 0:
+		count_w = UiKit.text(ci, tr("MENU_LEVEL_MAX"), Vector2(w, 22.0), 18, UiKit.TEXT,
+				true, 2)
+	else:
+		var rest := " / %d XP" % need
+		var rw := UiKit.text(ci, rest, Vector2(w, 22.0), 18, UiKit.TEXT, false, 2)
+		var cw := UiKit.text(ci, str(Account.xp_in_level_at(total)), Vector2(w - rw, 22.0),
+				18, UiKit.TEXT, true, 2)
+		count_w = rw + cw
+	var bar := Rect2(lv_w + 12.0, 6.0, w - lv_w - 12.0 - count_w - 12.0, 16.0)
+	UiKit.round_rect(ci, bar, Color("ededed"), 8)
+	var fill := bar
+	fill.size.x = maxf(8.0, bar.size.x * Account.progress_at(total))
+	UiKit.round_rect(ci, fill, XP_COL, 8)
+
+
+# --- 레벨업 팝업 (피그마 "팝업_레벨업") --------------------------------------------------
+
+
+func _build_levelup() -> void:
+	_lvup = Control.new()
+	_lvup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_lvup.visible = false
+	_lvup.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_lvup)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.35)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lvup.add_child(dim)
+	_lvup_face = Control.new()
+	_lvup_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lvup_face.draw.connect(_draw_levelup)
+	_lvup.add_child(_lvup_face)
+	var ok := Button.new()
+	ok.text = tr("UI_CONFIRM")
+	ok.size = Vector2(400.0, 68.0)
+	UiKit.btn_card(ok, UiKit.GRAY_DEEP, 26)
+	ok.pressed.connect(func() -> void:
+		Sfx.play("click")
+		_lvup.visible = false)
+	_lvup_face.add_child(ok)
+	_lvup.set_meta("ok", ok)
+
+
+func _open_levelup() -> void:
+	var vp := get_viewport_rect().size
+	var card := Vector2(850.0, 770.0)
+	_lvup_face.position = ((vp - card) / 2.0).floor()
+	_lvup_face.size = card
+	var ok: Button = _lvup.get_meta("ok")
+	ok.position = Vector2((card.x - ok.size.x) / 2.0, card.y - 30.0 - ok.size.y)
+	_lvup.visible = true
+	_lvup_face.queue_redraw()
+	Sfx.play("record")
+
+
+func _draw_levelup() -> void:
+	var ci := _lvup_face
+	var w := ci.size.x
+	UiKit.round_rect(ci, Rect2(Vector2.ZERO, ci.size), UiKit.WHITE, 28)
+	UiKit.text(ci, tr("POP_LEVEL_UP"), Vector2(w / 2.0, 90.0), 44, UiKit.BROWN, true, 1)
+	# 별 + LEVEL N.
+	var star := Rect2(w / 2.0 - 100.0, 120.0, 200.0, 190.0)
+	UiKit.draw_tex(ci, "star_big.png", star)
+	UiKit.text(ci, tr("HUD_LEVEL_CAPTION"), Vector2(w / 2.0, 212.0), 14, Color("b8860b"),
+			false, 1)
+	UiKit.text(ci, "%02d" % _lvup_level, Vector2(w / 2.0, 250.0), 36, UiKit.WHITE, true, 1)
+	# 보상 칩 — 골드.
+	var chip := Rect2(w / 2.0 - 110.0, 340.0, 220.0, 200.0)
+	UiKit.round_rect_outline(ci, chip, Color("f5f5f5"), 14, 2, UiKit.PANEL_LINE)
+	UiKit.text(ci, tr("POP_REWARD_GOLD"), Vector2(chip.get_center().x, chip.position.y + 30.0),
+			14, UiKit.TEXT, true, 1)
+	UiKit.coin_icon(ci, chip.get_center() + Vector2(0.0, 6.0), 90.0)
+	UiKit.text(ci, "+%s" % UiKit.commas(_lvup_gold), Vector2(chip.get_center().x,
+			chip.end.y - 24.0), 26, UiKit.TEXT, true, 1)
+	# 게이지.
+	var total := _xp_to
+	var lv := Account.level_at(total)
+	var bar := Rect2(w / 2.0 - 220.0, 590.0, 440.0, 16.0)
+	var lv_text := tr("MENU_LEVEL").format({"level": lv})
+	UiKit.text(ci, lv_text, Vector2(bar.position.x - 12.0, bar.position.y + 14.0), 18,
+			UiKit.TEXT, true, 2)
+	UiKit.round_rect(ci, bar, Color("ededed"), 8)
+	var fill := bar
+	fill.size.x = maxf(8.0, bar.size.x * Account.progress_at(total))
+	UiKit.round_rect(ci, fill, XP_COL, 8)
+	var need := Account.xp_to_next_at(total)
+	var count := tr("MENU_LEVEL_MAX") if need <= 0 \
+			else "%d / %d XP" % [Account.xp_in_level_at(total), need]
+	UiKit.text(ci, count, Vector2(bar.end.x + 12.0, bar.position.y + 14.0), 18, UiKit.TEXT)
 
 
 func _spacer(h: float) -> Control:
@@ -410,10 +542,9 @@ func _make_button(label: String, primary: bool) -> Button:
 	var b := Button.new()
 	b.text = label
 	b.pressed.connect(func() -> void: Sfx.play("click"))
-	b.custom_minimum_size = Vector2(420.0, 68.0)
-	b.add_theme_font_size_override("font_size", 30)
+	b.custom_minimum_size = Vector2(380.0, 70.0)
 	if primary:
-		UiKit.btn_primary(b, 30)
+		UiKit.btn_primary(b, 28)
 	else:
-		UiKit.btn_ghost(b, 30)
+		UiKit.btn_card(b, UiKit.GRAY_DEEP, 28)
 	return b

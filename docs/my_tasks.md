@@ -51,6 +51,14 @@
 
 ---
 
+## 🟡 피그마 UI — 작업자에게 확인·요청할 것 (2026-09-28)
+
+- [ ] `docs/figma_questions.md`의 질문 13개를 UI 작업자/기획과 결정 (재화 `+`의 뜻, 레벨업 보상, 커스텀 슬롯 값, 인게임 타이머, 홀드, 일시정지 안 음량, 랭킹 STAGE 열, 닉네임 규칙 등)
+- [ ] 디자인 폰트 파일 받기 — **Paperlogy**(4 Regular / 6 SemiBold / 8 ExtraBold), **학교안심 둥근미소 OTF R** (상업용 라이선스 확인 포함)
+  - **📤 줄 것**: `.ttf/.otf` 파일 → `shared/assets/fonts/`에 넣고 `ui_font.tres`·`UiKit.font_bold()`를 갈아 끼운다
+- [ ] 모바일 세로(1080×1920) 화면 디자인 요청 — 피그마에는 가로 26장뿐이다 (노션 인벤토리의 세로 35장 기준)
+- [ ] 피그마 MCP 계정은 `contact@wonderwheel.co.kr`로 인증해야 파일이 열린다 (재인증: 터미널 `claude` → `/mcp` → figma)
+
 ## 참고 — 이건 내가 한다 (사용자 작업 아님)
 
 - 위 값들을 받아 `project.godot`(`cattris/steam/app_id`, `cattris/cloud/url`, `cattris/cloud/anon_key`)에 넣고 검증

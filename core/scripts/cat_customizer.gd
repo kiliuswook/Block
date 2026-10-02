@@ -12,11 +12,17 @@ const UiKit := preload("res://core/scripts/ui_kit.gd")
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
 const CatSprite := preload("res://core/scripts/cat_sprite.gd")
 const INK := UiKit.INK
-const LIST_W := 190.0  # 왼쪽 부위 목록 폭
-const ROW_H := 60.0  # 부위 목록 한 줄
+const LIST_W := 240.0  # 왼쪽 부위 목록 버튼 폭 (피그마 목록 268 = 버튼 240 + 스크롤)
+const LIST_SCROLL := 28.0  # 목록 오른쪽 스크롤 자리
+const ROW_H := 53.0  # 부위 목록 한 줄 (얼굴 53 + 두께 3, 줄 간격 10)
+const ROW_GAP := 17.0  # 두께 아래로 10
 const ROW_ICON := 46.0  # 줄 왼쪽 클로즈업 아이콘
-const BAR_H := 62.0  # 아래 액션 바
-const TILE := Vector2(112.0, 128.0)  # 모양 타일
+const BAR_H := 78.0  # 아래 액션 바 (btn_normal 얼굴 71 + 두께 7)
+const TILE := Vector2(172.0, 160.0)  # 옵션 타일 (피그마 cat list 172×160, 간격 16)
+const TILE_GAP := 16
+## 색 부위 → 물감 병 그림 (피그마 "물감" 시트 8종: 볼·눈·코·입·수염·얼굴·발바닥·몸 무늬)
+const JAR_OF := {"cheek_col": 1, "eye_col": 2, "nose_col": 3, "mouth_col": 4,
+		"whisker_col": 5, "ear": 6, "pad_col": 7, "body": 8, "pattern_col": 8}
 const SWATCH := 72.0  # 색 스와치
 ## 흰 패널 위에서 읽히는 희귀도 색 (CustomCat.RARITY_COLS는 어두운 무대용이었다).
 const RARITY_INK: Array[Color] = [
@@ -24,7 +30,7 @@ const RARITY_INK: Array[Color] = [
 ]
 const ASK_PAD := 28.0  # 구매 확인창 카드 안쪽 여백
 const ASK_GAP := 12.0  # 확인창 글 줄 간격
-const ASK_BTN_H := 56.0  # 확인창 버튼 높이
+const ASK_BTN_H := 66.0  # 확인창 버튼 높이
 const PREVIEW_COL := Color("2f9cc4")  # 잠긴 파츠 "입혀 보는 중" 표시
 
 var _cat_id := "mycat"  # 지금 꾸미는 중인 캐릭터
@@ -57,6 +63,7 @@ var _ask_buy: Button
 var _ask_no: Button
 var _ask_key := ""
 var _ask_idx := -1
+var _ask_cat := ""  # 안내 모드: 이 파츠를 가진 냥이 (살 수 없는 냥이 파츠)
 var _ask_rect := Rect2()  # 확인창 카드 자리 (_layout_ask가 재서 넣는다)
 
 
@@ -65,16 +72,18 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_list_scroll = ScrollContainer.new()
 	_list_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_style_scroll(_list_scroll)
 	add_child(_list_scroll)
 	_list = VBoxContainer.new()
-	_list.add_theme_constant_override("separation", 8)
-	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_list.add_theme_constant_override("separation", int(ROW_GAP))
+	_list.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_list_scroll.add_child(_list)
 	_grid_scroll = ScrollContainer.new()
 	_grid_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_style_scroll(_grid_scroll)
 	add_child(_grid_scroll)
 	_panel = VBoxContainer.new()
-	_panel.add_theme_constant_override("separation", 14)
+	_panel.add_theme_constant_override("separation", 20)
 	_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_grid_scroll.add_child(_panel)
 	# 마지막으로 고른 파츠 한 줄 (희귀도 색 / 잠금 안내).
@@ -83,19 +92,20 @@ func _ready() -> void:
 	_flavor_lbl.add_theme_font_size_override("font_size", 17)
 	add_child(_flavor_lbl)
 	_bar = HBoxContainer.new()
-	_bar.add_theme_constant_override("separation", 12)
-	_bar.alignment = BoxContainer.ALIGNMENT_END
+	_bar.add_theme_constant_override("separation", 14)
+	_bar.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_child(_bar)
-	var rnd := _bar_btn(tr("CC_RANDOM"), UiKit.CYAN_DEEP)
-	rnd.pressed.connect(_randomize_all)
-	_bar.add_child(rnd)
-	var rst := _bar_btn(tr("CC_RESET"), Color("c9c6d0"))
+	var rst := _bar_btn(tr("CC_RESET"), UiKit.GRAY_DEEP)
 	rst.pressed.connect(_reset_all)
 	_bar.add_child(rst)
+	var rnd := _bar_btn(tr("CC_RANDOM").replace("🎲", "").strip_edges(), UiKit.GRAY_DEEP)
+	rnd.pressed.connect(_randomize_all)
+	_bar.add_child(rnd)
 	var ok := Button.new()
 	ok.text = tr("CC_SAVE")
-	ok.custom_minimum_size = Vector2(190.0, 56.0)
-	UiKit.style_button(ok, UiKit.GOLD, UiKit.GOLD_DEEP, INK, 24, 16)
+	ok.custom_minimum_size = Vector2(380.0, 71.0)
+	ok.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	UiKit.btn_primary(ok, 30)
 	ok.pressed.connect(func() -> void:
 		Sfx.play("record")
 		Achv.unlock(Achv.CUSTOM_CAT)
@@ -105,32 +115,55 @@ func _ready() -> void:
 		saved.emit())
 	_bar.add_child(ok)
 	_build_ask()
-	_flavor = tr("CC_FLAVOR_WELCOME")
+	_flavor = ""  # 피그마에는 안내 줄이 없다 — 저장·잠금 안내가 있을 때만 뜬다
 	_flavor_col = UiKit.MUTED
 	_refresh_flavor()
 
 
-## 패널이 앉을 자리 (가운데 카드 안쪽) — 페이지가 카드 크기를 정하고 부른다.
+## 패널이 앉을 자리 (오른쪽 칸 안쪽) — 피그마 119:3425: 목록 268 · 간격 10 · 옵션 판,
+## 아래로 20 띄워 액션 바.
 func set_area(rect: Rect2) -> void:
 	position = rect.position
 	size = rect.size
-	var grid_h := rect.size.y - BAR_H - 34.0
+	var grid_h := rect.size.y - BAR_H - 20.0
 	_list_scroll.position = Vector2.ZERO
 	# 부위 목록은 줄 단위로 끊는다 — 반쯤 잘린 줄이 보이면 고장 난 것처럼 보인다.
-	var step := ROW_H + 8.0  # 줄 + VBox separation
-	_list_scroll.size = Vector2(LIST_W,
-			maxf(step, floorf((grid_h + 8.0) / step) * step - 8.0))
-	var gx := LIST_W + 22.0
+	var step := ROW_H + ROW_GAP
+	_list_scroll.size = Vector2(LIST_W + LIST_SCROLL,
+			maxf(step, floorf((grid_h + ROW_GAP) / step) * step - ROW_GAP + 3.0))
+	var gx := LIST_W + LIST_SCROLL + 10.0
 	_grid_w = rect.size.x - gx
 	_grid_scroll.position = Vector2(gx, 0.0)
 	_grid_scroll.size = Vector2(_grid_w, grid_h)
-	_panel.custom_minimum_size = Vector2(_grid_w, 0.0)
-	_flavor_lbl.position = Vector2(0.0, grid_h + 2.0)
-	_flavor_lbl.size = Vector2(rect.size.x, 26.0)
+	_panel.custom_minimum_size = Vector2(_grid_w - LIST_SCROLL, 0.0)
+	_flavor_lbl.position = Vector2(0.0, grid_h - 24.0)
+	_flavor_lbl.size = Vector2(rect.size.x, 22.0)
+	_flavor_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_bar.position = Vector2(0.0, rect.size.y - BAR_H)
-	_bar.size = Vector2(rect.size.x, BAR_H)
+	_bar.size = Vector2(rect.size.x, 71.0)
 	_layout_ask()
 	_rebuild_panel()
+
+
+## 피그마 scroll: 연회색 트랙(모서리 999, 안쪽 3) + #828282 손잡이(폭 12, 검은 테 1).
+func _style_scroll(sc: ScrollContainer) -> void:
+	var bar := sc.get_v_scroll_bar()
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color("f1f1f1")
+	track.set_corner_radius_all(99)
+	track.content_margin_left = 3.0
+	track.content_margin_right = 3.0
+	var grab := StyleBoxFlat.new()
+	grab.bg_color = Color("828282")
+	grab.set_corner_radius_all(99)
+	grab.set_border_width_all(1)
+	grab.border_color = Color.BLACK
+	grab.content_margin_left = 6.0
+	grab.content_margin_right = 6.0
+	bar.add_theme_stylebox_override("scroll", track)
+	for st: String in ["grabber", "grabber_highlight", "grabber_pressed"]:
+		bar.add_theme_stylebox_override(st, grab)
+	bar.custom_minimum_size.x = 18.0
 
 
 ## 이 냥이를 패널에 펼친다. 같은 대상이면 다시 짓지 않고 새로 그리기만 한다.
@@ -159,7 +192,7 @@ func _char_id() -> String:
 # --- 왼쪽 부위 목록 --------------------------------------------------------------
 ## 이 캐릭터에 실제로 반영되는 부위만 줄로 세운다. 시트 그림으로 그리는 냥이는
 ## 레이어 색만, 나만의 캐릭터는 디자인 냥이에게서 빌려 온 파츠만 다룬다.
-## 부위는 CustomCat.groups_all() 단위 — 한 줄 안에서 모양과 색이 함께 나온다.
+## 부위는 CustomCat.GROUPS 단위 — 한 줄 안에서 모양과 색이 함께 나온다.
 
 
 func _build_rows() -> void:
@@ -167,7 +200,7 @@ func _build_rows() -> void:
 	_custom_slot = GameState.is_custom_cat(_cat_id)
 	_preset_tab = not sprite
 	_groups.clear()
-	for group in CustomCat.groups_all():
+	for group in CustomCat.GROUPS:
 		var keys: Array = []
 		for part in CustomCat.group_parts(group):
 			var key := str(part.key)
@@ -193,8 +226,8 @@ func _build_rows() -> void:
 		_add_row(tr(str(_groups[i].name)), i + (1 if _preset_tab else 0), _groups[i])
 
 
-## 부위 줄 하나 — 왼쪽에 그 부위만 확대한 클로즈업, 오른쪽에 이름.
-func _add_row(label: String, i: int, group: Dictionary) -> void:
+## 부위 줄 하나 — 피그마 btn(글자 24 가운데). 고른 줄은 노랑 + 화살표.
+func _add_row(label: String, i: int, _group: Dictionary) -> void:
 	var b := Button.new()
 	b.custom_minimum_size = Vector2(LIST_W, ROW_H)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -203,18 +236,25 @@ func _add_row(label: String, i: int, group: Dictionary) -> void:
 		_cur = i
 		_refresh())
 	var face := Control.new()
-	face.position = Vector2(8.0, (ROW_H - ROW_ICON) / 2.0)
-	face.size = Vector2(ROW_ICON, ROW_ICON)
-	face.clip_contents = true  # 클로즈업 — 부위 밖은 잘라 낸다
+	face.set_anchors_preset(Control.PRESET_FULL_RECT)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	face.draw.connect(func() -> void: _draw_row_icon(face, group))
+	face.draw.connect(func() -> void:
+		if i != _cur:
+			return
+		# 화살표(피그마 arrow-forward-thick 24) — 글자 왼쪽.
+		var tw := UiKit.text_width(label, 24, true)
+		var c := Vector2((LIST_W + 26.0 - tw) / 2.0 - 10.0 - 12.0, ROW_H / 2.0)
+		face.draw_colored_polygon(PackedVector2Array([c + Vector2(-11.0, -3.0),
+				c + Vector2(0.0, -3.0), c + Vector2(0.0, -10.0), c + Vector2(11.0, 0.0),
+				c + Vector2(0.0, 10.0), c + Vector2(0.0, 3.0), c + Vector2(-11.0, 3.0)]),
+				UiKit.BTN_TEXT))
 	b.add_child(face)
 	var name_lbl := Label.new()
 	name_lbl.text = label
-	name_lbl.position = Vector2(ROW_ICON + 16.0, 0.0)
-	name_lbl.size = Vector2(LIST_W - ROW_ICON - 24.0, ROW_H)
+	name_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_font_size_override("font_size", 24)
 	name_lbl.clip_text = true
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(name_lbl)
@@ -237,13 +277,18 @@ func _draw_row_icon(face: Control, group: Dictionary) -> void:
 func _restyle_rows() -> void:
 	for i in _rows.size():
 		var b := _rows[i]
+		var lbl := b.get_child(1) as Label
 		if i == _cur:
-			UiKit.style_button(b, UiKit.CYAN, UiKit.CYAN_DEEP, INK, 18, 14)
+			# 피그마 active: #ffcd03 · 테 3 · 두께 7 · 모서리 11. 글자는 화살표만큼 오른쪽.
+			UiKit.style_button(b, Color("ffcd03"), Color("c79a00"), UiKit.BTN_TEXT, 24, 11,
+					true, 3, 7)
+			lbl.offset_left = 26.0
 		else:
-			UiKit.style_button(b, UiKit.WHITE, Color("c9c6d0"), Color(INK, 0.75),
-					18, 14)
-		(b.get_child(1) as Label).add_theme_color_override("font_color",
-				INK if i == _cur else Color(INK, 0.75))
+			UiKit.style_button(b, UiKit.WHITE, Color("e9e9e9"), UiKit.BTN_TEXT, 24, 11,
+					true, 3, 3)
+			lbl.offset_left = 0.0
+		lbl.add_theme_color_override("font_color", UiKit.BTN_TEXT)
+		lbl.add_theme_font_override("font", UiKit.font_bold())
 
 
 # --- 오른쪽 옵션 격자 -------------------------------------------------------------
@@ -268,11 +313,11 @@ func _skin(extra_key := "", extra_idx := 0) -> Dictionary:
 	return skin
 
 
-func _bar_btn(text: String, accent: Color) -> Button:
+func _bar_btn(text: String, _accent: Color) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(190.0, 56.0)
-	UiKit.style_button(b, UiKit.WHITE, accent, INK, 22, 16)
+	b.custom_minimum_size = Vector2(230.0, 71.0)
+	UiKit.btn_normal(b, 30)
 	return b
 
 
@@ -353,7 +398,10 @@ func _rebuild_panel() -> void:
 	if _preset_tab and _cur == 0:
 		var grid := _section(tr("CC_PRESET"), TILE.x + 8.0)
 		for char_id: String in CustomCat.CHARS:
-			grid.add_child(_make_preset_tile(char_id))
+			# 파츠 레이어가 있는 냥이만 프리셋이 된다 (지금은 디자인 냥이 16종 전부).
+			# 나만의 캐릭터는 내가 가진(해금한) 냥이만 늘어놓는다 — 잠긴 냥이는 아예 안 보인다.
+			if CatSprite.is_layered(char_id) and not _preset_locked(char_id):
+				grid.add_child(_make_preset_tile(char_id))
 		return
 	var gi := _cur - (1 if _preset_tab else 0)
 	if gi < 0 or gi >= _groups.size():
@@ -370,8 +418,7 @@ func _rebuild_panel() -> void:
 		if _custom_slot:
 			idxs = CustomCat.my_options(key)
 		var color: bool = part.get("type") == "color"
-		var grid := _section(tr(str(part.name)),
-				(SWATCH + 10.0) if color else (TILE.x + 10.0))
+		var grid := _section(tr(str(part.name)), TILE.x)
 		for i: int in idxs:
 			var lock := _locked(key, i)
 			var prev: bool = lock and int(_preview_sel.get(key, -1)) == i
@@ -383,17 +430,24 @@ func _rebuild_panel() -> void:
 						i == picked, lock, prev))
 
 
-## 부위 안의 한 줄 — 소제목 + 그 아래 옵션 격자.
-func _section(title: String, cell: float) -> GridContainer:
-	var head := Label.new()
-	head.text = title
-	head.add_theme_font_size_override("font_size", 17)
-	head.add_theme_color_override("font_color", UiKit.MUTED)
-	_panel.add_child(head)
+## 부위 안의 한 줄 — 소제목(첫 줄은 생략) + 그 아래 3칸 옵션 격자.
+## 피그마: 소제목 32 · 위에 #8f8f8f 점선, 타일 172×160 간격 16.
+func _section(title: String, _cell: float) -> GridContainer:
+	if _panel.get_child_count() > 0:
+		var head := Control.new()
+		head.custom_minimum_size = Vector2(0.0, 12.0 + 40.0)
+		head.draw.connect(func() -> void:
+			var x := 0.0
+			while x < head.size.x:
+				head.draw_line(Vector2(x, 1.0), Vector2(minf(x + 8.0, head.size.x), 1.0),
+						Color("8f8f8f"), 2.0)
+				x += 14.0
+			UiKit.text(head, title, Vector2(8.0, 12.0 + 32.0), 32, UiKit.TEXT, true))
+		_panel.add_child(head)
 	var grid := GridContainer.new()
-	grid.columns = maxi(1, int((_grid_w - 18.0) / cell))
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
+	grid.columns = maxi(1, int((_grid_w - LIST_SCROLL + TILE_GAP) / (TILE.x + TILE_GAP)))
+	grid.add_theme_constant_override("h_separation", TILE_GAP)
+	grid.add_theme_constant_override("v_separation", TILE_GAP)
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_panel.add_child(grid)
 	return grid
@@ -406,7 +460,11 @@ func _locked(key: String, idx: int) -> bool:
 
 func _pick(key: String, idx: int) -> void:
 	if _locked(key, idx):
-		_open_buy(key, idx)
+		# 파츠 전용 옵션만 산다 — 냥이의 파츠는 그 냥이를 데려와야 열린다.
+		if GameState.part_buyable(key, idx):
+			_open_buy(key, idx)
+		else:
+			_open_cat_info(key, idx)
 		return
 	var part := CustomCat.get_part(key)
 	# 같은 부위에 걸려 있던 미리보기는 진짜 선택이 덮어쓴다.
@@ -435,14 +493,12 @@ func _price_text(key: String, idx: int) -> String:
 			else tr("CC_PRICE").format({"gold": n})
 
 
-## 잠긴 옵션 한 줄 안내 — 값과, 원래 어느 냥이의 파츠였는지.
-func _lock_text(key: String, idx: int) -> String:
-	var line := _price_text(key, idx)
+## 잠긴 냥이 파츠를 여는 냥이의 이름 ("" = 파츠 전용 옵션).
+func _source_name(key: String, idx: int) -> String:
 	var hint := GameState.part_unlock_hint(key, idx)
-	if not hint.is_empty():
-		var who := tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
-		line += "   ·   " + tr("CC_FROM").format({"name": who})
-	return line
+	if hint.is_empty():
+		return ""
+	return tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))
 
 
 ## 1,200 처럼 세 자리마다 끊어 준다.
@@ -469,18 +525,30 @@ func _build_ask() -> void:
 	_ask = Control.new()
 	_ask_layer.add_child(_ask)
 	_ask.draw.connect(func() -> void:
-		_ask.draw_rect(Rect2(Vector2.ZERO, _ask.size), Color(0.09, 0.13, 0.18, 0.55))
-		UiKit.panel_box(UiKit.WHITE, 22, 0.0).draw(_ask.get_canvas_item(), _ask_rect))
-	_ask_title = _ask_label(22, INK)
+		_ask.draw_rect(Rect2(Vector2.ZERO, _ask.size), UiKit.DIM)
+		UiKit.card_box(UiKit.WHITE, 28).draw(_ask.get_canvas_item(), _ask_rect)
+		# 위쪽 재화 그림 — 골드면 코인, 유니크 파츠면 캔.
+		if _ask_key != "":
+			var icon := Vector2(_ask_rect.get_center().x, _ask_rect.position.y + ASK_PAD + 44.0)
+			if _ask_cat != "":
+				# 안내 모드 — 이 파츠를 가진 냥이를 보여 준다 (데려올 대상).
+				Player.paint_cat(_ask, icon + Vector2(0.0, 6.0), 92.0, 0.0, true, false,
+						GameState.cat_skin(_ask_cat, CustomCat.TIER_MAX))
+			elif GameState.part_can(_ask_key, _ask_idx):
+				UiKit.can_icon(_ask, icon, 90.0)
+			else:
+				UiKit.coin_icon(_ask, icon, 90.0))
+	_ask_title = _ask_label(26, UiKit.TEXT)
+	_ask_title.add_theme_font_override("font", UiKit.font_bold())
 	_ask_hint = _ask_label(17, UiKit.MUTED)
-	_ask_wallet = _ask_label(18, UiKit.GOLD_DEEP)
+	_ask_wallet = _ask_label(20, UiKit.GOLD_DEEP)
 	_ask_buy = Button.new()
-	UiKit.style_button(_ask_buy, UiKit.GOLD, UiKit.GOLD_DEEP, INK, 21, 14)
+	UiKit.btn_primary(_ask_buy, 24)
 	_ask_buy.pressed.connect(_confirm_buy)
 	_ask.add_child(_ask_buy)
 	_ask_no = Button.new()
 	_ask_no.text = tr("UI_CANCEL")
-	UiKit.btn_ghost(_ask_no, 21)
+	UiKit.btn_card(_ask_no, UiKit.GRAY_DEEP, 24)
 	_ask_no.pressed.connect(_close_ask)
 	_ask.add_child(_ask_no)
 	# 캐릭터 페이지를 닫으면 확인창도 같이 내린다 (CanvasLayer는 부모가 숨어도 그려진다).
@@ -504,9 +572,9 @@ func _ask_label(fs: int, col: Color) -> Label:
 ## 줄 수를 재서 카드 높이를 정한다 — 글이 길어져도 버튼 줄과 겹치지 않게.
 func _ask_card() -> Rect2:
 	var vp := _ask.size if _ask.size.x > 0.0 else Vector2(1080.0, 1920.0)
-	var w := clampf(vp.x - 120.0, 320.0, 560.0)
+	var w := clampf(vp.x - 120.0, 320.0, 660.0)
 	var inner := w - ASK_PAD * 2.0
-	var h := ASK_PAD
+	var h := ASK_PAD + 110.0  # 위쪽 재화 그림 자리
 	for lbl: Label in [_ask_title, _ask_hint, _ask_wallet]:
 		if lbl.text.is_empty():
 			continue
@@ -528,7 +596,7 @@ func _layout_ask() -> void:
 	_ask_rect = _ask_card()
 	var card := _ask_rect
 	var inner := card.size.x - ASK_PAD * 2.0
-	var y := card.position.y + ASK_PAD
+	var y := card.position.y + ASK_PAD + 110.0
 	for lbl: Label in [_ask_title, _ask_hint, _ask_wallet]:
 		lbl.visible = not lbl.text.is_empty()
 		if not lbl.visible:
@@ -538,10 +606,13 @@ func _layout_ask() -> void:
 		y += lbl.size.y + ASK_GAP
 	var bw := (inner - 16.0) / 2.0
 	var by := card.position.y + card.size.y - ASK_PAD - ASK_BTN_H
-	_ask_buy.position = Vector2(card.position.x + ASK_PAD, by)
-	_ask_buy.size = Vector2(bw, ASK_BTN_H)
-	_ask_no.position = Vector2(card.position.x + ASK_PAD + bw + 16.0, by)
+	_ask_no.position = Vector2(card.position.x + ASK_PAD, by)
 	_ask_no.size = Vector2(bw, ASK_BTN_H)
+	if not _ask_buy.visible:
+		# 안내 모드는 닫기 버튼 하나 — 가운데에 선다.
+		_ask_no.position.x = card.position.x + (card.size.x - bw) / 2.0
+	_ask_buy.position = Vector2(card.position.x + ASK_PAD + bw + 16.0, by)
+	_ask_buy.size = Vector2(bw, ASK_BTN_H)
 	_ask.queue_redraw()
 
 
@@ -551,27 +622,49 @@ func _open_buy(key: String, idx: int) -> void:
 		return
 	_ask_key = key
 	_ask_idx = idx
+	_ask_cat = ""
+	_ask_buy.visible = true
+	_ask_no.text = tr("UI_CANCEL")
 	var price := GameState.part_price(key, idx)
 	var name := tr(str(part.name)) if part.get("type") == "color" 			else str((part.opts as Array)[idx].name)
 	var cans_buy := GameState.part_can(key, idx)
 	# 값은 제목 줄이 말한다 — 가운데 줄은 "원래 어느 냥이의 파츠였나"만 (중복 제거).
 	_ask_title.text = tr("CC_BUY_ASK_CAN").format({"name": name, "cans": _gold(price)}) 			if cans_buy else tr("CC_BUY_ASK").format({"name": name, "gold": _gold(price)})
-	var hint := GameState.part_unlock_hint(key, idx)
-	_ask_hint.text = "" if hint.is_empty() else tr("CC_FROM").format(
-			{"name": tr(str(GameState.get_cat(str(hint.cat)).get("name", "")))})
+	_ask_hint.text = tr("CC_PART_ONLY")
 	var afford := GameState.can_afford_part(key, idx)
 	_ask_wallet.text = tr("CC_WALLET_CAN").format({"cans": _gold(GameState.cans)}) 			if cans_buy else tr("CC_WALLET").format({"gold": _gold(GameState.gold)})
 	_ask_wallet.add_theme_color_override("font_color",
 			(UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP) if afford else UiKit.RED_DEEP)
 	_ask_buy.text = tr("CC_BUY")
 	_ask_buy.disabled = not afford
-	# 유니크 파츠는 캔으로 산다 — 확인 버튼 색까지 갈라 둔다.
-	UiKit.style_button(_ask_buy,
-			UiKit.CAN if cans_buy else UiKit.GOLD,
-			UiKit.CAN_DEEP if cans_buy else UiKit.GOLD_DEEP, INK, 21, 14)
+	UiKit.btn_primary(_ask_buy, 24)
 	_ask_layer.visible = true
 	_layout_ask()
 	# 사기 전에 입혀 본 모습을 보여 준다 (저장되지 않는다).
+	_preview_sel[key] = idx
+	Sfx.play("click")
+	_refresh()
+	changed.emit()
+
+
+## 살 수 없는 냥이 파츠 — 입혀 보여 주면서 "이 냥이를 데려오면 열린다"고 알린다.
+func _open_cat_info(key: String, idx: int) -> void:
+	var part := CustomCat.get_part(key)
+	var hint := GameState.part_unlock_hint(key, idx)
+	if part.is_empty() or hint.is_empty():
+		return
+	_ask_key = key
+	_ask_idx = idx
+	_ask_cat = str(hint.cat)
+	var who := tr(str(GameState.get_cat(_ask_cat).get("name", "")))
+	var name := tr(str(part.name)) if part.get("type") == "color" 			else str((part.opts as Array)[idx].name)
+	_ask_title.text = tr("CC_CAT_PART_TITLE").format({"part": name, "name": who})
+	_ask_hint.text = tr("CC_CAT_PART_HINT").format({"name": who})
+	_ask_wallet.text = ""
+	_ask_buy.visible = false
+	_ask_no.text = tr("UI_OK")
+	_ask_layer.visible = true
+	_layout_ask()
 	_preview_sel[key] = idx
 	Sfx.play("click")
 	_refresh()
@@ -586,6 +679,7 @@ func _close_ask() -> void:
 		_preview_sel.erase(_ask_key)
 	_ask_key = ""
 	_ask_idx = -1
+	_ask_cat = ""
 	_refresh()
 	changed.emit()
 
@@ -633,30 +727,85 @@ func previewing() -> bool:
 
 
 ## 디자인 캐릭터 한 마리를 통째로 불러오는 타일.
-func _make_preset_tile(char_id: String) -> Button:
+## 옵션 타일 껍데기 (피그마 cat list): 모서리 10 · 평평한 판.
+## 보통 #f9f9f9 · 잠김 #e0e0e0 · 고른 것 #0b78fd(+ 오른쪽 위 체크 30) · 입혀 보는 중은 파란 테.
+func _tile_button(selected: bool, locked: bool, previewing: bool) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = TILE
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var bg := Color("0b78fd") if selected else (Color("e0e0e0") if locked else Color("f9f9f9"))
+	for st: String in ["normal", "hover", "pressed", "disabled"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = bg
+		if st == "hover":
+			sb.bg_color = bg.lightened(0.08) if selected else bg.darkened(0.03)
+		elif st == "pressed":
+			sb.bg_color = bg.darkened(0.08)
+		sb.set_corner_radius_all(10)
+		if previewing:
+			sb.set_border_width_all(4)
+			sb.border_color = PREVIEW_COL
+		b.add_theme_stylebox_override(st, sb)
+	return b
+
+
+## 타일 안 글자·체크·값 — 그림 아래(y 30+70+10) 이름 16, 잠겼으면 그 아래 값 알약.
+func _tile_label(face: Control, label: String, selected: bool, locked: bool,
+		key := "", idx := -1, col: Color = Color("272727")) -> void:
+	var ink := UiKit.WHITE if selected else col
+	var y := 30.0 + 70.0 + 10.0 + 16.0
+	var priced := locked and key != ""
+	# 냥이 파츠는 값 대신 "누구의 파츠인가"를 단다 (사서 열 수 없다).
+	var owner := _source_name(key, idx) if priced and not GameState.part_buyable(key, idx) 			else ""
+	if priced:
+		y -= 8.0
+	UiKit.text(face, label, Vector2(TILE.x / 2.0, y), 16, ink, true, 1, TILE.x - 16.0)
+	if selected:
+		face.draw_circle(Vector2(TILE.x - 21.0, 21.0), 16.0, UiKit.WHITE)
+		UiKit.check_badge(face, Vector2(TILE.x - 21.0, 21.0), 14.0, Color("272727"))
+	if not locked:
+		return
+	var can := priced and GameState.part_can(key, idx)
+	UiKit.lock_icon(face, Vector2(20.0, 20.0), 20.0,
+			UiKit.CAN_DEEP if can else Color("8f8f8f"))
+	if not priced:
+		return
+	if owner != "":
+		var ow := minf(UiKit.text_width(owner, 14, true) + 24.0, TILE.x - 12.0)
+		var oat := Vector2((TILE.x - ow) / 2.0, y + 6.0)
+		UiKit.round_rect(face, Rect2(oat, Vector2(ow, 26.0)), UiKit.WHITE, 20)
+		UiKit.text(face, owner, Vector2(TILE.x / 2.0, oat.y + 19.0), 14,
+				Color("7d7d7d"), true, 1, ow - 12.0)
+		return
+	var txt := UiKit.commas(GameState.part_price(key, idx))
+	var w := 20.0 + 4.0 + UiKit.text_width(txt, 14, true) + 16.0
+	var at := Vector2((TILE.x - w) / 2.0, y + 6.0)
+	UiKit.round_rect(face, Rect2(at, Vector2(w, 26.0)), UiKit.WHITE, 20)
+	if can:
+		UiKit.can_icon(face, at + Vector2(8.0 + 10.0, 13.0), 20.0)
+	else:
+		UiKit.coin_icon(face, at + Vector2(8.0 + 10.0, 13.0), 20.0)
+	UiKit.text(face, txt, at + Vector2(8.0 + 24.0, 19.0), 14,
+			UiKit.CAN_DEEP if can else UiKit.BTN_TEXT, true)
+
+
+func _make_preset_tile(char_id: String) -> Button:
 	var locked := _preset_locked(char_id)
-	UiKit.style_button(b, UiKit.WHITE, Color("c9c6d0"), INK, 15, 14)
+	var b := _tile_button(false, locked, false)
 	b.pressed.connect(func() -> void: _load_preset(char_id))
 	var face := Control.new()
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.draw.connect(func() -> void:
-		var skin := {"parts": CustomCat.char_parts(char_id, _preset_tier(char_id))}
-		Player.paint_cat(face, Vector2(TILE.x / 2.0, 54.0), 56.0, 0.0, true, false,
+		# 불러오면 실제로 조립될 모습(시트 파츠 믹스) 그대로 보여 준다.
+		var parts := CustomCat.char_parts(char_id, _preset_tier(char_id))
+		var skin := {"parts": parts, "mix": CustomCat.mix_of(parts),
+				"tints": CustomCat.mix_tints(parts)}
+		Player.paint_cat(face, Vector2(TILE.x / 2.0, 30.0 + 38.0), 62.0, 0.0, true, false,
 				_shadow(skin) if locked else skin)
-		if locked:
-			_draw_lock(face, Vector2(TILE.x - 22.0, 24.0), 0.9)
-		var font := ThemeDB.fallback_font
-		var label := tr(str((CustomCat.CHARS[char_id] as Dictionary).get("name",
-				char_id)))
-		var fs := UiKit.fit_size(font, label, TILE.x - 10.0, 15)
-		var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		face.draw_string(font, Vector2((TILE.x - w) / 2.0, TILE.y - 14.0), label,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
-				UiKit.MUTED if locked else Color(INK, 0.85)))
+		var label := tr(str((CustomCat.CHARS[char_id] as Dictionary).get("name", char_id)))
+		_tile_label(face, label, false, locked, "", -1,
+				Color("9a9a9a") if locked else Color("272727")))
 	b.add_child(face)
 	return b
 
@@ -722,34 +871,24 @@ func _load_preset(char_id: String) -> void:
 	changed.emit()
 
 
+## 색 옵션 — 피그마 "물감" 타일: 그 부위의 물감 병(63×70) + 실제 색 방울.
 func _make_swatch(key: String, idx: int, col: Color, selected: bool,
 		locked := false, previewing := false) -> Button:
-	var b := Button.new()
-	b.custom_minimum_size = Vector2(SWATCH, SWATCH)
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	# 잠긴 색도 진짜 색으로 보여 준다 — 무슨 색인지 모르면 살 이유가 없다.
-	# 잠금 표시는 위에 얹는 자물쇠·값 판이 맡는다.
-	var deep := PREVIEW_COL if previewing \
-			else (UiKit.GOLD_DEEP if selected else Color("c9c6d0"))
-	UiKit.style_button(b, col, deep, INK, 15, 14)
+	var b := _tile_button(selected, locked, previewing)
 	b.pressed.connect(func() -> void: _pick(key, idx))
 	var face := Control.new()
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var jar := "jar_%d.png" % int(JAR_OF.get(key, 1))
+	var label := tr(str(CustomCat.get_part(key).get("name", "")))
 	face.draw.connect(func() -> void:
-		if selected or previewing:
-			# 고른 색은 안쪽에 체크 링을 둘러 한눈에 보이게.
-			face.draw_arc(Vector2(SWATCH, SWATCH) / 2.0, SWATCH * 0.32, 0.0, TAU, 28,
-					PREVIEW_COL if previewing else UiKit.WHITE, 4.0)
-		if locked and not previewing:
-			# 자물쇠·값은 어떤 색 위에서도 읽히게 흰 반투명 판을 깐다.
-			face.draw_circle(Vector2(SWATCH / 2.0, SWATCH / 2.0 - 10.0), 15.0,
-					Color(1.0, 1.0, 1.0, 0.8))
-			face.draw_rect(Rect2(4.0, SWATCH - 24.0, SWATCH - 8.0, 20.0),
-					Color(1.0, 1.0, 1.0, 0.8))
-			_draw_lock(face, Vector2(SWATCH / 2.0, SWATCH / 2.0 - 8.0), 1.0,
-					GameState.part_can(key, idx))
-			_draw_price(face, Vector2(8.0, SWATCH - 9.0), key, idx, 12))
+		var r := Rect2(TILE.x / 2.0 - 31.5, 30.0, 63.0, 70.0)
+		UiKit.draw_tex(face, jar, r)
+		# 실제 색 — 병 오른쪽 아래 방울 (어떤 색인지 모르면 살 이유가 없다).
+		var at := r.end - Vector2(4.0, 10.0)
+		face.draw_circle(at, 15.0, UiKit.INK)
+		face.draw_circle(at, 12.0, col)
+		_tile_label(face, label, selected, locked and not previewing, key, idx))
 	b.add_child(face)
 	return b
 
@@ -775,18 +914,11 @@ func _draw_lock(ci: CanvasItem, at: Vector2, sc := 1.0, can_lock := false) -> vo
 	ci.draw_arc(at + Vector2(0.0, -3.0) * sc, 6.0 * sc, PI, TAU, 10, col, 3.0 * sc)
 
 
-## 이 옵션만 바꾼 미니 냥이를 그려주는 미리보기 타일 (이름은 희귀도 색).
+## 모양 옵션 — 이 옵션만 바꾼 미니 냥이(63×70 자리) + 이름(희귀도 색).
 func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 		locked := false, previewing := false) -> Button:
 	var rar := int(opt.get("r", 0))
-	var b := Button.new()
-	b.custom_minimum_size = TILE
-	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	var deep := PREVIEW_COL if previewing \
-			else (UiKit.GOLD_DEEP if selected
-			else (Color(RARITY_INK[rar], 0.6) if rar > 0 else Color("c9c6d0")))
-	UiKit.style_button(b, Color("fff1cf") if selected else UiKit.WHITE, deep,
-			INK, 15, 14)
+	var b := _tile_button(selected, locked, previewing)
 	b.pressed.connect(func() -> void: _pick(key, idx))
 	var face := Control.new()
 	face.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -794,19 +926,13 @@ func _make_style_tile(key: String, idx: int, opt: Dictionary, selected: bool,
 	var opt_name := ("★" if rar >= 3 else "") + str(opt.name)
 	face.draw.connect(func() -> void:
 		# 잠긴 파츠는 회색 실루엣 — 단, 입혀 보는 중이면 제 색으로 보여 준다.
-		Player.paint_cat(face, Vector2(TILE.x / 2.0, 52.0), 56.0, 0.0, true, false,
+		Player.paint_cat(face, Vector2(TILE.x / 2.0, 30.0 + 38.0), 62.0, 0.0, true, false,
 				_skin(key, idx) if (previewing or not locked)
 				else _shadow(_skin(key, idx)))
-		if locked:
-			_draw_lock(face, Vector2(TILE.x - 22.0, 24.0), 0.9,
-					GameState.part_can(key, idx))
-			_draw_price(face, Vector2(9.0, 24.0), key, idx)
-		var font := ThemeDB.fallback_font
-		var fs := UiKit.fit_size(font, opt_name, TILE.x - 10.0, 15)
-		var w := font.get_string_size(opt_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		face.draw_string(font, Vector2((TILE.x - w) / 2.0, TILE.y - 14.0), opt_name,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
-				PREVIEW_COL if previewing
-						else (UiKit.MUTED if locked else RARITY_INK[rar])))
+		_tile_label(face, opt_name, selected, locked and not previewing, key, idx,
+				PREVIEW_COL if previewing else (Color("7d7d7d") if locked
+						else (RARITY_INK[rar] if rar > 0 else Color("272727")))))
 	b.add_child(face)
 	return b
+
+

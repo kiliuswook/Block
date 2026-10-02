@@ -7,7 +7,10 @@ const OUT := "E:/Game/Block/.tmp_shots"
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT)
 	await get_tree().process_frame
-	await _capture("res://core/scenes/title.tscn", OUT + "/title.png")
+	# 스플래시(로고 + Press to play) → 메뉴.
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_splash.png")
+	await _capture("res://core/scenes/title.tscn", OUT + "/title.png",
+			func(inst: Node) -> void: inst._dismiss_splash())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_char_locked.png",
 			func(inst: Node) -> void: _view_cat(inst, "black"))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_modes.png",
@@ -16,11 +19,17 @@ func _ready() -> void:
 			func(inst: Node) -> void: inst._open_chars())
 	# 타이틀 무대 = 좌석. 이번 판에 나갈 냥이가 여기 선다.
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_seat.png",
-			func(inst: Node) -> void: inst._refresh_seats())
+			func(inst: Node) -> void:
+				inst._dismiss_splash()
+				inst._refresh_seats())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_pick.png",
 			func(inst: Node) -> void: inst._open_chars(true))
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
+	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_lang.png",
+			func(inst: Node) -> void:
+				inst._settings.open()
+				inst._settings._open_lang_list())
 	await _capture("res://core/scenes/title.tscn", OUT + "/title_set_pad.png",
 			func(inst: Node) -> void:
 				inst._settings.open()
@@ -222,6 +231,8 @@ func _ready() -> void:
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless.png")
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava.png",
 			func(inst: Node) -> void: inst.get_node("Board").lava_y = 940.0)
+	await _capture("res://core/scenes/main.tscn", OUT + "/endless_lava_far.png",
+			func(inst: Node) -> void: _seed_far_lava(inst))
 	await _capture("res://core/scenes/main.tscn", OUT + "/endless_hud.png",
 			func(_inst: Node) -> void: EventBus.height_changed.emit(23))
 	# 골드러시: 게이지가 반쯤 찬 평상시 · 발동 중(금빛 우물 + 금이 박힌 스택) ·
@@ -252,9 +263,14 @@ func _ready() -> void:
 						{"gold": 87, "gold_from": GameState.gold - 87,
 						"xp": 56, "xp_from": maxi(GameState.xp - 56, 0)}))
 	# --- 모바일(세로 1080×1920) 레이아웃 --- (창 크기는 _fit_window가 씬 경로로 맞춘다)
-	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png")
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title.png",
+			func(inst: Node) -> void: inst._dismiss_splash())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_settings.png",
 			func(inst: Node) -> void: inst._settings.open())
+	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_set_lang.png",
+			func(inst: Node) -> void:
+				inst._settings.open()
+				inst._settings._open_lang_list())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_gacha.png",
 			func(inst: Node) -> void: inst._open_gacha())
 	await _capture("res://mobile/ui/title_mobile.tscn", OUT + "/m_title_pick.png",
@@ -277,6 +293,10 @@ func _ready() -> void:
 				tc.get_node("JumpButton")._ring = 0.6
 				tc.get_node("DropButton").touch_index = 4
 				tc.get_node("MovePad")._touches[5] = -1)
+	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_lava_far.png",
+			func(inst: Node) -> void:
+				inst.get_node("TouchControls").visible = true
+				_seed_far_lava(inst))
 	await _capture("res://mobile/ui/main_mobile.tscn", OUT + "/m_endless_fever.png",
 			func(inst: Node) -> void:
 				inst.get_node("TouchControls").visible = true
@@ -326,6 +346,19 @@ func _seed_fever(inst: Node, on: bool) -> void:
 	else:
 		b._fever_gain(EscapeBoard.FEVER_MAX * 0.55)
 		b.fever_near = 0.8
+	b.queue_redraw()
+
+
+## 무한: 고양이가 높이 올라 용암이 화면 아래로 벗어난 순간 — 아래 끝 "▼ n" 게이지.
+func _seed_far_lava(inst: Node) -> void:
+	var b: Node = inst.get_node("Board")
+	for x in range(EscapeBoard.COLS):
+		b.grid[Vector2i(x, -10)] = Board.PIECES[x % 7]
+	b.best_height = 11  # 이미 오른 높이 — 새로 오른 칸으로 피버가 터지지 않게
+	b.fever_gauge = 0.0  # [테스트용] 시작 게이지가 차 있어도 평상시 모습으로
+	var p: Node2D = b.get_node("Player")
+	p.position = Vector2(EscapeBoard.COLS * EscapeBoard.CELL * 0.5,
+			-10.0 * EscapeBoard.CELL - Player.SIZE / 2.0)
 	b.queue_redraw()
 
 

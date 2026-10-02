@@ -278,6 +278,39 @@ func _ready() -> void:
 	b3._spawn_piece()
 	_check(not b3.playing, "escape: piece spawning inside the stack ends the game")
 
+	# 스테이지 모드도 무한처럼: 놓는 즉시 다음 블록이 나오고, 앞 블록 위(우물 밖)에서
+	# 기다렸다 내려온다. 떨어지기 시작한 블록은 돌릴 수 없다.
+	var b3b: Node2D = load("res://core/scripts/escape_board.gd").new()
+	var p3b: Node2D = load("res://core/scripts/player.gd").new()
+	p3b.name = "Player"
+	b3b.add_child(p3b)
+	add_child(b3b)
+	b3b.start_game()
+	var first3: String = b3b.piece_type
+	b3b._release_piece()
+	_check(b3b.loose.size() == 1 and b3b.loose[0].t == first3,
+			"classic: release detaches the piece")
+	_check(b3b.piece_state == b3b.PieceState.TRACKING and b3b.piece_type != "",
+			"classic: next piece spawns immediately")
+	var top3: int = b3b.rows
+	for lc: Vector2i in b3b._loose_cells(b3b.loose[0]):
+		top3 = mini(top3, lc.y)
+	var cells3: Array = b3b._cells(b3b.piece_type, b3b.piece_rot, b3b.piece_pos)
+	var clear3 := true
+	for c3: Vector2i in cells3:
+		if c3.y >= top3:
+			clear3 = false
+	_check(clear3, "classic: new piece waits above the detached one")
+	b3b.piece_type = "T"
+	b3b.piece_rot = 0
+	b3b.piece_state = b3b.PieceState.FALLING
+	b3b.piece_pos = Vector2i(3, 8)
+	b3b._try_rotate(1)
+	_check(b3b.piece_rot == 0, "falling piece cannot rotate")
+	b3b.piece_state = b3b.PieceState.TRACKING
+	b3b._try_rotate(1)
+	_check(b3b.piece_rot == 1, "tracking piece still rotates")
+
 	GameState.mode = GameState.MODE_ENDLESS
 	var b4: Node2D = load("res://core/scripts/escape_board.gd").new()
 	var p4: Node2D = load("res://core/scripts/player.gd").new()

@@ -1,0 +1,17 @@
+{
+ "Prop_Head": {
+  "h": 212,
+  "layer": 85,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "eeeeed",
+  "w": 256,
+  "x": 5,
+  "y": 11
+ }
+}

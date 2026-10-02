@@ -12,15 +12,17 @@ const FEVER_METER := preload("res://core/scripts/fever_meter.gd")
 const USER_HUD := preload("res://core/scripts/user_hud.gd")
 const PIECE_FLYER := preload("res://core/scripts/piece_flyer.gd")
 ## 계기판 카드(타이틀과 같은 흰 카드): 열의 폭과 카드가 그 둘레에 두는 여백.
-const HUD_COL_W := 300.0
-const HUD_CARD_PAD := Vector2(22.0, 18.0)
+const HUD_COL_W := 305.0
+const HUD_CARD_PAD := Vector2(25.0, 24.0)
+const HUD_NEXT_H := 195.0  # NEXT 남색 판 높이 (피그마)
+const KeyBinds := preload("res://core/scripts/key_binds.gd")
 ## 오른쪽 계기판 열의 자리. 모드마다 켜지는 줄이 달라서 씬에 박힌 y를 그대로 쓰면
 ## 서로 겹친다 — 가로 화면 계기판의 y는 `_layout_stat_column()` 한 곳에서만 정한다.
-const HUD_COL_X := 1360.0
-const HUD_COL_TOP := 44.0
-const HUD_ROW_GAP := 26.0  # 줄과 줄 사이
-const HUD_CAPTION_GAP := 4.0  # 제목 ↔ 숫자
-const HUD_CAPTION_H := 26.0
+const HUD_COL_X := 1254.0
+const HUD_COL_TOP := 62.0
+const HUD_ROW_GAP := 30.0  # 줄과 줄 사이 (사이에 구분선이 간다)
+const HUD_CAPTION_GAP := 6.0  # 제목 ↔ 숫자
+const HUD_CAPTION_H := 22.0
 # 세로 화면 오른쪽 열 — 우물(≈234~846) 오른쪽 여백에 서는 좁은 카드.
 const HUD_P_COL_X := 884.0
 const HUD_P_COL_W := 158.0
@@ -66,6 +68,8 @@ var _flyer_armed := false  # 판을 열 때의 첫 블록은 예고된 적이 �
 ## 계기판 뒤에 깔리는 흰 카드(들)를 그리는 레이어와, 카드가 감쌀 노드 묶음.
 var hud_cards: Control
 var hud_groups: Array = []
+var hud_dividers: Array[float] = []  # 계기판 줄 사이 구분선 y (가로 화면)
+var key_hint: Control  # 좌하단 조작 안내 카드 (실제 키 바인딩으로 그린다)
 
 
 func _ready() -> void:
@@ -96,7 +100,7 @@ func _ready() -> void:
 		# Arcade cabinet HUD: LEVEL is the board you're on, TOP is the high score,
 		# and LINES is a rack of tiles rather than a number.
 		height_title.text = "LEVEL"
-		best_title.text = "TOP"
+		best_title.text = "TOP SCORE"
 		lines_title.text = "LINES"
 		# 설명 문구는 두지 않는다 — 아케이드 계기판만 남긴다.
 		goal_label.visible = false
@@ -261,6 +265,7 @@ func _show_new_record() -> void:
 func _on_game_over() -> void:
 	var was_record := false
 	var stats := ""
+	var stat_cols: Array = []
 	var endless := GameState.mode == GameState.MODE_ENDLESS
 	var classic := GameState.mode == GameState.MODE_CLASSIC
 	if endless:
@@ -268,6 +273,9 @@ func _on_game_over() -> void:
 		was_record = GameState.record_height(height)
 		stats = tr("HUD_STATS_ENDLESS").format(
 				{"height": height, "best": GameState.best_height})
+		stat_cols = [["HEIGHT", tr("HUD_FLOOR").format({"n": height})],
+				["BEST", tr("HUD_FLOOR").format({"n": GameState.best_height})],
+				["SCORE", UiKit.commas(GameState.score)]]
 		if was_record:
 			Replays.save_replay("endless", board.rec_export())
 		if weekly_up and not was_record:  # record_height already submits
@@ -277,6 +285,8 @@ func _on_game_over() -> void:
 		was_record = GameState.record_classic(GameState.score)
 		stats = "SCORE %d      LEVEL %d      LINES %d" \
 				% [GameState.score, board.level, board.total_lines]
+		stat_cols = [["SCORE", UiKit.commas(GameState.score)], ["LEVEL", str(board.level)],
+				["LINES", str(board.total_lines)]]
 		if was_record:
 			Replays.save_replay("classic", board.rec_export())
 		if weekly_up and not was_record:
@@ -312,7 +322,7 @@ func _on_game_over() -> void:
 		if not board.playing:
 			if user_hud:
 				_reveal_user_hud()  # 세로 화면은 여기서 처음 뜬다
-			death_popup.open(stats, was_record, earned, "", xp_line, reward))
+			death_popup.open(stats, was_record, earned, "", xp_line, reward, stat_cols))
 
 
 ## 결과창과 함께 유저 HUD를 띄운다. 세로 화면은 좌상단이 ⏸ 버튼 자리이고 카드
@@ -326,6 +336,7 @@ func _reveal_user_hud() -> void:
 		if is_instance_valid(hud_cards):
 			hud_cards.queue_redraw()
 		user_hud.place(Vector2((vp.x - user_hud.rect().size.x) / 2.0, USER_HUD.MARGIN.y))
+	user_hud.show_wallet = true  # 코인이 날아갈 지갑 알약
 	user_hud.visible = true
 
 
@@ -374,6 +385,7 @@ func _build_user_hud() -> void:
 	var vp := get_viewport_rect().size
 	user_hud = USER_HUD.new()
 	user_hud.visible = vp.x >= vp.y
+	user_hud.show_wallet = false  # 디자인: 인게임은 Lv 카드만 — 지갑은 결과창 때 뜬다
 	add_child(user_hud)
 	death_popup.hud = user_hud  # 결과 화면의 보상 연출이 이 카드로 골드를 날린다
 
@@ -399,18 +411,21 @@ func _build_backdrop() -> void:
 func _tone_hud() -> void:
 	for l: Label in [$UI/NextTitle, score_title, level_title, lines_title,
 			height_title, best_title]:
-		l.add_theme_color_override("font_color", UiKit.MUTED)
-		l.add_theme_font_size_override("font_size", 21)
-	for l: Label in [score_label, level_label, lines_label]:
-		_ink_label(l, UiKit.INK)
-	# 큰 숫자 슬롯(무한=층, 스테이지=LEVEL)은 따뜻한 강조색.
-	_ink_label(height_label, UiKit.ORANGE_DEEP)
-	_ink_label(best_label, UiKit.GOLD_DEEP)
+		l.add_theme_color_override("font_color", Color("888888"))  # 피그마 소제목 14 #888
+		l.add_theme_font_size_override("font_size", 14)
+		l.add_theme_font_override("font", UiKit.font_bold())
+	($UI/NextTitle as Label).add_theme_color_override("font_color", UiKit.INK)
+	($UI/NextTitle as Label).add_theme_font_size_override("font_size", 18)
+	for l: Label in [score_label, level_label, lines_label, height_label, best_label]:
+		_ink_label(l, UiKit.TEXT)
+		l.add_theme_font_override("font", UiKit.font_bold())
+	score_label.add_theme_font_override("font", UiKit.font_extra())  # 피그마 SCORE 50 ExtraBold
+	# TOP SCORE는 금색 (트로피 아이콘은 카드가 그린다).
+	_ink_label(best_label, UiKit.GOLD)
 	_ink_label(record_label, UiKit.GOLD_DEEP)
 	_ink_label(goal_label, UiKit.MUTED)
 	_ink_label(help_label, Color(UiKit.INK, 0.72))
 	help_label.add_theme_font_size_override("font_size", 19)
-	# 화면 한가운데 배너는 우물(어두움) 위에도 뜨므로 잉크 외곽선을 유지한다.
 	for l: Label in [milestone_label, pause_label]:
 		l.add_theme_color_override("font_outline_color", UiKit.INK)
 	milestone_label.add_theme_color_override("font_color", UiKit.CREAM)
@@ -438,19 +453,21 @@ func _layout_stat_column() -> void:
 		_layout_stat_column_portrait()
 		return
 	var y := HUD_COL_TOP
-	# NEXT는 제목 + 미리보기 판이라 따로 쌓는다.
+	hud_dividers.clear()
+	# NEXT는 제목 + 남색 판이라 따로 쌓는다.
 	var next_title: Label = $UI/NextTitle
 	var next_prev: Control = $UI/NextPreview
 	next_title.position = Vector2(HUD_COL_X, y)
-	next_title.size = Vector2(HUD_COL_W, HUD_CAPTION_H)
-	y += HUD_CAPTION_H + HUD_CAPTION_GAP
+	next_title.size = Vector2(HUD_COL_W, 28.0)
+	y += 28.0 + 8.0
 	next_prev.position = Vector2(HUD_COL_X, y)
+	next_prev.size = Vector2(HUD_COL_W, HUD_NEXT_H)
 	y += next_prev.size.y + HUD_ROW_GAP
-	for row: Array in [[height_title, height_label, 72],
-			[best_title, best_label, 44],
-			[score_title, score_label, 40],
-			[level_title, level_label, 40],
-			[lines_title, lines_label, 36]]:
+	for row: Array in [[height_title, height_label, 44],
+			[best_title, best_label, 30],
+			[score_title, score_label, 50],
+			[level_title, level_label, 48],
+			[lines_title, lines_label, 30]]:
 		var cap: Label = row[0]
 		var val: Label = row[1]
 		if not val.visible:
@@ -462,13 +479,19 @@ func _layout_stat_column() -> void:
 		y += HUD_CAPTION_H + HUD_CAPTION_GAP
 		val.position = Vector2(HUD_COL_X, y)
 		val.size = Vector2(HUD_COL_W, ceilf(fs * 1.25))
+		if val == best_label:
+			# 트로피 아이콘 자리(카드가 그린다)만큼 오른쪽으로.
+			val.position.x += 40.0
+			val.size.x -= 40.0
 		val.pivot_offset = val.size / 2.0
 		y += val.size.y + HUD_ROW_GAP
+		hud_dividers.append(y - HUD_ROW_GAP / 2.0)
 		if val == height_label and fever_meter != null:
 			# 골드러시 게이지는 큰 층수 바로 아래 — 이 판의 리듬을 읽는 줄이다.
 			fever_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 8.0)
 			fever_meter.size = Vector2(HUD_COL_W - 40.0, 50.0)
 			y = fever_meter.position.y + fever_meter.size.y + HUD_ROW_GAP
+			hud_dividers[-1] = y - HUD_ROW_GAP / 2.0
 		if val == lines_label and goal_meter != null:
 			# 타일 랙은 LINES 숫자에 딸린 줄이라 바로 아래 붙인다.
 			goal_meter.position = Vector2(HUD_COL_X, y - HUD_ROW_GAP + 10.0)
@@ -539,9 +562,14 @@ func _build_hud_cards() -> void:
 				height_label, best_title, best_label, goal_label, goal_meter,
 				fever_meter]
 		# 기록 갱신 줄은 판 도중에 켜진다 — 그때 카드가 자라지 않게 미리 넣어 둔다.
-		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label]})
-	if help_label.visible and help_label.text != "":
+		# 피그마: 계기판 카드는 위아래 40 여백으로 화면 높이를 다 채운다 (1228,40 · 360×1000).
+		hud_groups.append({"nodes": col, "w": HUD_COL_W, "always": [record_label],
+				"full": true})
+	if vp.y > vp.x and help_label.visible and help_label.text != "":
 		hud_groups.append({"nodes": [help_label], "w": 0.0, "pill": true})
+	if vp.x >= vp.y:
+		help_label.visible = false
+		_build_key_hint()
 	hud_cards = Control.new()
 	hud_cards.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud_cards.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -570,12 +598,99 @@ func _build_hud_cards_portrait() -> void:
 	hud_groups.append({"nodes": right, "w": 0.0, "always": [record_label]})
 
 
+## 좌하단 조작 안내 카드 (피그마) — 실제 키 바인딩(KeyBinds)을 키캡 칩으로 그린다.
+## 두 열: [이동 · 회전 · 점프] / [빠른 낙하 · 대시 · 일시정지].
+func _build_key_hint() -> void:
+	key_hint = Control.new()
+	key_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	key_hint.position = Vector2(48.0, get_viewport_rect().size.y - 152.0 - 62.0)
+	key_hint.size = Vector2(552.0, 152.0)
+	key_hint.draw.connect(_draw_key_hint)
+	$UI.add_child(key_hint)
+
+
+func _draw_key_hint() -> void:
+	var ci := key_hint
+	UiKit.round_rect(ci, Rect2(Vector2.ZERO, ci.size), Color(UiKit.CARD_SKY, 0.85), 16)
+	var rows := [
+		[[_key("move_left", 0), _key("move_right", 0)], tr("HUD_KEYS_MOVE")],
+		[[_key("rotate_ccw", 0), _key("rotate_cw", 0)], tr("HUD_KEYS_ROTATE")],
+		[[_key("jump", 0), _key("jump", 1)], tr("SET_ACT_JUMP")],
+		[[_key("soft_drop", 0)], tr("SET_ACT_SOFT_DROP")],
+		[[_key("dash", 0)], tr("SET_ACT_DASH")],
+		[[_key("pause", 0)], tr("SET_ACT_PAUSE")],
+	]
+	for i in rows.size():
+		var col := i / 3
+		var row := i % 3
+		var x := 18.0 + col * 270.0
+		var y := 18.0 + row * 42.0
+		var keys: Array = rows[i][0]
+		for k in keys.size():
+			var name := str(keys[k])
+			if name == "":
+				continue
+			var kw := maxf(30.0, UiKit.text_width(name, 13, true) + 14.0)
+			# 피그마 키캡: 연회색 얼굴 · 잉크 테 2 · 아래 두께 3(#9e9e9e) · 모서리 6.
+			UiKit.round_rect(ci, Rect2(x, y + 3.0, kw, 27.0), Color("9e9e9e"), 6)
+			UiKit.round_rect_outline(ci, Rect2(x, y, kw, 27.0), Color("e6e6e6"), 6, 2,
+					UiKit.INK)
+			UiKit.text(ci, name, Vector2(x + kw / 2.0, y + 19.0), 13, UiKit.INK, true, 1)
+			x += kw + 4.0
+			if k < keys.size() - 1 and str(keys[k + 1]) != "":
+				UiKit.text(ci, "/", Vector2(x + 2.0, y + 20.0), 13, UiKit.TEXT)
+				x += 12.0
+		UiKit.text(ci, str(rows[i][1]), Vector2(x + 8.0, y + 21.0), 15, UiKit.TEXT, true, 0,
+				250.0 - (x - col * 270.0))
+
+
+## 금 트로피 — 컵 + 손잡이 + 받침 (피그마 TOP SCORE 아이콘).
+func _draw_trophy(ci: CanvasItem, c: Vector2, r: float) -> void:
+	var gold := UiKit.GOLD
+	var deep := UiKit.GOLD_DEEP
+	# 손잡이 (컵 뒤).
+	ci.draw_arc(c + Vector2(-r * 0.7, -r * 0.35), r * 0.45, PI * 0.5, PI * 1.5, 12, deep, 4.0)
+	ci.draw_arc(c + Vector2(r * 0.7, -r * 0.35), r * 0.45, -PI * 0.5, PI * 0.5, 12, deep, 4.0)
+	# 컵 — 위가 넓고 아래로 오므라든다.
+	ci.draw_colored_polygon(PackedVector2Array([
+			c + Vector2(-r * 0.8, -r), c + Vector2(r * 0.8, -r),
+			c + Vector2(r * 0.5, r * 0.25), c + Vector2(-r * 0.5, r * 0.25)]), gold)
+	ci.draw_rect(Rect2(c + Vector2(-r * 0.8, -r), Vector2(r * 1.6, r * 0.28)), Color(1, 1, 1, 0.35))
+	# 기둥 + 받침.
+	ci.draw_rect(Rect2(c + Vector2(-r * 0.16, r * 0.25), Vector2(r * 0.32, r * 0.4)), deep)
+	UiKit.round_rect(ci, Rect2(c + Vector2(-r * 0.6, r * 0.65), Vector2(r * 1.2, r * 0.32)), deep,
+			3)
+
+
+## 액션의 n번째 키 이름 (없으면 빈 문자열).
+func _key(act: String, slot: int) -> String:
+	var row := {"act": act, "slot": slot}
+	var code := KeyBinds.code_of(GameState.keybinds, row)
+	if code <= 0:
+		return ""
+	return KeyBinds.key_name(code)
+
+
 func _draw_hud_cards() -> void:
-	var box := UiKit.panel_box(UiKit.WHITE, 26, 0.0)
+	var box := UiKit.card_box(UiKit.WHITE, 24)
 	for g: Dictionary in hud_groups:
 		var r := _group_rect(g)
+		if g.get("full", false) and r.size.x > 0.0:
+			var vh := get_viewport_rect().size.y
+			r = Rect2(r.position.x, 40.0, r.size.x, vh - 80.0)
 		if r.size.x > 0.0:
 			hud_cards.draw_style_box(box, r)
+	var vp := get_viewport_rect().size
+	if vp.y > vp.x:
+		return
+	# 가로 화면: 줄 사이 구분선 + TOP SCORE 트로피.
+	for dy: float in hud_dividers:
+		if dy > record_label.position.y - 4.0:
+			continue
+		hud_cards.draw_line(Vector2(HUD_COL_X, dy), Vector2(HUD_COL_X + HUD_COL_W, dy),
+				Color("e6e6e6"), 2.0)
+	if best_label.visible:
+		_draw_trophy(hud_cards, Vector2(HUD_COL_X + 16.0, best_label.position.y + 22.0), 15.0)
 
 
 ## 묶음이 차지하는 자리 + 여백. 열은 폭을 고정해(`w`) 짧은 숫자 하나 때문에
@@ -683,11 +798,14 @@ func _to_title() -> void:
 func _fit_board() -> void:
 	var vp := get_viewport_rect().size
 	var portrait := vp.y > vp.x
-	var top := 200.0 if portrait else 40.0
-	var bottom := 1410.0 if portrait else vp.y - 56.0
+	# 가로: 피그마 우물 틀이 (640,40)~(1196,1040) — 틀(8)+안쪽 여백(10)을 빼고 보드를 앉힌다.
+	var frame := EscapeBoard.FRAME_OUT if not portrait else 0.0
+	var top := 200.0 if portrait else 40.0 + frame
+	var bottom := 1410.0 if portrait else vp.y - 40.0 - frame
 	var s := minf(1.0, (bottom - top) / (board.rows * EscapeBoard.CELL))
 	board.scale = Vector2(s, s)
-	board.position = Vector2((vp.x - EscapeBoard.COLS * EscapeBoard.CELL * s) / 2.0, top)
+	var cx := vp.x / 2.0 if portrait else 918.0 * vp.x / 1920.0
+	board.position = Vector2(cx - EscapeBoard.COLS * EscapeBoard.CELL * s / 2.0, top)
 	# 흔들림은 이 자리를 기준으로 보드 노드를 민다 (무한은 카메라가 대신 흔들린다).
 	board.base_pos = board.position
 	if portrait:
@@ -744,7 +862,7 @@ func _build_skip_level_button() -> void:
 	btn.modulate.a = 0.85
 	if vp.x > vp.y:
 		# 좌상단은 유저 HUD 카드 자리 — 그 아래로 내려 앉힌다.
-		btn.position = Vector2(40.0, 132.0)
+		btn.position = Vector2(52.0, 176.0)
 		btn.size = Vector2(240.0, 48.0)
 	else:
 		# Portrait: down the left margin, clear of the NEXT card and the well.

@@ -7,6 +7,7 @@ extends Node
 const RATE := 22050
 const POOL_SIZE := 12
 const BGM_FADE := 0.8
+const LOOP_TAIL := 256  # samples copied past loop_end (see _wav)
 
 enum { SINE, SQUARE, TRIANGLE, SAW, NOISE }
 
@@ -150,6 +151,14 @@ func _add_tone(buf: PackedFloat32Array, t0: float, dur: float, f0: float,
 
 
 func _wav(buf: PackedFloat32Array, looped := false) -> AudioStreamWAV:
+	var loop_len := buf.size()
+	if looped:
+		# Loop end flush with the last sample made the Android mixer read past
+		# the buffer at the wrap point (SIGSEGV on the AudioTrack thread). Tail
+		# the loop with a copy of its head so the resampler's look-ahead stays
+		# in bounds and still hears the right samples.
+		buf = buf.duplicate()
+		buf.append_array(buf.slice(0, LOOP_TAIL))
 	var bytes := PackedByteArray()
 	bytes.resize(buf.size() * 2)
 	for i in buf.size():
@@ -162,7 +171,7 @@ func _wav(buf: PackedFloat32Array, looped := false) -> AudioStreamWAV:
 	if looped:
 		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		wav.loop_begin = 0
-		wav.loop_end = buf.size()
+		wav.loop_end = loop_len
 	return wav
 
 

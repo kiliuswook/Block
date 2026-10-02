@@ -12,8 +12,10 @@ extends RefCounted
 
 ## 시트 파츠 배치표 — 나만의 캐릭터가 어떤 레이어를 빌릴 수 있는지 확인한다.
 const CatLayouts := preload("res://core/scripts/cat_layouts.gd")
-## [임시 · 진짜 파츠 아트가 나오면 제거] 부위마다 5~6개씩 더 얹은 임시 파츠 카탈로그.
-const TempParts := preload("res://core/scripts/temp_parts.gd")
+## 히든 파츠 세트 배치표 — 옵션의 "src"가 세트 id(hidden_a01 …)를 가리킬 수 있다.
+const HiddenLayouts := preload("res://core/scripts/hidden_layouts.gd")
+## 신규 냥이 10종(char07~16)의 배치표 — tools/gen_cat_layers.py 자동 생성.
+const GenLayouts := preload("res://core/scripts/gen_layouts.gd")
 
 const RARITY_NAMES: Array[String] = ["CAT_RARITY_0", "CAT_RARITY_1",
 		"CAT_RARITY_2", "CAT_RARITY_3"]
@@ -27,6 +29,9 @@ const RARITY_COLS: Array[Color] = [
 const BODY_COLS: Array[Color] = [  # Cat_Body_SkinFill
 	Color("fbf6ee"), Color("2f2c33"), Color("f0932b"),
 	Color("f0e2d0"), Color("aeb6c2"),
+	# 신규 10종 (char07~16) — 흰 몸(화가·비·젖소)은 위의 fbf6ee를 같이 쓴다
+	Color("fdecad"), Color("c48a41"), Color("8fa6c2"), Color("2d3543"),
+	Color("fddae2"), Color("d6c7ed"), Color("f0c164"),
 ]
 const EAR_COLS: Array[Color] = [  # Cat_Body_Pattern / Cat_Tail_Pattern (귀·꼬리)
 	Color("e8d9c8"), Color("f3b53f"), Color("26232c"), Color("d0781c"),
@@ -41,6 +46,7 @@ const EYE_COLS: Array[Color] = [  # Cat_Eyes_Color
 const PAD_COLS: Array[Color] = [  # Cat_Feet_Pawpad
 	Color("fdfbf8"), Color("fe856d"), Color("fe9883"), Color("fdb3a2"),
 	Color("d2a08c"),
+	Color("fb6ba1"), Color("f38088"), Color("fd9ea4"),  # 신규 10종
 ]
 const CHEEK_COLS: Array[Color] = [Color("feb8ad")]  # Cat_Cheek
 const WHISKER_COLS: Array[Color] = [Color("2c2a33")]  # Cat_Whiskers
@@ -60,24 +66,58 @@ const PARTS: Array[Dictionary] = [
 	# --- Prop_Back ------------------------------------------------------------
 	{"key": "back", "name": "CAT_PART_BACK", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "등은 가볍게."},
-		{"id": "pillow", "src": "char04", "name": "베개", "r": 1, "d": "Char04가 늘 베고 다니는 베개."}]},
+		{"id": "pillow", "src": "char04", "name": "베개", "r": 1, "d": "Char04가 늘 베고 다니는 베개."},
+		{"id": "pizza_box", "src": "hidden_d01", "hidden": true, "name": "피자 상자", "r": 1, "d": "히든 · 뚜껑 열린 피자 한 판."},
+		{"id": "pizza_box_side", "src": "hidden_d02", "hidden": true, "name": "옆으로 든 피자 상자", "r": 1, "d": "히든 · 배달 중인 피자 상자."},
+		{"id": "pizza_box_open", "src": "hidden_d03", "hidden": true, "name": "활짝 연 피자 상자", "r": 1, "d": "히든 · 한 조각 빈 피자 상자."},
+		{"id": "katana", "src": "char10", "name": "카타나", "r": 2, "d": "Char10의 2nd 파츠."},
+		{"id": "umbrella", "src": "char15", "name": "노란 우산", "r": 1, "d": "Char15의 2nd 파츠."}]},
 	# --- Cat_Tail (해금 3단계 파츠) ---------------------------------------------
 	{"key": "tail", "name": "CAT_PART_TAIL", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "꼬리는 아직 자라는 중."},
 		{"id": "curl", "src": "char01", "name": "말린 꼬리", "r": 1, "d": "Char01·02·04·05의 3rd 파츠."},
-		{"id": "ring", "src": "char03", "name": "고리 꼬리", "r": 1, "d": "Char03·06의 3rd 파츠."}]},
+		{"id": "ring", "src": "char03", "name": "고리 꼬리", "r": 1, "d": "Char03·06의 3rd 파츠."},
+		{"id": "fluffy", "src": "char07", "name": "복슬 꼬리", "r": 1, "d": "Char07의 3rd 파츠."},
+		{"id": "tabby_ring", "src": "char08", "name": "태비 꼬리", "r": 1, "d": "Char08의 3rd 파츠."},
+		{"id": "blue_curl", "src": "char09", "name": "블루 말린 꼬리", "r": 1, "d": "Char09의 3rd 파츠."},
+		{"id": "zigzag", "src": "char10", "name": "지그재그 꼬리", "r": 1, "d": "Char10의 3rd 파츠."},
+		{"id": "calico", "src": "char11", "name": "삼색 줄 꼬리", "r": 1, "d": "Char11의 3rd 파츠."},
+		{"id": "ribbon", "src": "char12", "name": "리본 꼬리", "r": 1, "d": "Char12의 3rd 파츠."},
+		{"id": "s_curl", "src": "char13", "name": "S자 꼬리", "r": 1, "d": "Char13의 3rd 파츠."},
+		{"id": "spotted", "src": "char14", "name": "반점 꼬리", "r": 1, "d": "Char14의 3rd 파츠."},
+		{"id": "gray_curl", "src": "char15", "name": "회색 말린 꼬리", "r": 1, "d": "Char15의 3rd 파츠."},
+		{"id": "tuft", "src": "char16", "name": "술 꼬리", "r": 1, "d": "Char16의 3rd 파츠."}]},
 	# --- Cat_Body -------------------------------------------------------------
 	{"key": "body", "name": "CAT_PART_BODY", "type": "color", "cols": BODY_COLS},
 	{"key": "ear_shape", "name": "CAT_PART_EAR_SHAPE", "type": "style", "opts": [
 		{"id": "round", "src": "char04", "name": "동글 귀", "d": "Char04·05·06의 둥근 실루엣."},
 		{"id": "folded", "src": "char01", "name": "접힌 귀", "r": 1, "d": "Char01의 노란 접힌 귀."},
-		{"id": "pointy", "src": "char03", "name": "쫑긋 귀", "d": "Char02·03의 뾰족 귀."}]},
+		{"id": "pointy", "src": "char03", "name": "쫑긋 귀", "d": "Char02·03의 뾰족 귀."},
+		{"id": "baker_body", "src": "char07", "name": "제빵사냥 귀", "d": "Char07의 몸 실루엣."},
+		{"id": "pirate_body", "src": "char08", "name": "해적 선장냥 귀", "d": "Char08의 몸 실루엣."},
+		{"id": "space_body", "src": "char09", "name": "우주냥 귀", "d": "Char09의 몸 실루엣."},
+		{"id": "ninja_body", "src": "char10", "name": "닌자냥 귀", "d": "Char10의 몸 실루엣."},
+		{"id": "painter_body", "src": "char11", "name": "화가냥 귀", "d": "Char11의 몸 실루엣."},
+		{"id": "strawberry_body", "src": "char12", "name": "딸기우유냥 귀", "d": "Char12의 몸 실루엣."},
+		{"id": "prince_body", "src": "char13", "name": "왕자냥 귀", "d": "Char13의 몸 실루엣."},
+		{"id": "summer_body", "src": "char14", "name": "여름휴가냥 귀", "d": "Char14의 몸 실루엣."},
+		{"id": "rainy_body", "src": "char15", "name": "비 오는 날냥 귀", "d": "Char15의 몸 실루엣."},
+		{"id": "cow_body", "src": "char16", "name": "젖소냥 귀", "d": "Char16의 몸 실루엣."}]},
 	{"key": "ear", "name": "CAT_PART_EAR", "type": "color", "cols": EAR_COLS},
 	{"key": "pattern", "name": "CAT_PART_PATTERN", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "순수 단색 원단."},
 		{"id": "tabby_head", "src": "char03", "name": "이마 태비", "d": "Char03·06의 줄무늬."},
 		{"id": "tuxedo_face", "src": "char02", "name": "턱시도 얼굴", "r": 1, "d": "Char02의 흰 얼굴."},
-		{"id": "siamese", "src": "char05", "name": "샴 마스크", "r": 1, "d": "Char05의 짙은 얼굴."}]},
+		{"id": "siamese", "src": "char05", "name": "샴 마스크", "r": 1, "d": "Char05의 짙은 얼굴."},
+		{"id": "baker_pattern", "src": "char07", "name": "캐러멜 태비", "r": 1, "d": "Char07의 무늬."},
+		{"id": "pirate_pattern", "src": "char08", "name": "갈색 태비", "r": 1, "d": "Char08의 무늬."},
+		{"id": "space_pattern", "src": "char09", "name": "블루그레이 귀", "r": 1, "d": "Char09의 무늬."},
+		{"id": "painter_pattern", "src": "char11", "name": "삼색 얼룩", "r": 1, "d": "Char11의 무늬."},
+		{"id": "strawberry_pattern", "src": "char12", "name": "딸기 귀", "r": 1, "d": "Char12의 무늬."},
+		{"id": "prince_pattern", "src": "char13", "name": "라일락 귀", "r": 1, "d": "Char13의 무늬."},
+		{"id": "summer_pattern", "src": "char14", "name": "표범 반점", "r": 1, "d": "Char14의 무늬."},
+		{"id": "rainy_pattern", "src": "char15", "name": "회색 턱시도", "r": 1, "d": "Char15의 무늬."},
+		{"id": "cow_pattern", "src": "char16", "name": "젖소 반점", "r": 1, "d": "Char16의 무늬."}]},
 	{"key": "pattern_col", "name": "CAT_PART_PATTERN_COL", "type": "color",
 		"cols": PATTERN_COLS},
 	# --- Cat_Prop_Belly / Cat_Prop_Chest ---------------------------------------
@@ -88,11 +128,29 @@ const PARTS: Array[Dictionary] = [
 		{"id": "keyboard", "src": "char03", "name": "키보드", "r": 1, "d": "Char03의 2nd 파츠."},
 		{"id": "lantern", "src": "char04", "name": "랜턴", "r": 2, "u": true, "d": "Char04의 2nd 파츠."},
 		{"id": "orb", "src": "char05", "name": "수정 구슬", "r": 2, "u": true, "d": "Char05의 2nd 파츠."},
-		{"id": "book", "src": "char06", "name": "책", "r": 1, "d": "Char06의 2nd 파츠."}]},
+		{"id": "book", "src": "char06", "name": "책", "r": 1, "d": "Char06의 2nd 파츠."},
+		{"id": "ramen", "src": "hidden_a01", "hidden": true, "name": "라면 그릇", "r": 1, "d": "히든 · 김 오르는 라면 한 그릇."},
+		{"id": "ramen_black", "src": "hidden_a02", "hidden": true, "name": "검은 라면 그릇", "r": 1, "d": "히든 · 무늬 그릇에 담은 라면."},
+		{"id": "ramen_egg", "src": "hidden_a03", "hidden": true, "name": "계란 라면", "r": 1, "d": "히든 · 반숙 달걀을 올린 라면."},
+		{"id": "candy_pile", "src": "hidden_b01", "hidden": true, "name": "사탕 더미", "r": 1, "d": "히든 · 뽑아 온 사탕이 한가득."},
+		{"id": "capsule_heart", "src": "hidden_b02", "hidden": true, "name": "하트 캡슐", "r": 2, "d": "히든 · 하트가 든 캡슐."},
+		{"id": "capsule_star", "src": "hidden_b03", "hidden": true, "name": "별 캡슐", "r": 2, "d": "히든 · 별이 든 캡슐."},
+		{"id": "pizza_slice", "src": "hidden_d01", "hidden": true, "name": "피자 한 조각", "r": 1, "d": "히든 · 치즈가 늘어나는 한 조각."},
+		{"id": "pizza_mushroom", "src": "hidden_d02", "hidden": true, "name": "버섯 피자", "r": 1, "d": "히든 · 버섯 올린 한 조각."},
+		{"id": "pizza_pineapple", "src": "hidden_d03", "hidden": true, "name": "파인애플 피자", "r": 1, "d": "히든 · 논쟁의 그 조각."},
+		{"id": "cupcake", "src": "char07", "name": "컵케이크", "r": 1, "d": "Char07의 2nd 파츠."},
+		{"id": "treasure", "src": "char08", "name": "보물 상자", "r": 1, "d": "Char08의 2nd 파츠."},
+		{"id": "rocket", "src": "char09", "name": "로켓", "r": 1, "d": "Char09의 2nd 파츠."},
+		{"id": "palette", "src": "char11", "name": "팔레트", "r": 1, "d": "Char11의 2nd 파츠."},
+		{"id": "berry_milk", "src": "char12", "name": "딸기우유", "r": 1, "d": "Char12의 2nd 파츠."},
+		{"id": "watermelon", "src": "char14", "name": "수박", "r": 1, "d": "Char14의 2nd 파츠."}]},
 	{"key": "chest", "name": "CAT_PART_CHEST", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "가슴팍은 비워둔다."},
 		{"id": "badge", "src": "char02", "name": "경찰 배지", "r": 2, "u": true, "d": "Char02의 1st 파츠."},
-		{"id": "bowtie", "src": "char06", "name": "나비넥타이", "r": 1, "d": "Char06의 1st 파츠."}]},
+		{"id": "bowtie", "src": "char06", "name": "나비넥타이", "r": 1, "d": "Char06의 1st 파츠."},
+		{"id": "cape", "src": "char13", "name": "왕실 망토", "r": 2, "d": "Char13의 2nd 파츠."},
+		{"id": "lei", "src": "char14", "name": "꽃 레이", "r": 1, "d": "Char14의 1st 파츠."},
+		{"id": "cowbell", "src": "char16", "name": "방울 목줄", "r": 1, "d": "Char16의 1st 파츠."}]},
 	# --- Cat_Feet -------------------------------------------------------------
 	{"key": "pad_col", "name": "CAT_PART_PAD_COL", "type": "color", "cols": PAD_COLS},
 	# --- 얼굴 (Cheek → Whiskers → Mouse → Nose → Eyes → Deco_Forehead) ----------
@@ -100,14 +158,43 @@ const PARTS: Array[Dictionary] = [
 		"cols": CHEEK_COLS},
 	{"key": "whisker", "name": "CAT_PART_WHISKER", "type": "style", "opts": [
 		{"id": "basic", "src": "char01", "name": "기본", "d": "단정한 기본 수염."},
-		{"id": "droop", "src": "char04", "name": "처진 수염", "d": "Char04의 나른한 수염."}]},
+		{"id": "droop", "src": "char04", "name": "처진 수염", "d": "Char04의 나른한 수염."},
+		{"id": "baker_whisker", "src": "char07", "name": "제빵사냥 수염", "d": "Char07의 수염."},
+		{"id": "pirate_whisker", "src": "char08", "name": "해적 선장냥 수염", "d": "Char08의 수염."},
+		{"id": "space_whisker", "src": "char09", "name": "우주냥 수염", "d": "Char09의 수염."},
+		{"id": "ninja_whisker", "src": "char10", "name": "닌자냥 수염", "d": "Char10의 수염."},
+		{"id": "painter_whisker", "src": "char11", "name": "화가냥 수염", "d": "Char11의 수염."},
+		{"id": "strawberry_whisker", "src": "char12", "name": "딸기우유냥 수염", "d": "Char12의 수염."},
+		{"id": "prince_whisker", "src": "char13", "name": "왕자냥 수염", "d": "Char13의 수염."},
+		{"id": "summer_whisker", "src": "char14", "name": "여름휴가냥 수염", "d": "Char14의 수염."},
+		{"id": "rainy_whisker", "src": "char15", "name": "비 오는 날냥 수염", "d": "Char15의 수염."},
+		{"id": "cow_whisker", "src": "char16", "name": "젖소냥 수염", "d": "Char16의 수염."}]},
 	{"key": "whisker_col", "name": "CAT_PART_WHISKER_COL", "type": "color",
 		"cols": WHISKER_COLS},
 	{"key": "mouth", "name": "CAT_PART_MOUTH", "type": "style", "opts": [
 		{"id": "w", "src": "char01", "name": "야옹입", "d": "Char01·02·05의 기본 입."},
 		{"id": "open_smile", "src": "char03", "name": "활짝 웃음", "d": "Char03의 만개한 미소."},
 		{"id": "yawn", "src": "char04", "name": "하품", "d": "Char04의 새벽 3시."},
-		{"id": "neutral", "src": "char06", "name": "무심", "d": "Char06의 쿨한 입."}]},
+		{"id": "neutral", "src": "char06", "name": "무심", "d": "Char06의 쿨한 입."},
+		{"id": "o_mouth", "src": "hidden_a01", "hidden": true, "name": "동그란 입", "r": 0, "d": "히든 · 라면 냄새에 벌어진 입."},
+		{"id": "hat_mouth", "src": "hidden_a02", "hidden": true, "name": "^ 입", "r": 0, "d": "히든 · 새침한 입."},
+		{"id": "noodle_mouth", "src": "hidden_a03", "hidden": true, "name": "면 먹는 입", "r": 1, "d": "히든 · 후루룩."},
+		{"id": "fang_open", "src": "hidden_b01", "hidden": true, "name": "송곳니 입", "r": 1, "d": "히든 · 이를 드러낸 입."},
+		{"id": "fang_small", "src": "hidden_b02", "hidden": true, "name": "작은 송곳니", "r": 1, "d": "히든 · 살짝 보이는 덧니."},
+		{"id": "tongue_out", "src": "hidden_b03", "hidden": true, "name": "메롱", "r": 1, "d": "히든 · 혀를 내민 입."},
+		{"id": "cat_w", "src": "hidden_d01", "hidden": true, "name": "ω 입", "r": 0, "d": "히든 · 고양이 입."},
+		{"id": "smile_arc", "src": "hidden_d02", "hidden": true, "name": "방긋", "r": 0, "d": "히든 · 얌전한 미소."},
+		{"id": "drool", "src": "hidden_d03", "hidden": true, "name": "침 흘리는 입", "r": 1, "d": "히든 · 피자 앞에서 참을 수 없다."},
+		{"id": "baker_mouth", "src": "char07", "name": "방긋 야옹입", "d": "Char07의 입."},
+		{"id": "pirate_mouth", "src": "char08", "name": "선장 야옹입", "d": "Char08의 입."},
+		{"id": "space_mouth", "src": "char09", "name": "우주 야옹입", "d": "Char09의 입."},
+		{"id": "ninja_mouth", "src": "char10", "name": "닌자 입", "d": "Char10의 입."},
+		{"id": "painter_mouth", "src": "char11", "name": "활짝 웃는 입", "d": "Char11의 입."},
+		{"id": "strawberry_mouth", "src": "char12", "name": "딸기 야옹입", "d": "Char12의 입."},
+		{"id": "prince_mouth", "src": "char13", "name": "새침한 미소", "d": "Char13의 입."},
+		{"id": "summer_mouth", "src": "char14", "name": "신난 입", "d": "Char14의 입."},
+		{"id": "rainy_mouth", "src": "char15", "name": "o 입", "d": "Char15의 입."},
+		{"id": "cow_mouth", "src": "char16", "name": "젖소 야옹입", "d": "Char16의 입."}]},
 	{"key": "mouth_col", "name": "CAT_PART_MOUTH_COL", "type": "color",
 		"cols": MOUTH_COLS},
 	{"key": "nose_col", "name": "CAT_PART_NOSE_COL", "type": "color", "cols": NOSE_COLS},
@@ -117,22 +204,66 @@ const PARTS: Array[Dictionary] = [
 		{"id": "squint", "src": "char03", "name": "><눈", "d": "Char03의 기분 최고 눈."},
 		{"id": "sleep", "src": "char04", "name": "감은눈", "d": "Char04의 잠든 눈."},
 		{"id": "star", "src": "char05", "name": "별눈", "r": 2, "u": true, "d": "Char05의 별 박은 눈."},
-		{"id": "tired", "src": "char06", "name": "졸린눈", "d": "Char06의 반쯤 감긴 눈."}]},
+		{"id": "tired", "src": "char06", "name": "졸린눈", "d": "Char06의 반쯤 감긴 눈."},
+		{"id": "ramen_sparkle", "src": "hidden_a01", "hidden": true, "name": "초롱눈", "r": 1, "d": "히든 · 라면을 본 눈."},
+		{"id": "ramen_sleepy", "src": "hidden_a02", "hidden": true, "name": "졸린 눈꺼풀", "r": 1, "d": "히든 · 반쯤 내려온 눈꺼풀."},
+		{"id": "ramen_squint", "src": "hidden_a03", "hidden": true, "name": "><눈 (라면)", "r": 0, "d": "히든 · 뜨거워서 감은 눈."},
+		{"id": "x_squint", "src": "hidden_b01", "hidden": true, "name": "×<눈", "r": 1, "d": "히든 · 뽑기에 실패한 눈."},
+		{"id": "spiral_eyes", "src": "hidden_b02", "hidden": true, "name": "빙글눈", "r": 1, "d": "히든 · 어질어질."},
+		{"id": "tear_squint", "src": "hidden_b03", "hidden": true, "name": "눈물 ><눈", "r": 1, "d": "히든 · 아깝게 놓친 눈."},
+		{"id": "happy_arc", "src": "hidden_d01", "hidden": true, "name": "웃는 눈", "r": 0, "d": "히든 · 기분 좋은 곡선."},
+		{"id": "dot_eyes", "src": "hidden_d02", "hidden": true, "name": "점눈", "r": 0, "d": "히든 · 작은 점 눈."},
+		{"id": "heart_eyes", "src": "hidden_d03", "hidden": true, "name": "하트눈", "r": 2, "d": "히든 · 피자에 반한 눈."},
+		{"id": "baker_eyes", "src": "char07", "name": "^^눈", "r": 1, "d": "Char07의 눈."},
+		{"id": "pirate_eyes", "src": "char08", "name": "선장 눈", "r": 1, "d": "Char08의 눈."},
+		{"id": "space_eyes", "src": "char09", "name": "초록 반짝눈", "r": 1, "d": "Char09의 눈."},
+		{"id": "ninja_eyes", "src": "char10", "name": "날카로운 눈", "r": 1, "d": "Char10의 눈."},
+		{"id": "painter_eyes", "src": "char11", "name": "동그란 눈", "r": 1, "d": "Char11의 눈."},
+		{"id": "strawberry_eyes", "src": "char12", "name": "핑크 반짝눈", "r": 1, "d": "Char12의 눈."},
+		{"id": "prince_eyes", "src": "char13", "name": "반쯤 뜬 눈", "r": 1, "d": "Char13의 눈."},
+		{"id": "summer_eyes", "src": "char14", "name": "윙크", "r": 1, "d": "Char14의 눈."},
+		{"id": "rainy_eyes", "src": "char15", "name": "글썽눈", "r": 1, "d": "Char15의 눈."},
+		{"id": "cow_eyes", "src": "char16", "name": "젖소 눈", "r": 1, "d": "Char16의 눈."}]},
 	{"key": "eye_col", "name": "CAT_PART_EYE_COL", "type": "color", "cols": EYE_COLS},
 	{"key": "mark", "name": "CAT_PART_MARK", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "깨끗한 이마."},
-		{"id": "moon", "src": "char04", "name": "초승달", "r": 1, "d": "Char04의 이마 달."}]},
+		{"id": "moon", "src": "char04", "name": "초승달", "r": 1, "d": "Char04의 이마 달."},
+		{"id": "star_mark", "src": "char09", "name": "이마 별", "r": 1, "d": "Char09의 기본 파츠."},
+		{"id": "paint_smudge", "src": "char11", "name": "물감 자국", "r": 1, "d": "Char11의 기본 파츠."},
+		{"id": "heart_mark", "src": "char12", "name": "이마 하트", "r": 1, "d": "Char12의 기본 파츠."}]},
 	# --- Prop_Face / Prop_Head --------------------------------------------------
 	{"key": "face", "name": "CAT_PART_FACE", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "민낯의 자신감."},
 		{"id": "sunglasses", "src": "char02", "name": "선글라스", "r": 2, "u": true, "d": "Char02의 2nd 파츠."},
-		{"id": "round_glasses", "src": "char06", "name": "동글 안경", "d": "Char06의 기본 파츠."}]},
+		{"id": "round_glasses", "src": "char06", "name": "동글 안경", "d": "Char06의 기본 파츠."},
+		{"id": "eye_patch", "src": "char08", "name": "안대", "r": 1, "d": "Char08의 기본 파츠."}]},
 	{"key": "head", "name": "CAT_PART_HEAD", "type": "style", "opts": [
 		{"id": "none", "name": "없음", "d": "머리는 가볍게."},
 		{"id": "headset", "src": "char03", "name": "게이밍 헤드셋", "r": 1, "d": "Char03의 1st 파츠."},
 		{"id": "sleep_mask", "src": "char04", "name": "수면 안대", "r": 1, "d": "Char04의 1st 파츠."},
 		{"id": "wizard", "src": "char05", "name": "마법사 모자", "r": 2, "u": true, "d": "Char05의 1st 파츠."},
-		{"id": "orange", "src": "char01", "name": "귤", "r": 1, "d": "Char01의 2nd 파츠."}]},
+		{"id": "orange", "src": "char01", "name": "귤", "r": 1, "d": "Char01의 2nd 파츠."},
+		{"id": "egg", "src": "hidden_a01", "hidden": true, "name": "계란 프라이", "r": 1, "d": "히든 · 머리 위 계란 프라이."},
+		{"id": "egg_drip", "src": "hidden_a02", "hidden": true, "name": "흘러내린 계란", "r": 1, "d": "히든 · 노른자가 흘러내린다."},
+		{"id": "egg_boiled", "src": "hidden_a03", "hidden": true, "name": "반숙 달걀", "r": 1, "d": "히든 · 반으로 자른 달걀."},
+		{"id": "claw", "src": "hidden_b01", "hidden": true, "name": "인형뽑기 집게", "r": 2, "d": "히든 · 머리를 노리는 집게."},
+		{"id": "claw_heart", "src": "hidden_b02", "hidden": true, "name": "하트 집게", "r": 2, "d": "히든 · 분홍 하트 집게."},
+		{"id": "claw_red", "src": "hidden_b03", "hidden": true, "name": "빨간 집게", "r": 2, "d": "히든 · 빨간 줄무늬 집게."},
+		{"id": "box_wow", "src": "hidden_c01", "hidden": true, "name": "놀란 상자", "r": 1, "d": "히든 · 깜짝 놀란 상자 얼굴."},
+		{"id": "box_smug", "src": "hidden_c02", "hidden": true, "name": "새침한 상자", "r": 1, "d": "히든 · 새침한 상자 얼굴."},
+		{"id": "box_love", "src": "hidden_c03", "hidden": true, "name": "반한 상자", "r": 2, "d": "히든 · 하트 선글라스 상자 얼굴."},
+		{"id": "cheese", "src": "hidden_d01", "hidden": true, "name": "치즈", "r": 1, "d": "히든 · 머리 위 치즈 한 덩이."},
+		{"id": "hot_sauce", "src": "hidden_d02", "hidden": true, "name": "핫소스", "r": 1, "d": "히든 · 매운 소스 한 병."},
+		{"id": "pickle_jar", "src": "hidden_d03", "hidden": true, "name": "피클 병", "r": 1, "d": "히든 · 피클 한 병."},
+		{"id": "chef_hat", "src": "char07", "name": "요리사 모자", "r": 1, "d": "Char07의 1st 파츠."},
+		{"id": "pirate_hat", "src": "char08", "name": "해적 삼각모", "r": 1, "d": "Char08의 1st 파츠."},
+		{"id": "antenna", "src": "char09", "name": "별 더듬이", "r": 1, "d": "Char09의 1st 파츠."},
+		{"id": "ninja_band", "src": "char10", "name": "닌자 머리띠", "r": 1, "d": "Char10의 1st 파츠."},
+		{"id": "beret", "src": "char11", "name": "베레모", "r": 1, "d": "Char11의 1st 파츠."},
+		{"id": "berry_beanie", "src": "char12", "name": "딸기 비니", "r": 1, "d": "Char12의 1st 파츠."},
+		{"id": "crown", "src": "char13", "name": "왕관", "r": 2, "d": "Char13의 1st 파츠."},
+		{"id": "rain_hat", "src": "char15", "name": "레인햇", "r": 1, "d": "Char15의 1st 파츠."},
+		{"id": "bucket_hat", "src": "char16", "name": "데이지 벙거지", "r": 1, "d": "Char16의 2nd 파츠."}]},
 ]
 
 ## 커스터마이저가 보여주는 "부위" 묶음 — 냥이 몸에서 같은 자리를 가리키는
@@ -173,7 +304,7 @@ const GROUPS: Array[Dictionary] = [
 ]
 
 
-## 컨셉 시트의 디자인 캐릭터들. parts = 디폴트 비주얼,
+## 디자인 캐릭터들 (char01~06 = 컨셉 시트, char07~16 = 신규 10종). parts = 디폴트 비주얼,
 ## tiers = 키캡 도감을 완성할 때마다 순서대로 붙는 1st / 2nd / 3rd 파츠.
 const CHARS: Dictionary = {
 	"char01": {  # 우유냥 — 접힌 노란 귀, 머그컵과 귤
@@ -268,160 +399,165 @@ const CHARS: Dictionary = {
 		},
 		"tiers": [{"chest": "bowtie"}, {"hold": "book"}, {"tail": "ring"}],
 	},
+	# ── 신규 10종 (char07~char16) ─────────────────────────────────────────────
+	# 생성 컨셉(리소스/new_chars, docs/new_cats_10.md). 파츠 레이어는 Higgsfield로 부위를
+	# 떼어 내 완성 렌더에 정합한 것이다(tools/gen_cat_layers.py → gen_layouts.gd). 몸·눈·입·
+	# 수염·무늬·소품이 전부 이 냥이 자신의 옵션("<id>_body" …)을 가리키므로 나만의 캐릭터에
+	# "원본 냥이"로 불러오면 원본 그대로 조립된다. 색은 레이어에서 잰 값이다.
+	"char07": {  # 제빵사냥 — 버터 크림 몸, 요리사 모자·컵케이크
+		"name": "CAT_BAKER",
+		"parts": {
+			"body_col": Color("fdecad"), "ear_col": Color("c98b4f"),
+			"tail_col": Color("c98b4f"), "foot_col": Color("fef6c4"),
+			"pad_col": Color("fb6ba1"),
+			"ear": "baker_body", "eyes": "baker_eyes", "eye_col": Color("241f28"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "baker_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "baker_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "baker_pattern", "pattern_col": Color("c98b4f"), "tail": "none",
+		},
+		"tiers": [{"head": "chef_hat"}, {"hold": "cupcake"}, {"tail": "fluffy"}],
+	},
+	"char08": {  # 해적 선장냥 — 브라운 태비, 안대·삼각모·보물 상자
+		"name": "CAT_PIRATE",
+		"parts": {
+			"body_col": Color("c48a41"), "ear_col": Color("7a4f2e"),
+			"tail_col": Color("b07a4a"), "foot_col": Color("fefcef"),
+			"pad_col": Color("fc9ba1"),
+			"ear": "pirate_body", "eyes": "pirate_eyes", "eye_col": Color("241f28"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "pirate_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "pirate_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "pirate_pattern", "pattern_col": Color("7a4f2e"), "tail": "none", "face": "eye_patch",
+		},
+		"tiers": [{"head": "pirate_hat"}, {"hold": "treasure"}, {"tail": "tabby_ring"}],
+	},
+	"char09": {  # 우주냥 — 러시안 블루, 별 더듬이·로켓
+		"name": "CAT_SPACE",
+		"parts": {
+			"body_col": Color("8fa6c2"), "ear_col": Color("6c7a96"),
+			"tail_col": Color("8d9cb8"), "foot_col": Color("fcfaf2"),
+			"pad_col": Color("fda4a7"),
+			"ear": "space_body", "eyes": "space_eyes", "eye_col": Color("3aa35a"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "space_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "space_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "space_pattern", "tail": "none", "mark": "star_mark",
+		},
+		"tiers": [{"head": "antenna"}, {"hold": "rocket"}, {"tail": "blue_curl"}],
+	},
+	"char10": {  # 닌자냥 — 차콜 단색, 빨간 머리띠·등 카타나
+		"name": "CAT_NINJA",
+		"parts": {
+			"body_col": Color("2d3543"), "ear_col": Color("26232c"),
+			"tail_col": Color("34364a"), "foot_col": Color("fdfaf2"),
+			"pad_col": Color("fd9e95"),
+			"ear": "ninja_body", "eyes": "ninja_eyes", "eye_col": Color("b8e04a"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "ninja_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "ninja_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "none", "tail": "none",
+		},
+		"tiers": [{"head": "ninja_band"}, {"back": "katana"}, {"tail": "zigzag"}],
+	},
+	"char11": {  # 화가냥 — 삼색, 베레모·팔레트
+		"name": "CAT_PAINTER",
+		"parts": {
+			"body_col": Color("fefdf5"), "ear_col": Color("f0932b"),
+			"tail_col": Color("f0932b"), "foot_col": Color("fefef6"),
+			"pad_col": Color("fd9392"),
+			"ear": "painter_body", "eyes": "painter_eyes", "eye_col": Color("241f28"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "painter_mouth", "mouth_col": Color("eb6000"),
+			"whisker": "painter_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "painter_pattern", "tail": "none", "mark": "paint_smudge",
+		},
+		"tiers": [{"head": "beret"}, {"hold": "palette"}, {"tail": "calico"}],
+	},
+	"char12": {  # 딸기우유냥 — 파스텔 핑크, 딸기 비니·딸기우유
+		"name": "CAT_STRAWBERRY",
+		"parts": {
+			"body_col": Color("fddae2"), "ear_col": Color("e98aa4"),
+			"tail_col": Color("f7c1cf"), "foot_col": Color("fddcdc"),
+			"pad_col": Color("f38088"),
+			"ear": "strawberry_body", "eyes": "strawberry_eyes", "eye_col": Color("e0607e"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "strawberry_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "strawberry_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "strawberry_pattern", "tail": "none", "mark": "heart_mark",
+		},
+		"tiers": [{"head": "berry_beanie"}, {"hold": "berry_milk"}, {"tail": "ribbon"}],
+	},
+	"char13": {  # 왕자냥 — 라일락, 왕관·망토
+		"name": "CAT_PRINCE",
+		"parts": {
+			"body_col": Color("d6c7ed"), "ear_col": Color("9a82c4"),
+			"tail_col": Color("cdbde6"), "foot_col": Color("fefdfc"),
+			"pad_col": Color("fd9ea4"),
+			"ear": "prince_body", "eyes": "prince_eyes", "eye_col": Color("7a4fc0"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "prince_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "prince_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "prince_pattern", "tail": "none",
+		},
+		"tiers": [{"head": "crown"}, {"chest": "cape"}, {"tail": "s_curl"}],
+	},
+	"char14": {  # 여름휴가냥 — 벵갈 반점, 꽃 레이·수박
+		"name": "CAT_SUMMER",
+		"parts": {
+			"body_col": Color("f0c164"), "ear_col": Color("8a5a34"),
+			"tail_col": Color("e6b872"), "foot_col": Color("fefcf1"),
+			"pad_col": Color("fda4a4"),
+			"ear": "summer_body", "eyes": "summer_eyes", "eye_col": Color("241f28"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "summer_mouth", "mouth_col": Color("eb6000"),
+			"whisker": "summer_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "summer_pattern", "pattern_col": Color("8a5a34"), "tail": "none",
+		},
+		"tiers": [{"chest": "lei"}, {"hold": "watermelon"}, {"tail": "spotted"}],
+	},
+	"char15": {  # 비 오는 날냥 — 회색·흰 바이컬러, 레인햇·우산
+		"name": "CAT_RAINY",
+		"parts": {
+			"body_col": Color("fdfdf4"), "ear_col": Color("7e8694"),
+			"tail_col": Color("9aa3ad"), "foot_col": Color("fefdf1"),
+			"pad_col": Color("fc9995"),
+			"ear": "rainy_body", "eyes": "rainy_eyes", "eye_col": Color("5a8ed0"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "rainy_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "rainy_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "rainy_pattern", "pattern_col": Color("fbf6ee"), "tail": "none",
+		},
+		"tiers": [{"head": "rain_hat"}, {"back": "umbrella"}, {"tail": "gray_curl"}],
+	},
+	"char16": {  # 젖소냥 — 흰 몸 + 검은 반점, 방울 목줄·벙거지
+		"name": "CAT_COW",
+		"parts": {
+			"body_col": Color("fefdf2"), "ear_col": Color("2f2c33"),
+			"tail_col": Color("fbf6ee"), "foot_col": Color("fefef5"),
+			"pad_col": Color("fda49a"),
+			"ear": "cow_body", "eyes": "cow_eyes", "eye_col": Color("241f28"),
+			"nose": "tri", "nose_col": Color("e58a86"),
+			"mouth": "cow_mouth", "mouth_col": Color("2c2a33"),
+			"whisker": "cow_whisker", "whisker_col": Color("2c2a33"),
+			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
+			"pattern": "cow_pattern", "tail": "none",
+		},
+		"tiers": [{"chest": "cowbell"}, {"head": "bucket_hat"}, {"tail": "tuft"}],
+	},
 }
 
 const TIER_MAX := 3
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# [임시 · 진짜 아트가 나오면 통째로 제거] 임시 캐릭터 char07 ~ char30
-# ------------------------------------------------------------------------------
-# 목표는 디자인 캐릭터 30종인데 컨셉 시트에는 아직 6종(char01~06)뿐이다.
-# 나머지 24마리는 "시트 파츠를 빌려 색만 갈아 끼운" 임시 조합이다 — 시트 그림이
-# 없으니 CatSprite.has()가 거짓이고, build_skin()이 나만의 캐릭터와 같은
-# 파츠 믹스(skin["mix"]) 경로로 그린다.
-#
-# ※ 제거할 때: 이 블록(TEMP_* / temp_chars / all_chars)과
-#    GameState.CATS의 "[임시]" 표시 구간, shared/locale/content.csv의
-#    CAT_TMP* 줄을 지우고 all_chars() 호출부를 CHARS로 되돌리면 된다.
-# ※ my_sources()는 일부러 CHARS만 훑는다 — 임시 캐릭터가 나만의 캐릭터의
-#    파츠 해금 출처로 새지 않게 하려는 것이다.
-# ══════════════════════════════════════════════════════════════════════════════
-
-const TEMP_FIRST := 7
-const TEMP_LAST := 30
-
-## 임시 캐릭터 한 줄 = 색 + 시트에 이미 있는 모양 옵션 조합.
-## b 몸 · e 귀/꼬리 · p 젤리 · ear 귀 모양 · ey 눈 · ec 눈 색 · m 입 · mc 입 색
-## · w 수염 · pt 무늬 · pc 무늬 색 · x 추가 파츠 · t 해금 3단계.
-const TEMP_DEFS: Array[Dictionary] = [
-	{"b": "a9dcc3", "e": "5fae8e", "p": "fdb3a2", "ear": "round", "ey": "oval",
-		"m": "w", "pt": "none", "x": {},
-		"t": [{"chest": "bowtie"}, {"head": "orange"}, {"tail": "curl"}]},
-	{"b": "cfc0e8", "e": "8f77c4", "p": "d2a08c", "ear": "pointy", "ey": "star",
-		"ec": "f0c53a", "m": "neutral", "mc": "6e5546", "pt": "tabby_head",
-		"pc": "8f77c4", "x": {},
-		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "ring"}]},
-	{"b": "ffd9c2", "e": "f3a06a", "p": "fe856d", "ear": "folded", "ey": "iris",
-		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
-		"t": [{"hold": "mug"}, {"head": "orange"}, {"tail": "curl"}]},
-	{"b": "bcd8f2", "e": "6f9fd0", "p": "fdfbf8", "ear": "round", "ey": "sleep",
-		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
-		"x": {"back": "pillow"},
-		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
-	{"b": "4a4750", "e": "26232c", "p": "fdfbf8", "ear": "pointy", "ey": "iris",
-		"ec": "f0c53a", "m": "w", "pt": "tuxedo_face", "pc": "fbf6ee", "x": {},
-		"t": [{"hold": "tie"}, {"face": "sunglasses"}, {"tail": "curl"}]},
-	{"b": "f6a8bb", "e": "d76b8a", "p": "fe9883", "ear": "round", "ey": "squint",
-		"m": "open_smile", "mc": "eb6000", "pt": "none", "x": {"mark": "moon"},
-		"t": [{"chest": "bowtie"}, {"head": "headset"}, {"tail": "ring"}]},
-	{"b": "c9a37a", "e": "8e6a4a", "p": "d2a08c", "ear": "folded", "ey": "tired",
-		"m": "neutral", "pt": "tabby_head", "pc": "8e6a4a",
-		"x": {"face": "round_glasses"},
-		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "ring"}]},
-	{"b": "7fc9c4", "e": "3f8f8f", "p": "fdfbf8", "ear": "pointy", "ey": "oval",
-		"m": "w", "pt": "siamese", "pc": "3f8f8f", "x": {},
-		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
-	{"b": "f7e08a", "e": "d9b53f", "p": "fe856d", "ear": "round", "ey": "star",
-		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
-		"t": [{"hold": "mug"}, {"head": "orange"}, {"tail": "curl"}]},
-	{"b": "9c6f9e", "e": "6b4470", "p": "d2a08c", "ear": "pointy", "ey": "iris",
-		"ec": "f0c53a", "m": "neutral", "mc": "6e5546", "w": "droop",
-		"pt": "siamese", "pc": "6b4470", "x": {},
-		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
-	{"b": "fdfdfd", "e": "cfd8e3", "p": "fdb3a2", "ear": "round", "ey": "sleep",
-		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
-		"x": {"back": "pillow"},
-		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
-	{"b": "f2854a", "e": "c05a24", "p": "fe9883", "ear": "pointy", "ey": "squint",
-		"m": "open_smile", "mc": "eb6000", "pt": "tabby_head", "pc": "c05a24",
-		"x": {},
-		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
-	{"b": "8fbf5a", "e": "5c8a30", "p": "fdb3a2", "ear": "folded", "ey": "oval",
-		"m": "w", "pt": "none", "x": {"mark": "moon"},
-		"t": [{"hold": "mug"}, {"chest": "bowtie"}, {"tail": "curl"}]},
-	{"b": "3b4a6b", "e": "22304a", "p": "fdfbf8", "ear": "pointy", "ey": "star",
-		"ec": "f0c53a", "m": "neutral", "pt": "tuxedo_face", "pc": "fbf6ee",
-		"x": {"face": "sunglasses"},
-		"t": [{"hold": "tie"}, {"chest": "badge"}, {"tail": "curl"}]},
-	{"b": "ff9d8a", "e": "d96a55", "p": "fe856d", "ear": "round", "ey": "iris",
-		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
-		"t": [{"chest": "bowtie"}, {"head": "orange"}, {"tail": "ring"}]},
-	{"b": "c8cdd4", "e": "949aa4", "p": "fdfbf8", "ear": "round", "ey": "tired",
-		"m": "neutral", "w": "droop", "pt": "tabby_head", "pc": "949aa4",
-		"x": {"face": "round_glasses"},
-		"t": [{"hold": "book"}, {"head": "sleep_mask"}, {"tail": "ring"}]},
-	{"b": "7a6fd0", "e": "4d43a0", "p": "d2a08c", "ear": "pointy", "ey": "star",
-		"ec": "f0c53a", "m": "w", "mc": "6e5546", "pt": "siamese", "pc": "4d43a0",
-		"x": {},
-		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
-	{"b": "fdf0a8", "e": "e8c74a", "p": "fe9883", "ear": "folded", "ey": "squint",
-		"m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
-		"t": [{"hold": "mug"}, {"head": "headset"}, {"tail": "ring"}]},
-	{"b": "8a5a3c", "e": "5e3a24", "p": "d2a08c", "ear": "round", "ey": "oval",
-		"m": "w", "pt": "tabby_head", "pc": "5e3a24", "x": {},
-		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "curl"}]},
-	{"b": "5aa8d8", "e": "2f6f9e", "p": "fdfbf8", "ear": "pointy", "ey": "iris",
-		"ec": "f0c53a", "m": "neutral", "pt": "siamese", "pc": "2f6f9e", "x": {},
-		"t": [{"head": "headset"}, {"hold": "keyboard"}, {"tail": "ring"}]},
-	{"b": "ffd4e2", "e": "ec9ab6", "p": "fdb3a2", "ear": "folded", "ey": "sleep",
-		"m": "yawn", "mc": "f39e63", "w": "droop", "pt": "none",
-		"x": {"mark": "moon"},
-		"t": [{"head": "sleep_mask"}, {"hold": "lantern"}, {"tail": "curl"}]},
-	{"b": "a8a45c", "e": "6f6c30", "p": "d2a08c", "ear": "round", "ey": "tired",
-		"m": "neutral", "pt": "tabby_head", "pc": "6f6c30",
-		"x": {"face": "round_glasses"},
-		"t": [{"hold": "book"}, {"chest": "bowtie"}, {"tail": "ring"}]},
-	{"b": "d8f26a", "e": "9ac02e", "p": "fe856d", "ear": "pointy", "ey": "star",
-		"ec": "f0c53a", "m": "open_smile", "mc": "eb6000", "pt": "none", "x": {},
-		"t": [{"head": "wizard"}, {"hold": "orb"}, {"tail": "curl"}]},
-	{"b": "2e3350", "e": "1b1f36", "p": "fdfbf8", "ear": "round", "ey": "star",
-		"ec": "f0c53a", "m": "w", "w": "droop", "pt": "siamese", "pc": "1b1f36",
-		"x": {"mark": "moon"},
-		"t": [{"head": "wizard"}, {"face": "sunglasses"}, {"tail": "ring"}]},
-]
-
-static var _temp_chars: Dictionary = {}
-
-
-## 임시 캐릭터 정의 {char id: CHARS와 같은 모양}. TEMP_DEFS 한 줄을 CHARS 항목으로
-## 부풀린다 — 적어 두지 않은 자리는 전부 기본값(코·볼·발바닥 모양 등)이다.
-static func temp_chars() -> Dictionary:
-	if not _temp_chars.is_empty():
-		return _temp_chars
-	var out := {}
-	for i in TEMP_DEFS.size():
-		var d: Dictionary = TEMP_DEFS[i]
-		var no := TEMP_FIRST + i
-		var parts := {
-			"body_col": Color(str(d.b)), "ear_col": Color(str(d.e)),
-			"tail_col": Color(str(d.e)), "foot_col": Color("fbf6ee"),
-			"pad_col": Color(str(d.p)),
-			"ear": str(d.ear), "eyes": str(d.ey),
-			"eye_col": Color(str(d.get("ec", "241f28"))),
-			"nose": "tri", "nose_col": Color("e58a86"),
-			"mouth": str(d.m), "mouth_col": Color(str(d.get("mc", "2c2a33"))),
-			"whisker": str(d.get("w", "basic")), "whisker_col": Color("2c2a33"),
-			"cheek": "pink", "cheek_col": Color("feb8ad"), "feet": "beans",
-			"pattern": str(d.pt), "tail": "none",
-		}
-		if str(d.pt) != "none":
-			parts["pattern_col"] = Color(str(d.get("pc", d.e)))
-		for k: String in (d.x as Dictionary):
-			parts[k] = (d.x as Dictionary)[k]
-		out["char%02d" % no] = {
-			"name": "CAT_TMP%02d" % no, "parts": parts, "tiers": d.t,
-		}
-	_temp_chars = out
-	return out
-
-
-## 디자인 캐릭터 + 임시 캐릭터. 파츠를 읽는 쪽은 이걸 쓴다
-## (임시 캐릭터를 지우면 이 함수도 CHARS 하나로 돌아간다).
-static func all_chars() -> Dictionary:
-	var out := CHARS.duplicate()
-	out.merge(temp_chars())
-	return out
 
 ## "나만의 캐릭터"(GameState의 custom 슬롯)가 쓰는 백지 몸통 — 디자인 캐릭터가
 ## 아니므로 CHARS에 넣지 않는다. 여기에 사용자가 고른 파츠가 얹힌다.
@@ -513,10 +649,18 @@ static func mix_of(parts: Dictionary) -> Dictionary:
 
 ## 그 냐이가 실제로 가진 레이어만 담는다 (코는 char06에만, 흰자는 일부 냐이에만 있다).
 static func _put(out: Dictionary, layer: String, char_id: String) -> void:
-	for l: Dictionary in CatLayouts.LAYOUTS.get(char_id, []):
+	for l: Dictionary in _layers_of(char_id):
 		if str(l.n) == layer:
 			out[layer] = char_id
 			return
+
+
+static func _layers_of(char_id: String) -> Array:
+	if CatLayouts.LAYOUTS.has(char_id):
+		return CatLayouts.LAYOUTS[char_id]
+	if GenLayouts.LAYOUTS.has(char_id):
+		return GenLayouts.LAYOUTS[char_id]
+	return HiddenLayouts.LAYOUTS.get(char_id, [])
 
 
 ## 이 옵션이 그림을 빌려오는 캐릭터 id ("" = 없음/모름).
@@ -549,96 +693,6 @@ static func mix_tints(parts: Dictionary) -> Dictionary:
 	return out
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# [임시 · temp_parts.gd와 함께 제거] 정식 카탈로그 + 임시 파츠
-# 임시 옵션·임시 색은 기존 목록 **뒤에** 붙는다 — 저장된 index가 밀리지 않는다.
-# 제거할 때: parts_all()/groups_all() 호출부를 PARTS/GROUPS로 되돌리면 된다.
-# ══════════════════════════════════════════════════════════════════════════════
-
-static var _parts_all: Array[Dictionary] = []
-static var _groups_all: Array[Dictionary] = []
-
-
-## 커스터마이저가 실제로 늘어놓는 부위 목록 = PARTS + 임시 파츠.
-static func parts_all() -> Array[Dictionary]:
-	if not _parts_all.is_empty():
-		return _parts_all
-	var out: Array[Dictionary] = []
-	for part in PARTS:
-		var p: Dictionary = part.duplicate(true)
-		var key := str(p.key)
-		if p.get("type") == "color":
-			if TempParts.COLORS.has(key):
-				var cols: Array = (p.cols as Array).duplicate()
-				for hex: String in (TempParts.COLORS[key] as Array):
-					cols.append(Color(hex))
-				p["cols"] = cols
-		elif TempParts.STYLES.has(key):
-			var opts: Array = (p.opts as Array).duplicate(true)
-			for opt: Dictionary in (TempParts.STYLES[key] as Array):
-				opts.append(opt.duplicate(true))
-			p["opts"] = opts
-		out.append(p)
-	# 정식 카탈로그에 아예 없던 부위 (목 소품 · 코 모양).
-	for np in TempParts.NEW_PARTS:
-		var p: Dictionary = np.duplicate(true)
-		var opts: Array = (p.base as Array).duplicate(true)
-		p.erase("base")
-		for opt: Dictionary in (TempParts.STYLES.get(str(p.key), []) as Array):
-			opts.append(opt.duplicate(true))
-		p["opts"] = opts
-		out.append(p)
-	_parts_all = out
-	return _parts_all
-
-
-## 커스터마이저 부위 묶음 = GROUPS + 임시 부위 자리.
-static func groups_all() -> Array[Dictionary]:
-	if not _groups_all.is_empty():
-		return _groups_all
-	var out: Array[Dictionary] = []
-	for g in GROUPS:
-		var d: Dictionary = g.duplicate(true)
-		# 코 모양은 코 색과 같은 묶음에 앉힌다.
-		if str(d.key) == "g_nose":
-			(d.parts as Array).append("nose")
-		out.append(d)
-		for ex in TempParts.GROUPS_EXTRA:
-			if str(ex.get("after", "")) == str(d.key):
-				var e: Dictionary = ex.duplicate(true)
-				e.erase("after")
-				out.append(e)
-	_groups_all = out
-	return _groups_all
-
-
-## 이 부위가 임시 파츠로 새로 생긴 자리인가 (출처표에 출처 없이 오른다).
-static func _is_temp_part(key: String) -> bool:
-	for np in TempParts.NEW_PARTS:
-		if str(np.key) == key:
-			return true
-	return false
-
-
-## [임시] 임시 파츠·임시 색은 빌려 온 냥이가 없다 — 출처표에 출처 없이 올린다.
-## (실제 해금은 골드 구매다 — GameState.part_unlocked 참조.)
-static func _mark_temp_open(out: Dictionary, part: Dictionary) -> void:
-	var key := str(part.key)
-	if part.get("type") == "color":
-		var base := 0
-		for o in PARTS:
-			if str(o.key) == key:
-				base = (o.cols as Array).size()
-		for i in range(base, (part.cols as Array).size()):
-			out[key][i] = []
-		return
-	var opts: Array = part.opts
-	for i in opts.size():
-		if _is_temp_part(key) or TempParts.owns(key, str(opts[i].id)):
-			out[key][i] = []
-
-
-
 ## 파츠 상점: 처음부터 열려 있는 옵션 index들 (부위 key별) — 백지 몸통(BLANK_CHAR)의
 ## 기본값과 "없음"이다. 나머지는 전부 꾸미기 화면에서 골드로 사야 쓸 수 있다.
 static var _free_opts: Dictionary = {}
@@ -647,7 +701,7 @@ static var _free_opts: Dictionary = {}
 static func free_options(key: String) -> Array:
 	if _free_opts.is_empty():
 		var base := char_selection("custom")  # 백지 몸통의 기본 선택
-		for part in parts_all():
+		for part in PARTS:
 			var k := str(part.key)
 			var out: Array = []
 			if base.has(k):
@@ -673,7 +727,7 @@ static func is_unique_option(key: String, idx: int) -> bool:
 
 
 static func get_part(key: String) -> Dictionary:
-	for p in parts_all():
+	for p in PARTS:
 		if p.key == key:
 			return p
 	return {}
@@ -706,7 +760,7 @@ static func pick(sel: Dictionary, key: String) -> int:
 
 ## 디자인 캐릭터의 파츠 묶음 — tier(0~3)만큼 해금 파츠를 얹어 돌려준다.
 static func char_parts(char_id: String, tier := TIER_MAX) -> Dictionary:
-	var def: Dictionary = all_chars().get(char_id, BLANK_CHAR)
+	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
 	var parts: Dictionary = (def.parts as Dictionary).duplicate(true)
 	var tiers: Array = def.tiers
 	for i in mini(maxi(tier, 0), tiers.size()):
@@ -720,13 +774,13 @@ static func char_parts(char_id: String, tier := TIER_MAX) -> Dictionary:
 ## 한국어로 박혀 있어 번역이 안 되므로, 번역 키가 있는 부위 이름(CAT_PART_*)만 준다.
 static func tier_gain_names(char_id: String, tier: int) -> Array[String]:
 	var out: Array[String] = []
-	var def: Dictionary = all_chars().get(char_id, BLANK_CHAR)
+	var def: Dictionary = CHARS.get(char_id, BLANK_CHAR)
 	var tiers: Array = def.tiers
 	if tier < 0 or tier >= tiers.size():
 		return out
 	var gained: Dictionary = tiers[tier]
 	for bundle_key: String in gained:
-		for part in parts_all():
+		for part in PARTS:
 			if _parts_key(str(part.key)) != bundle_key or part.get("type") == "color":
 				continue
 			var nm := str(part.name)
@@ -740,7 +794,7 @@ static func tier_gain_names(char_id: String, tier: int) -> Array[String]:
 static func char_selection(char_id: String, tier := TIER_MAX) -> Dictionary:
 	var parts := char_parts(char_id, tier)
 	var sel := {}
-	for part in parts_all():
+	for part in PARTS:
 		var key := str(part.key)
 		var want: Variant = parts.get(_parts_key(key))
 		if want == null:
@@ -806,11 +860,8 @@ static func apply_sel(parts: Dictionary, sel: Dictionary) -> Dictionary:
 static func build_skin(char_id: String, tier: int, sel: Dictionary) -> Dictionary:
 	var parts := apply_sel(char_parts(char_id, tier), sel)
 	var skin := skin_from_parts(parts)
-	# 디자인 냥이가 아니면(= 나만의 캐릭터, 그리고 아직 시트가 없는 임시 캐릭터)
-	# 시트 파츠 그림을 직접 조립해 그린다.
-	# [임시] 몸 실루엣을 바꾸는 임시 파츠(귀 모양)를 골랐으면 시트 조립을 포기하고
-	# 코드 렌더러에 맡긴다 — 시트에는 그 실루엣 그림이 없다.
-	if not CHARS.has(char_id) and not TempParts.forces_code_render(parts):
+	# 디자인 냥이가 아니면(= 나만의 캐릭터) 시트 파츠 그림을 직접 조립해 그린다.
+	if not CHARS.has(char_id):
 		skin["mix"] = mix_of(parts)
 		skin["tints"] = mix_tints(parts)
 	return skin
@@ -852,7 +903,7 @@ static func my_sources() -> Dictionary:
 	if not _sources.is_empty():
 		return _sources
 	var out := {}
-	for part in parts_all():
+	for part in PARTS:
 		var key := str(part.key)
 		out[key] = {}
 		# "없음"은 어느 냥이의 것도 아니다 — 늘 고를 수 있어야 원상복구가 된다.
@@ -861,8 +912,11 @@ static func my_sources() -> Dictionary:
 			for i in opts.size():
 				if str(opts[i].id) == "none":
 					out[key][i] = []
-		_mark_temp_open(out, part)  # [임시] 임시 파츠는 빌려 온 냥이가 없다
+		_mark_hidden_open(out, part)
 	for char_id: String in CHARS:
+		# 파츠 레이어가 있는 냥이만 재료를 빌려 줄 수 있다.
+		if not CatLayouts.LAYOUTS.has(char_id) and not GenLayouts.LAYOUTS.has(char_id):
+			continue
 		var def: Dictionary = CHARS[char_id]
 		_collect_sources(out, char_id, 0, def.parts)
 		var tiers: Array = def.tiers
@@ -872,10 +926,21 @@ static func my_sources() -> Dictionary:
 	return out
 
 
+## 히든 파츠("hidden": true)는 어느 디자인 냥이의 것도 아니다 — 출처 없이 올려
+## 처음부터 목록에 서고, 다른 파츠처럼 골드로 산다 (GameState.part_unlocked 참조).
+static func _mark_hidden_open(out: Dictionary, part: Dictionary) -> void:
+	if part.get("type") == "color":
+		return
+	var opts: Array = part.opts
+	for i in opts.size():
+		if bool((opts[i] as Dictionary).get("hidden", false)):
+			out[str(part.key)][i] = []
+
+
 ## 파츠 묶음 하나(기본 파츠 또는 해금 단계 하나)를 출처표에 적는다.
 static func _collect_sources(out: Dictionary, char_id: String, tier: int,
 		parts: Dictionary) -> void:
-	for part in parts_all():
+	for part in PARTS:
 		var key := str(part.key)
 		var want: Variant = parts.get(_parts_key(key))
 		if want == null:

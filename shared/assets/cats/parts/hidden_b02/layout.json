@@ -1,0 +1,62 @@
+{
+ "Cat_Eyes_Color": {
+  "h": 37,
+  "layer": 61,
+  "recolor": true,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "000000",
+  "w": 114,
+  "x": 68,
+  "y": 118
+ },
+ "Cat_Mouse": {
+  "h": 24,
+  "layer": 52,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "ec796b",
+  "w": 34,
+  "x": 108,
+  "y": 151
+ },
+ "Cat_Prop_Belly": {
+  "h": 100,
+  "layer": 30,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": null,
+  "w": 100,
+  "x": 75,
+  "y": 188
+ },
+ "Prop_Head": {
+  "h": 171,
+  "layer": 85,
+  "recolor": false,
+  "tiers": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "tint": "f2f5f8",
+  "w": 159,
+  "x": 45,
+  "y": 52
+ }
+}

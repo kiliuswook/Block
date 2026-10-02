@@ -101,20 +101,19 @@ func _ready() -> void:
 	_check(GameState.part_can("eyes", star), "유니크 파츠 값의 단위는 캔이다")
 	_check(not GameState.part_can("eyes", _idx("eyes", "iris")),
 			"보통 파츠는 골드로 산다")
-	var price := GameState.part_price("eyes", star)
-	_check(price in GameState.PART_CAN_PRICES, "값은 캔 가격표에서 나온다")
-	GameState.gold = 999999
-	GameState.cans = 0
-	_check(not GameState.can_afford_part("eyes", star),
-			"골드가 아무리 많아도 유니크 파츠는 못 산다")
+	# 유니크 파츠도 냥이의 파츠면 파는 물건이 아니다 — 그 냥이(마법사)를 데려오면 열린다.
+	var caps_keep := GameState.keycaps
+	GameState.keycaps = {}
+	GameState.cans = 999
+	_check(not GameState.part_buyable("eyes", star), "냥이 파츠는 캔으로도 못 산다")
 	_check(not GameState.buy_part("eyes", star), "구매가 거절된다")
-	_check(GameState.gold == 999999, "거절된 구매는 골드를 건드리지 않는다")
-	GameState.cans = price
-	_check(GameState.buy_part("eyes", star), "캔으로 산다")
-	_check(GameState.cans == 0 and GameState.gold == 999999,
-			"캔만 빠지고 골드는 그대로")
-	_check(GameState.part_unlocked("eyes", star), "산 파츠는 열린다")
-	_check(GameState.part_price("eyes", star) == 0, "이미 산 파츠는 값이 0")
+	_check(GameState.cans == 999, "거절된 구매는 캔을 건드리지 않는다")
+	var ring := {}
+	for i in 26:
+		ring[char(65 + i)] = 1
+	GameState.keycaps["wizard"] = ring
+	_check(GameState.part_unlocked("eyes", star), "마법사를 데려오면 별눈이 열린다")
+	GameState.keycaps = caps_keep
 
 	if failures == 0:
 		print("ALL TESTS PASSED")

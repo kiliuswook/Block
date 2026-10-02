@@ -119,5 +119,7 @@ locale/translations=PackedStringArray("res://shared/locale/ui.en.translation", "
 
 [rendering]
 
+renderer/rendering_method.mobile="gl_compatibility"
 rendering_device/driver.windows="d3d12"
+textures/vram_compression/import_etc2_astc=true
 environment/defaults/default_clear_color=Color(0.043, 0.047, 0.071, 1)
