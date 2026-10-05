@@ -65,7 +65,7 @@ MENU_CHARACTER,🐱  Character,🐱  캐릭터,[🐱  Çĥàřàçţéř ——�
 MENU_SHOP,🛒  Shop,🛒  상점,[🛒  Şĥôþ —————]
 MENU_RANKING,🏆  Ranking,🏆  랭킹,[🏆  Řàńķïńğ ————————]
 MENU_SETTINGS,⚙  Settings,⚙  설정,[⚙  Şéţţïńğş ————————]
-MENU_ACHV,🏅  Achievements,🏅  업적,[🏅  Åçĥïéṽéɱéńţş ————————————]
+MENU_ACHV,Achievements,업적,[Åçĥïéṽéɱéńţş —————————]
 MENU_WEEKLY_PRIZE,Last week's ranking prize!  +{gold} G  +{cans} cans,지난주 랭킹 보상!  +{gold} G  +{cans} 캔,[Łàşţ ŵééķ'ş řàńķïńğ þřïżé!  +{gold} Ğ  +{cans} çàńş ————————————————————————————————————————]
 MENU_WEEKLY_PRIZE_GOLD,Last week's ranking prize!  +{gold} G,지난주 랭킹 보상!  +{gold} G,[Łàşţ ŵééķ'ş řàńķïńğ þřïżé!  +{gold} Ğ —————————————————————————————]
 MENU_WEEKLY_PRIZE_CAN,Last week's ranking prize!  +{cans} cans,지난주 랭킹 보상!  +{cans} 캔,[Łàşţ ŵééķ'ş řàńķïńğ þřïżé!  +{cans} çàńş ————————————————————————————————]

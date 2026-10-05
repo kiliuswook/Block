@@ -34,7 +34,16 @@ static func _has_arg(flag: String) -> bool:
 	return flag in OS.get_cmdline_user_args() or flag in OS.get_cmdline_args()
 
 
-## 개발용 세로 창 (1080×1920 컨텐츠를 486×864 창에 표시).
+## 개발용 세로 창 (1080×1920 컨텐츠를 486×864 창에 표시). 실제 모바일 빌드처럼
+## stretch aspect를 expand로 둔다 — `--mobile-size=1200x1920`(태블릿)·`1080x2340`(긴 폰)
+## 처럼 화면 비율을 주면 뷰포트가 그만큼 늘어난 모습을 데스크톱에서 볼 수 있다.
 static func apply_mobile_dev_window(win: Window) -> void:
 	win.content_scale_size = Vector2i(1080, 1920)
-	win.size = Vector2i(486, 864)
+	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	var screen := Vector2(1080.0, 1920.0)
+	for a: String in OS.get_cmdline_user_args() + OS.get_cmdline_args():
+		if a.begins_with("--mobile-size="):
+			var wh := a.get_slice("=", 1).split("x")
+			if wh.size() == 2 and wh[0].to_int() > 0 and wh[1].to_int() > 0:
+				screen = Vector2(wh[0].to_float(), wh[1].to_float())
+	win.size = Vector2i(screen * (864.0 / screen.y))

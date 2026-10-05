@@ -32,6 +32,14 @@ const HUD_P_ROW_GAP := 22.0
 # 앞에서 멈추도록 x 30~196에 맞춘다 (main_mobile.tscn의 NEXT offset과 같은 값).
 const HUD_P_LEFT_X := 30.0
 const HUD_P_LEFT_W := 166.0
+# 세로 화면 씬(main_mobile.tscn) 좌표가 그려진 기준 크기. 모바일은 stretch aspect가
+# expand라 태블릿(더 넓다)·긴 폰(더 길다)에서는 뷰포트가 이보다 커진다 — `_spread_portrait()`.
+const PORTRAIT_DESIGN := Vector2(1080.0, 1920.0)
+# 세로 화면에서 터치 덱이 차지하는 아래 몫(덱 윗선 = 화면 아래 - 이 값).
+const PORTRAIT_DECK_H := 520.0
+
+## 세로 화면이 설계 폭보다 넓을 때 오른쪽 열이 밀려난 거리 (`_spread_portrait()`).
+var _p_dx := 0.0
 
 @onready var board: EscapeBoard = $Board
 @onready var score_title: Label = $UI/ScoreTitle
@@ -73,6 +81,7 @@ var key_hint: Control  # 좌하단 조작 안내 카드 (실제 키 바인딩으
 
 
 func _ready() -> void:
+	_spread_portrait()
 	_build_backdrop()
 	EventBus.score_changed.connect(func(v: int) -> void: score_label.text = str(v))
 	EventBus.level_changed.connect(func(v: int) -> void: level_label.text = str(v))
@@ -524,10 +533,10 @@ func _layout_stat_column_portrait() -> void:
 			continue
 		var fs: int = row[2]
 		val.add_theme_font_size_override("font_size", fs)
-		cap.position = Vector2(HUD_P_COL_X, y)
+		cap.position = Vector2(HUD_P_COL_X + _p_dx, y)
 		cap.size = Vector2(HUD_P_COL_W, HUD_CAPTION_H)
 		y += HUD_CAPTION_H + HUD_CAPTION_GAP
-		val.position = Vector2(HUD_P_COL_X, y)
+		val.position = Vector2(HUD_P_COL_X + _p_dx, y)
 		val.size = Vector2(HUD_P_COL_W, ceilf(fs * 1.25))
 		val.pivot_offset = val.size / 2.0
 		y += val.size.y + HUD_P_ROW_GAP
@@ -539,11 +548,11 @@ func _layout_stat_column_portrait() -> void:
 			record_label.clip_text = true
 			record_label.add_theme_font_size_override("font_size", 18)
 			record_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			record_label.position = Vector2(HUD_P_COL_X - HUD_CARD_PAD.x, y - HUD_P_ROW_GAP + 2.0)
+			record_label.position = Vector2(HUD_P_COL_X + _p_dx - HUD_CARD_PAD.x, y - HUD_P_ROW_GAP + 2.0)
 			record_label.size = Vector2(HUD_P_COL_W + HUD_CARD_PAD.x * 2.0, 34.0)
 			y = record_label.position.y + record_label.size.y + HUD_P_ROW_GAP
 		if val == lines_label and goal_meter != null:
-			goal_meter.position = Vector2(HUD_P_COL_X, y - HUD_P_ROW_GAP + 6.0)
+			goal_meter.position = Vector2(HUD_P_COL_X + _p_dx, y - HUD_P_ROW_GAP + 6.0)
 			goal_meter.size = Vector2(HUD_P_COL_W, 72.0)
 			y = goal_meter.position.y + goal_meter.size.y + HUD_P_ROW_GAP
 
@@ -791,6 +800,48 @@ func _to_title() -> void:
 	get_tree().change_scene_to_file("res://core/scenes/boot.tscn")
 
 
+## 세로 화면이 설계 크기(1080×1920)보다 크면(태블릿·긴 폰) 씬 좌표로 박힌 계기판과
+## 터치 버튼을 화면 가장자리로 벌린다 — 왼쪽 열은 그대로, 오른쪽 열·오른손 버튼은 늘어난
+## 폭만큼, 가운데 슬롯은 절반만큼. 늘어난 높이는 버튼·덱을 아래로 내리고 우물이 가져간다
+## (`_fit_board()`·`EscapeBoard._fit_zoom()`이 덱 윗선까지 쓴다).
+func _spread_portrait() -> void:
+	var vp := get_viewport_rect().size
+	if vp.y <= vp.x:
+		return
+	var dx := maxf(0.0, vp.x - PORTRAIT_DESIGN.x)
+	var dy := maxf(0.0, vp.y - PORTRAIT_DESIGN.y)
+	# 오른쪽 열 카드는 화면 오른쪽 끝에서 왼쪽 카드(NEXT)와 같은 여백을 두고 멈춘다.
+	if dx > 0.0:
+		var margin := HUD_P_LEFT_X - HUD_CARD_PAD.x
+		# 카드 = 열 ± 패드, 그 안에 기록 갱신 줄이 패드만큼 더 나간다.
+		_p_dx = minf(dx, vp.x - margin - HUD_CARD_PAD.x * 2.0 - HUD_P_COL_W - HUD_P_COL_X)
+	if dx == 0.0 and dy == 0.0:
+		return
+	for n: Node in $UI.get_children():
+		var c := n as Control
+		# 앵커로 화면에 붙은 노드(가운데 배너 등)는 스스로 따라온다.
+		if c == null or c.anchor_left != 0.0 or c.anchor_right != 0.0:
+			continue
+		var mid := c.position.x + c.size.x / 2.0
+		if mid > PORTRAIT_DESIGN.x * 2.0 / 3.0:
+			c.position.x += dx
+		elif mid > PORTRAIT_DESIGN.x / 3.0:
+			c.position.x += dx / 2.0
+	var touch := $TouchControls
+	var deck := touch.get_node_or_null("Deck") as Control
+	if deck != null:
+		deck.position = Vector2(0.0, vp.y - PORTRAIT_DECK_H)
+		deck.size = Vector2(vp.x, PORTRAIT_DECK_H)
+	for path: String in ["MovePad"]:
+		var c := touch.get_node_or_null(path) as Control
+		if c != null:
+			c.position.y += dy
+	for path: String in ["RotateButton", "DropButton", "JumpButton"]:
+		var c := touch.get_node_or_null(path) as Control
+		if c != null:
+			c.position += Vector2(dx, dy)
+
+
 ## Every fixed-pit mode plays in the standard 20-row tetris well — taller
 ## than the scene layouts expect, so scale the board to fit between the top
 ## margin and (portrait) the touch zone, centered horizontally. Endless keeps
@@ -801,9 +852,13 @@ func _fit_board() -> void:
 	# 가로: 피그마 우물 틀이 (640,40)~(1196,1040) — 틀(8)+안쪽 여백(10)을 빼고 보드를 앉힌다.
 	var frame := EscapeBoard.FRAME_OUT if not portrait else 0.0
 	var top := 200.0 if portrait else 40.0 + frame
-	var bottom := 1410.0 if portrait else vp.y - 40.0 - frame
+	var bottom := vp.y - PORTRAIT_DECK_H + 10.0 if portrait else vp.y - 40.0 - frame
 	var s := minf(1.0, (bottom - top) / (board.rows * EscapeBoard.CELL))
 	board.scale = Vector2(s, s)
+	if portrait:
+		# 긴 폰은 우물이 다 들어가고도 높이가 남는다 — 남는 몫은 위에 두고 우물은 덱 위에
+		# 붙인다(고양이·발판이 엄지 가까이 온다).
+		top = bottom - board.rows * EscapeBoard.CELL * s
 	var cx := vp.x / 2.0 if portrait else 918.0 * vp.x / 1920.0
 	board.position = Vector2(cx - EscapeBoard.COLS * EscapeBoard.CELL * s / 2.0, top)
 	# 흔들림은 이 자리를 기준으로 보드 노드를 민다 (무한은 카메라가 대신 흔들린다).

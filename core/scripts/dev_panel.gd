@@ -59,7 +59,7 @@ func _ready() -> void:
 	v.add_theme_constant_override("separation", 10)
 	card.add_child(v)
 	var head := Label.new()
-	head.text = "🛠  개발용 확인 패널  ·  출시 빌드에서는 제거"
+	head.text = "개발용 확인 패널  ·  출시 빌드에서는 제거"
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_font_size_override("font_size", 26)
 	head.add_theme_color_override("font_color", UiKit.INK)

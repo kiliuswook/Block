@@ -582,7 +582,8 @@ func _fit_zoom() -> float:
 	var vp := get_viewport_rect().size
 	var portrait := vp.y > vp.x
 	var top := 200.0 if portrait else 40.0
-	var bottom := 1410.0 if portrait else vp.y - 56.0
+	# 세로는 터치 덱 윗선(화면 아래 - 520)까지 — 긴 폰·태블릿도 같은 규칙.
+	var bottom := vp.y - 510.0 if portrait else vp.y - 56.0
 	return minf(1.0, (bottom - top) / (PIT_ROWS * CELL))
 
 

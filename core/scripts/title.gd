@@ -1888,7 +1888,7 @@ func _build_dev_panel() -> void:
 	_dev = DEV_PANEL.new()
 	$UI.add_child(_dev)
 	var b := Button.new()
-	b.text = "🛠 DEV"
+	b.text = "DEV"
 	b.size = Vector2(120.0, 44.0)
 	b.position = Vector2(24.0, vh - 60.0)
 	UiKit.btn_card(b, UiKit.PURPLE_DEEP, 17)
