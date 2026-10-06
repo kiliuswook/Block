@@ -2,7 +2,7 @@ extends Node
 ## 모드 선택 카드의 데모 플레이 캡처 — 시간차로 몇 장 찍어 움직임을 확인한다.
 ## 세로 확인은 `-- --mobile` 인자로 띄운다(파일 이름 앞에 m_).
 
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 
 
 func _ready() -> void:

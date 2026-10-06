@@ -3,7 +3,7 @@ extends Node
 ## 모바일 화면들을 찍는다. 모바일 빌드는 stretch aspect가 expand라 뷰포트가 화면 비율만큼
 ## 늘어난다 — 씬 좌표로 박힌 UI가 따라오는지 본다. → `.tmp_shots/aspect_<화면>_<크기>.png`
 
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 const SIZES := [Vector2i(1080, 1920), Vector2i(1200, 1920), Vector2i(1080, 2340)]
 const TITLE := "res://mobile/ui/title_mobile.tscn"
 const MAIN := "res://mobile/ui/main_mobile.tscn"

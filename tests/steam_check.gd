@@ -2,7 +2,7 @@ extends Node
 ## 스팀 백엔드 점검 — 초기화 → 보드 생성 → 제출 → 조회를 순서대로 돌리고
 ## 결과를 콘솔에 찍는다. 실제 스팀 클라이언트가 켜져 있어야 의미가 있다.
 ##
-##   & "<godot>" --path E:\Game\Block res://tests/steam_check.tscn -- --steam
+##   & "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/steam_check.tscn -- --steam
 ##
 ## 기본 앱 id는 480(Spacewar)이라 스팀 계정만 있으면 바로 돌아간다. 480은
 ## 공용 테스트 앱이라 보드에 남이 만든 이상한 값이 섞여 있는 게 정상이다.

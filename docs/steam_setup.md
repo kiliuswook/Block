@@ -182,7 +182,7 @@ Deck 호환성 심사는 출시 후에도 신청할 수 있으니 급하지 않�
 앱 id 없이도 **테스트 앱 480**으로 백엔드가 살아 있는지 볼 수 있다 (스팀 클라이언트 켜 둘 것):
 
 ```powershell
-& "<godot>" --headless --path E:\Game\Block res://tests/steam_check.tscn -- --steam
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/steam_check.tscn -- --steam
 ```
 
 `백엔드 STEAM` / `조회 N 엔트리`가 찍히면 정상. 스팀을 꺼 두면 HTTP 백엔드로

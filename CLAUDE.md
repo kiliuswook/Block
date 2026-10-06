@@ -107,8 +107,8 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 ## 실행
 
 - Godot 실행 파일: `C:/Users/SangWook Lee/Downloads/Godot_v4.6.3-stable_win64.exe/Godot_v4.6.3-stable_win64.exe`
-- 에디터 열기: `& "<godot>" --editor --path E:\Game\Block`
-- 게임 실행: `& "<godot>" --path E:\Game\Block`
+- 에디터 열기: `& "<godot>" --editor --path E:\WonderWheel\Games\CatTris\dev`
+- 게임 실행: `& "<godot>" --path E:\WonderWheel\Games\CatTris\dev`
 - godot-mcp 서버가 `.mcp.json`에 설정되어 있음 (E:/GODOT/godot-mcp)
 
 ## 배포 (GitHub Pages)
@@ -117,7 +117,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 
 - 라이브 URL: PC https://kiliuswook.github.io/Block/ (`gh-pages` 루트) / 모바일 세로판 https://kiliuswook.github.io/Block/m/ (`gh-pages`의 `m/`)
 - 절차 (순서대로 — ⓜ = 모바일 전용 단계, 함께 수행한다):
-  1. **익스포트**: `& "<godot>" --headless --path E:\Game\Block --export-release "Web" build/web/index.html` / ⓜ `--export-release "WebMobile" build/web_m/index.html`
+  1. **익스포트**: `& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev --export-release "Web" build/web/index.html` / ⓜ `--export-release "WebMobile" build/web_m/index.html`
   2. **캐시 버스터**: `index.html`에서 `index.js` src와 GODOT_CONFIG의 `mainPack`에 버전 쿼리(`?v=<타임스탬프>`)를 붙일 것 — Pages가 10분 캐시(`max-age=600`)라 이걸 안 하면 배포 직후 브라우저에 이전 빌드가 보임 (ⓜ 모바일 `index.html`도 동일)
   3. **gh-pages 복사**: git worktree로 `gh-pages` 체크아웃 → `build/web/*` → 루트에 복사. ⓜ `build/web_m/*` → `m/` (기존 `m/`을 비우고 복사)
   4. **커밋·푸시** 후 worktree 정리, PC URL 안내 (ⓜ 두 URL 모두)
@@ -149,7 +149,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - **[개발용 · 출시 전 제거] 업적/리더보드 확인 패널 (`core/scripts/dev_panel.gd`, class_name 없음 — preload)**: 업적 목록 UI는 스팀 오버레이가, 리더보드는 랭킹 화면이 맡기로 해서 게임 안에 확인 수단이 없다. 스팀 없이 개발하는 동안만 쓰는 임시 패널이다 — 타이틀 **우상단 `🛠 DEV` 버튼**으로만 연다(단축키 없음 — 웹 빌드에서 브라우저가 키를 가로채는 경우가 있어 버튼 하나로 통일). 탭 둘: **업적**(id · 조건 · 진행 "지금/목표" · 해금 여부 + 행마다 해금/잠그기 토글, 상단에 `Achv.check()` 다시 판정 · 전부 해금 · 해금 기록 비우기) / **리더보드**(백엔드 STEAM·HTTP·OFFLINE, 플랫폼, 내 id·이름, 주차·리셋까지, `LIVE_MODES` × 누적/주간 보드마다 이름·엔트리 수·내 순위·내 기록 + 상위 5줄, 다시 받기·전부 제출). 진행률은 Achv가 들고 있지 않아 패널이 세이브 값을 다시 센다. **출시(스팀) 빌드에서는 뺀다** — `dev_panel.gd`의 `ENABLED := false` 한 줄이면 DEV 버튼과 패널이 사라지고, 완전히 지우려면 파일 + `title.gd`의 `DEV_PANEL` preload · `_dev` · `_build_dev_panel()` · `_unhandled_input`의 Esc 처리 · `tests/visual_capture.gd`의 `title_dev_*` 캡처를 제거하면 된다. 임시 UI라 문구는 한국어 하드코딩(번역 CSV에 넣지 않음)
 - `server/supabase/schema.sql` — 모바일 백엔드 서버 스키마 (테이블 · RLS · 주간 정산 함수 · cron). **신뢰 모델은 A안**: 골드·키캡·레벨의 주인은 계속 로컬 save.json이고, 서버는 ① 랭킹 보드(내 행만 쓰기) ② **주간 정산** ③ 세이브 백업만 맡는다. **주간 시상은 서버 cron이 지난 주 상위 3을 뽑아 `rewards` 행을 만들고 클라이언트는 `Cloud.claim_rewards()`로 받기만 한다** — 클라가 순위를 스스로 읽던 `_roll_week()`/`_claim_rewards()` 경로는 HTTP·STEAM 백엔드에만 남아 있다. 보드 하나 = (모드, 주차) 한 쌍이라 서버 백엔드에는 **주간 롤오버가 없다**(누적 보드는 `week_id = -1`). 주차 기준(`week_id()` SQL의 313200/604800)은 클라의 `Ranks.WEEK_ANCHOR`/`WEEK_LEN`과, 상금은 `settle_week()`의 `[500,300,200]`과 `Ranks.WEEKLY_REWARDS`가 **같은 값이어야 한다**
 - `docs/` — 기획/설계 문서. **`docs/my_tasks.md` = 사용자가 외부 사이트에서 해야 할 일 목록**(스팀 파트너 사이트 · Supabase 세팅) — 사용자 작업이 필요한 일이 생기면 여기에 한 줄 추가하고, 끝났는지 확인할 때도 여기부터 볼 것
-- `tests/` — 테스트. 캐릭터 시트 캡처: `res://tests/cat_sheet.tscn` → `.tmp_shots/cat_sheet.png`. 실행: `& "<godot>" --headless --path E:\Game\Block res://tests/test_board.tscn` (탈출 모드: `res://tests/test_escape.tscn`)
+- `tests/` — 테스트. 캐릭터 시트 캡처: `res://tests/cat_sheet.tscn` → `.tmp_shots/cat_sheet.png`. 실행: `& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/test_board.tscn` (탈출 모드: `res://tests/test_escape.tscn`)
 
 ## 익스포트 프리셋 (export_presets.cfg)
 
@@ -221,9 +221,9 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
 - **통조림 캔 (🥫 두 번째 재화, 2026-09-01)**: 고양이 간식. 저장은 `GameState.cans`/`cans_earned`(save.json), API는 `add_cans(n, persist)`/`spend_cans(n)`. **들어오는 곳은 주간 랭킹 시상 하나뿐이다** — 인게임 드랍도, 골드로 사는 길도 없다. 배분은 `Ranks.WEEKLY_CANS`(1위 10캔 · 3위 8 · 5위 7 · 10위 6 · 20위 5 · 30위 4 · 50위 3 · 75위 2 · **100위 1**, 그 밖 0)이고 판정은 `Ranks.weekly_cans(rank)`. 골드 상금(`WEEKLY_REWARDS` 3위까지)은 그대로라 시상 확인이 `CAN_RANKS`(=100)줄까지 보드를 훑는다. 세 백엔드가 모두 `Ranks._pay(gold, cans)` 한 곳으로 모이고 시그널도 `weekly_reward(gold, cans)`로 바뀌었다(서버 백엔드는 `Cloud.claim_rewards()`가 `{"gold", "cans"}`를 돌려준다 — 서버 쪽은 `rewards.cans` 열 + `week_cans(rank)` 함수라 **스키마를 다시 Run 해야 한다**). **쓰는 곳은 둘뿐**: ① 유니크 냥이의 키캡 뽑기(캔 뽑기 열) ② 유니크 파츠 구매. 표시는 좌상단 유저 HUD의 골드 왼쪽(`user_hud.gd`, 아이콘은 `UiKit.can_icon()`, 색은 `UiKit.CAN`/`CAN_DEEP`/`CAN_LABEL`)이고, 캐릭터 타일·키캡 진행 바도 유니크면 은빛으로 그린다. 개발 중 캔 치트는 DEV 패널 "치트" 탭(`dev_panel.gd`의 `CAN_GRANTS`). 회귀 테스트: `res://tests/test_cans.tscn` -> `ALL TESTS PASSED`, 캡처 `.tmp_shots/title_gacha.png`·`title_gacha_can.png`·`m_title_gacha.png`·`title_mycat_unique.png`
 - **유니크 파츠 (캔 전용)**: 꾸미기 카탈로그(`CustomCat.PARTS`)의 옵션에 `"u": true`가 붙으면 **골드로는 살 수 없고 캔으로만 산다** — 단 2026-09-29부터 **냥이의 파츠는 팔지 않으므로**(위 "파츠 해금 = 냥이 획득") 지금의 `"u"` 여섯 개는 모두 주인 냥이(까망·마법사 등)를 데려오면 열리고, 캔 가격은 앞으로 `"u"`를 단 **파츠 전용** 옵션이 생길 때만 쓰인다 — 판정은 `CustomCat.is_unique_option(key, idx)` -> `GameState.part_can(key, idx)`, 값은 희귀도별 `PART_CAN_PRICES = [5, 8, 15, 25]`(골드 `PART_PRICES`와 나란히 간다). 지금 유니크인 것은 **희귀도 r=2 여섯 개**(랜턴 · 수정 구슬 · 경찰 배지 · 별눈 · 선글라스 · 마법사 모자). 구매는 `buy_part()`가 재화를 갈라 쓰고, 살 수 있는지는 `can_afford_part()`가 본다. 꾸미기 화면(`cat_customizer.gd`)에서는 자물쇠·값·확인창이 전부 은빛 + 캔 아이콘으로 바뀐다(`_price_text()`/`_draw_price(ci, at, key, idx)`/`_draw_lock(..., can_lock)`, 문구는 `CC_*_CAN` 번역 키). **히든 파츠는 r이 2여도 유니크가 아니다** — 유니크는 `"u"` 플래그를 단 것만이다
 - **계정 레벨(`core/autoload/account.gd`, autoload `Account`)**: 판을 거듭하면 저절로 오르는 "얼마나 오래 놀았나" 축 — **골드로 살 수도 가챠로 건너뛸 수도 없고, 오직 플레이로만 오른다**(키캡=캐릭터 해금, 골드=소비, 레벨=누적). 상태는 `GameState.xp`(누적 경험치)·`GameState.account_level`(보상까지 축하가 끝난 레벨, save.json)이고 레벨 자체는 xp에서 계산한다 — 그래서 커브를 손대도 `Account.sync()`(타이틀 `_ready`)가 밀린 레벨의 보상을 따라잡아 지급한다. 커브는 `xp_need(lv) = min(XP_BASE + XP_STEP*(lv-1), XP_CAP)`(120/60/1500), 만렙 `LEVEL_MAX`=50(총 약 57,000 XP). 한 판 경험치는 `run_xp(mode, score, height, stage, record)` — 참가비 `RUN_BASE` + 성적(무한=층×2, 스테이지=점수/150+LEVEL×5, 그 외=점수/200) + 기록 갱신 `XP_RECORD`, 한 판 상한 `RUN_XP_CAP`. 지급은 `main.gd._award_run_xp()`(골드와 같은 자리, `xp_awarded`로 중복 방지)이고 결과 줄은 사망 팝업의 `xp_line`(하늘색)으로 나간다. 레벨업 보상은 골드 `level_reward(lv)`(5레벨마다 2배)뿐 — 잠금 해제 같은 건 걸지 않는다. 10레벨마다 칭호(`MENU_TIER_1`~`_5`), 타이틀에서는 지갑 알약 바로 아래 레벨 알약(`title.gd._build_level_pill()`/`_draw_level_pill()`)이 Lv·칭호·경험치 바를 보여 준다. 회귀 테스트: `res://tests/test_level.tscn` → `ALL TESTS PASSED`
-- 타이틀 흐름(인원 토글·캐릭터 세팅 → 모드 → 바로 시작) 회귀 테스트: `& "<godot>" --headless --path E:\Game\Block res://tests/test_flow.tscn` → 마지막 줄 `PASS`
-- 씬 스크린샷 캡처: `& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn` → `.tmp_shots/`에 저장
-- 캐릭터 스프라이트 점검(6종 × 4단계 + 잠금 실루엣 + 레이어 리컬러 + 코드 렌더 대조): `& "<godot>" --path E:\Game\Block res://tests/sprite_check.tscn` → `.tmp_shots/sprite_check.png`
+- 타이틀 흐름(인원 토글·캐릭터 세팅 → 모드 → 바로 시작) 회귀 테스트: `& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/test_flow.tscn` → 마지막 줄 `PASS`
+- 씬 스크린샷 캡처: `& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/visual_capture.tscn` → `.tmp_shots/`에 저장
+- 캐릭터 스프라이트 점검(6종 × 4단계 + 잠금 실루엣 + 레이어 리컬러 + 코드 렌더 대조): `& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/sprite_check.tscn` → `.tmp_shots/sprite_check.png`
 - 새 `class_name` 추가 시 헤드리스 실행 전 `--import`로 전역 클래스 캐시 갱신 필요
 
 ## 컨벤션

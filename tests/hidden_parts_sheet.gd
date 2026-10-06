@@ -1,11 +1,11 @@
 extends Node2D
 ## 히든 파츠 세트 미리보기 캡처 — 세트 하나 = 한 줄 (그 세트의 파츠를 전부 입힌
 ## 나만의 캐릭터 + 부위별로 하나씩만 입힌 모습).
-## 실행: <godot> --path E:\Game\Block res://tests/hidden_parts_sheet.tscn
+## 실행: <godot> --path E:\WonderWheel\Games\CatTris\dev res://tests/hidden_parts_sheet.tscn
 ##  → .tmp_shots/hidden_parts_sheet.png
 
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 const WIN := Vector2i(1400, 780)
 
 

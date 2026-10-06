@@ -1,9 +1,9 @@
 extends Node2D
 ## 캐릭터 컨셉 시트 재현 캡처 — 디자인 캐릭터 × 파츠 해금 단계(디폴트/1st/2nd/3rd).
-## 실행: <godot> --path E:\Game\Block res://tests/cat_sheet.tscn → .tmp_shots/cat_sheet.png
+## 실행: <godot> --path E:\WonderWheel\Games\CatTris\dev res://tests/cat_sheet.tscn → .tmp_shots/cat_sheet.png
 
 const CustomCat := preload("res://core/scripts/custom_cat.gd")
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 const WIN := Vector2i(1780, 980)
 const CELL := 128.0  # 매트릭스 한 칸
 const BLOCK_ROWS := 4  # 한 블록에 캐릭터 4마리

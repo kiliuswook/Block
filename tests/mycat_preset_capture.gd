@@ -4,7 +4,7 @@ extends Node
 ## 결과: .tmp_shots/title_mycat_preset.png · title_mycat_preset_baker.png ·
 ##       title_mycat_preset_ninja.png
 
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 
 
 func _ready() -> void:

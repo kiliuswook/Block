@@ -3,7 +3,7 @@
 > 아래 모든 이미지는 Godot 4.6이 **이미지 파일·스프라이트 0장**으로 `_draw()` 프리미티브만 써서 실시간 렌더링한 화면 캡처다.
 > 렌더 원본: `tests/character_gallery.tscn` (기존 `Player.paint_cat()` + 캐릭터별 오버레이). 설계 근거·공수 추정: [character_art_spec.md](character_art_spec.md).
 >
-> 다시 뽑기: `& "<godot>" --path E:\Game\Block res://tests/character_gallery.tscn` → `.tmp_shots/chars/`에 시트 3장 + 애니메이션 45프레임 저장, GIF는 `ffmpeg -framerate 12.5 -i anim_%02d.png ...`로 조립.
+> 다시 뽑기: `& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/character_gallery.tscn` → `.tmp_shots/chars/`에 시트 3장 + 애니메이션 45프레임 저장, GIF는 `ffmpeg -framerate 12.5 -i anim_%02d.png ...`로 조립.
 
 ## 애니메이션 (3단계 전원, 3.6초 사이클)
 

@@ -2,11 +2,11 @@ extends Node2D
 ## Dev utility: renders the 20-character roster (docs/character_art_spec.md)
 ## entirely with _draw() primitives, captures 3 stage sheets + an animation
 ## frame sequence into .tmp_shots/chars/ then quits.
-## Run: & "<godot>" --path E:\Game\Block res://tests/character_gallery.tscn
+## Run: & "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/character_gallery.tscn
 
 const Player := preload("res://core/scripts/player.gd")
 const FONT := preload("res://shared/assets/fonts/NotoSansKR-Regular.otf")
-const OUT := "E:/Game/Block/.tmp_shots/chars"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots/chars"
 
 const COLS := 5
 const CELL := Vector2(190.0, 205.0)

@@ -146,7 +146,7 @@ GameState.save_enabled = false
    → **Publish** 해야 실제로 반영된다 (등록만 하고 게시를 안 하면 안 열린다)
 3. 실기 검증: 스팀 클라이언트를 켜고
    ```powershell
-   & "<godot>" --path E:\Game\Block -- --steam
+   & "<godot>" --path E:\WonderWheel\Games\CatTris\dev -- --steam
    ```
    조건을 만족시켜 **오버레이 토스트가 뜨는지** 확인. 토스트 조건: 오버레이가 켜져 있고
    (`Steam 설정 → 게임 중`), `storeStats()`까지 불렸을 것 — `unlock_achievement()`가 둘 다 한다.

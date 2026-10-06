@@ -1,7 +1,7 @@
 extends Node
 ## Dev utility: boots each scene, waits a few frames, saves a screenshot.
 
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 
 
 func _ready() -> void:

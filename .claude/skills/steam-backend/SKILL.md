@@ -143,10 +143,10 @@ GodotSteam의 콜백은 **Steam 싱글톤의 전역 시그널**로 온다. `lead
 
 ```powershell
 # 스팀 백엔드 점검 (초기화 → 보드 생성 → 제출 → 조회)
-& "<godot>" --headless --path E:\Game\Block res://tests/steam_check.tscn -- --steam
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/steam_check.tscn -- --steam
 
 # 게임을 스팀 구현체로 실행
-& "<godot>" --path E:\Game\Block -- --steam
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev -- --steam
 ```
 
 - `--steam` 인자는 `Platform` autoload가 직접 본다(`boot.gd`와 같은 규칙,

@@ -1,6 +1,6 @@
 extends SceneTree
 ## Locale CSV maintenance. Run headless:
-##   godot --headless --path E:\Game\Block --script res://tools/locale_tool.gd
+##   godot --headless --path E:\WonderWheel\Games\CatTris\dev --script res://tools/locale_tool.gd
 ##
 ## Does two things to every shared/locale/*.csv:
 ##  1. Drops locale columns that are still completely empty. Godot's CSV

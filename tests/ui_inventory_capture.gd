@@ -1,7 +1,7 @@
 extends "res://tests/visual_capture.gd"
 ## UI 리뉴얼 인벤토리용 추가 캡처 — visual_capture.gd 가 안 찍는 화면들.
 ## (오버레이의 세로판 · 마일스톤 배너 · 스테이지 결과창 · 뽑기 결과 · DEV 치트 탭)
-## 실행: godot --path E:\Game\Block res://tests/ui_inventory_capture.tscn
+## 실행: godot --path E:\WonderWheel\Games\CatTris\dev res://tests/ui_inventory_capture.tscn
 
 
 func _ready() -> void:

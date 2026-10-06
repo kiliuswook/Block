@@ -1,8 +1,8 @@
 extends Node
 ## 피그마 대조용 빠른 캡처 — 가로 화면 주요 상태만 찍어 .tmp_shots/fig_*.png 로 남긴다.
-## 실행: godot --path E:\Game\Block res://tests/figma_shots.tscn
+## 실행: godot --path E:\WonderWheel\Games\CatTris\dev res://tests/figma_shots.tscn
 
-const OUT := "E:/Game/Block/.tmp_shots"
+const OUT := "E:/WonderWheel/Games/CatTris/dev/.tmp_shots"
 const T := "res://core/scenes/title.tscn"
 
 

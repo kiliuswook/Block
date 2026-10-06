@@ -76,9 +76,9 @@ shared/locale/
 
 ```powershell
 # 빈 로케일 열 정리 + en_XA 의사 로케일 열 재생성
-& "<godot>" --headless --path E:\Game\Block --script res://tools/locale_tool.gd
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev --script res://tools/locale_tool.gd
 # 그 다음 반드시 재임포트
-& "<godot>" --headless --path E:\Game\Block --import
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev --import
 ```
 CSV를 손댔으면 **항상 이 두 줄을 순서대로** 돌린다.
 
@@ -163,9 +163,9 @@ tr("POP_RESULT_GOLD").format({"gold": amount})
 ### 개발용 로케일 강제
 
 ```powershell
-& "<godot>" --path E:\Game\Block -- --locale=de       # 특정 언어로 실행
-& "<godot>" --path E:\Game\Block -- --locale=en_XA    # 의사 로케일 (레이아웃 점검)
-& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn -- --locale=en_XA
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev -- --locale=de       # 특정 언어로 실행
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev -- --locale=en_XA    # 의사 로케일 (레이아웃 점검)
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/visual_capture.tscn -- --locale=en_XA
 ```
 `--locale`은 **저장되지 않는다** — 레이아웃 테스트가 플레이어의 실제 선택을 덮어쓰지 않는다.
 
@@ -195,9 +195,9 @@ tr("POP_RESULT_GOLD").format({"gold": amount})
 ```
 
 ```powershell
-& "<godot>" --headless --path E:\Game\Block --script res://tools/locale_tool.gd  # 재생성
-& "<godot>" --headless --path E:\Game\Block --import
-& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn -- --locale=en_XA
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev --script res://tools/locale_tool.gd  # 재생성
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev --import
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/visual_capture.tscn -- --locale=en_XA
 ```
 `.tmp_shots/`를 눈으로 확인:
 - 버튼 밖으로 글자가 나가면 → `UiKit.style_button`을 안 거친 버튼이다.

@@ -75,13 +75,13 @@ core/ ──✗▶ steam/, mobile/            (금지: preload·씬 하드 배�
 
 ```powershell
 # 1) 로직 테스트
-& "<godot>" --headless --path E:\Game\Block res://tests/test_board.tscn
-& "<godot>" --headless --path E:\Game\Block res://tests/test_escape.tscn
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/test_board.tscn
+& "<godot>" --headless --path E:\WonderWheel\Games\CatTris\dev res://tests/test_escape.tscn
 # 2) 레이아웃 스크린샷
-& "<godot>" --path E:\Game\Block res://tests/visual_capture.tscn
+& "<godot>" --path E:\WonderWheel\Games\CatTris\dev res://tests/visual_capture.tscn
 ```
 - `.tmp_shots/`의 가로 샷과 세로 샷(`m_title`, `m_escape`, `m_endless`…) **양쪽을 눈으로 확인**. 새 UI가 생겼으면 `tests/visual_capture.gd`에 가로·세로 캡처를 **둘 다** 추가.
-- 수동 확인: 스팀 = 그냥 실행 / 모바일 = `& "<godot>" --path E:\Game\Block -- --mobile` (세로 창 에뮬레이션) 또는 에디터에서 `tests/run_mobile.tscn` **F6**.
+- 수동 확인: 스팀 = 그냥 실행 / 모바일 = `& "<godot>" --path E:\WonderWheel\Games\CatTris\dev -- --mobile` (세로 창 에뮬레이션) 또는 에디터에서 `tests/run_mobile.tscn` **F6**.
 - 플랫폼 폴더에 리소스를 추가/이동했으면 Web 익스포트 로그로 필터 동작 확인: `--export-release "Web"` 후 로그에 `steam/`·`mobile/` 파일이 없어야 함.
 - 새 `class_name`을 만들었으면 헤드리스 실행 전 `--import` 필수.
 
