@@ -12,11 +12,11 @@ config_version=5
 
 config/name="Cat-Tris"
 config/version="0.1.0"
-run/main_scene="res://core/scenes/boot.tscn"
+run/main_scene="res://core/scenes/wonderwheel_boot.tscn"
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.0706, 0.0588, 0.1412, 1)
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
-boot_splash/show_image=false
-boot_splash/bg_color=Color(0.584314, 0.87451, 1, 1)
 
 [autoload]
 

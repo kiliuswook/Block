@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://addons/wonderwheel_splash/wonderwheel_splash.tscn" id="1_sp"]
+
+[node name="WonderWheelBoot" type="Node"]
+
+[node name="WonderWheelSplash" parent="." instance=ExtResource("1_sp")]
+next_scene = "res://core/scenes/boot.tscn"

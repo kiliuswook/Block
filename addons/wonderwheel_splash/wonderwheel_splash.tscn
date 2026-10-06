@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/wonderwheel_splash/wonderwheel_splash.gd" id="1_ww"]
+
+[node name="WonderWheelSplash" type="CanvasLayer"]
+script = ExtResource("1_ww")
