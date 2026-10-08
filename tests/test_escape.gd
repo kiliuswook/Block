@@ -22,6 +22,10 @@ func _ready() -> void:
 	var queued: String = board.next_type
 	board._spawn_piece()
 	_check(board.piece_type == queued, "queued piece becomes the current piece")
+	_check(board._drop_locked(), "fresh piece ignores the drop key")
+	board.track_timer = EscapeBoard.DROP_LOCK_TIME
+	_check(not board._drop_locked(), "drop key works again after the lock time")
+	board.track_timer = 0.0
 
 	# Solidity queries
 	var c := EscapeBoard.CELL

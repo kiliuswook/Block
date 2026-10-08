@@ -25,6 +25,9 @@ const FRAME_W := 8.0
 const FRAME_OUT := FRAME_PAD + FRAME_W
 const TRACK_TIME_BASE := 5.0
 const TRACK_TIME_MIN := 2.0
+## 새 블록이 나온 뒤 이 시간 동안은 낙하 키로 놓을 수 없다 — 급하게 연타하다
+## 다음 블록까지 줄줄이 떨어뜨리는 사고를 막는다.
+const DROP_LOCK_TIME := 1.0
 const TRACK_STEP := 0.07
 const FALL_INTERVAL_BASE := 0.26
 const FALL_INTERVAL_MIN := 0.1
@@ -689,9 +692,10 @@ func _track(delta: float) -> void:
 		if now - drop_tap_time <= DROP_DOUBLE_TAP and _hard_drop_loose():
 			drop_tap_time = -1e9
 			return
-		drop_tap_time = now
-		_release_piece()
-		return
+		if not _drop_locked():
+			drop_tap_time = now
+			_release_piece()
+			return
 	track_timer += delta
 	track_move_timer += delta
 	piece_pos.y = _spawn_row()
@@ -705,6 +709,12 @@ func _track(delta: float) -> void:
 			slide_off = clampf(slide_off - float(dir), -1.5, 1.5)
 	if track_timer >= _track_time():
 		_release_piece()
+
+
+## 막 나온 블록은 잠깐 낙하 키를 받지 않는다 (두 번 누르기 하드드롭은 방금 놓은
+## 블록 몫이라 그대로 통한다). 추적 시간이 더 짧으면 그 시간까지만 잠근다.
+func _drop_locked() -> bool:
+	return track_timer < minf(DROP_LOCK_TIME, _track_time())
 
 
 ## Origin column the tracking piece steers toward. The default "-2" centers
