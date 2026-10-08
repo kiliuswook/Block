@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 최종 수정일 | 2026-10-06 |
+| 최종 수정일 | 2026-10-08 |
 | 게임 버전 | 0.1.0 (`project.godot` `config/version`) |
 | 기준 브랜치 / 커밋 | `main` / `e59c1c8` |
 | 엔진 | Godot 4.6 (2D, `config/features` = 4.6 / Forward Plus, 모바일은 `gl_compatibility`) |
@@ -83,17 +83,18 @@
 | 달리기 | `RUN_SPEED`=330 px/s × speed |
 | 점프 | `JUMP_VEL`=-840 × jump, 코요테 `COYOTE`=0.1초, 입력 버퍼 `JUMP_BUFFER`=0.12초 |
 | 중력 | `GRAVITY`=2300, 최대 낙하 `MAX_FALL`=1300. 낙하 키로 빠른 낙하 ×`FAST_FALL_FACTOR`=2.2 × weight |
-| 벽 | 벽 미끄럼 `WALL_SLIDE_SPEED`=160, 벽 점프 체공 중 1회 (`WALL_JUMP_PUSH`=430, 0.18초) |
+| 풍선 점프 (테스트 중) | 공중에서 점프를 다시 누르면 몸이 부풀어 뜨고, 누를 때마다 위로 `float_flap_velocity`=-430 × jump. 부푼 동안 중력 `float_gravity`=900, 가만히 두면 `float_max_fall`=140 px/s로 가라앉음, 좌우 이동 ×`float_move_factor`=0.75. **최대 높이는 마지막으로 디딘 자리에서 `float_max_height_cells`=5칸**(320px, 일반 점프는 약 2.4칸). 착지·낙하 키·대시로 바람이 빠진다. 부푼 동안은 머리 박기로 블록을 못 부순다. 그림만 `float_puff_scale`=1.28배로 커지고 판정 크기는 그대로. 값은 전부 `player.gd`의 `@export`(인스펙터 "풍선 점프" 묶음) |
+| 벽 | 벽 미끄럼 `WALL_SLIDE_SPEED`=160. 벽 점프는 제거됨 (2026-10-08, 풍선 점프로 대체) |
 | 대시 | 같은 방향 두 번(`DOUBLE_TAP`=0.3초) 또는 대시 키. `DASH_SPEED`=850 × dash, 0.22초, 쿨다운 0.25초 ÷ dash |
 | 대시 충돌 | 떨어지는/착지한 블록을 `push`칸 밀거나, 박힌 블록 한 칸을 친다. 튕겨남 `KNOCKBACK_SPEED`=420 ÷ weight |
-| 블록 부수기 | 대시·머리 박기(점프로 위 블록). 일반 블록은 **두 번**(1타 금 감 → 2타 파괴), 금 블록은 한 번, 피버 암반은 불가 |
+| 블록 부수기 | 대시·머리 박기(바닥 점프로 위 블록, 풍선 점프 중에는 불가). 일반 블록은 **두 번**(1타 금 감 → 2타 파괴), 금 블록은 한 번, 피버 암반은 불가 |
 
 **기본 키** (`project.godot` `[input]`, 재설정은 `core/scripts/key_binds.gd`)
 
 | 액션 | 키보드 기본 | 패드 기본 |
 |---|---|---|
 | 좌우 이동 | ← → | LS / D-pad (고정) |
-| 점프 | ↑, Space | A |
+| 점프 (공중에서 다시 = 풍선 점프) | ↑, Space | A |
 | 대시 | Shift (또는 좌우 두 번) | X |
 | 낙하(놓기·가속·두 번=하드드롭) | ↓ | RT, D-pad ↓ |
 | 회전 반시계 / 시계 | Z / X | LB / RB |
@@ -102,7 +103,7 @@
 
 `hard_drop`(Space)·`hold_piece`(C, Shift) 액션은 입력 맵에 남아 있으나 실제 보드는 쓰지 않는다.
 
-**터치** (`core/scripts/touch_*.gd`, 세로 배치는 `mobile/ui/main_mobile.tscn`): 왼쪽 이동 패드(◀▶, 두 번 두드리면 대시), 오른쪽 점프·회전(시계)·낙하 버튼, ⏸ 버튼. 모바일 빌드는 항상, 그 외는 터치스크린이 있을 때만 표시.
+**터치** (`core/scripts/touch_*.gd`, 세로 배치는 `mobile/ui/main_mobile.tscn`): 왼쪽 이동 패드(◀▶, 두 번 두드리면 대시), 오른쪽 점프(공중에서 다시 누르면 풍선 점프)·회전(시계)·낙하 버튼, ⏸ 버튼. 모바일 빌드는 항상, 그 외는 터치스크린이 있을 때만 표시.
 
 ### 3.3 점수
 
@@ -371,7 +372,7 @@ en·ko 외 11개 언어는 선택 목록에는 있으나 CSV에 번역 열이 �
 
 | 종류 | 목록 |
 |---|---|
-| 효과음 24종 | jump, walljump, dash, land, lock, rotate, harddrop, impact, clear, combo, crack, break, shove, gold, shutter, fever, milestone, record, death, pause, click, buy, error, escape |
+| 효과음 24종 | jump, puff(풍선 점프), dash, land, lock, rotate, harddrop, impact, clear, combo, crack, break, shove, gold, shutter, fever, milestone, record, death, pause, click, buy, error, escape |
 | BGM 2종 | `title`, `game` (첫 재생 때 렌더) |
 | 버스 | Master / BGM / SFX (런타임 생성) |
 

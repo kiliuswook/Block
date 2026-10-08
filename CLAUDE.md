@@ -171,7 +171,7 @@ Godot 4.6 (2D) 게임 프로젝트. 구덩이에 빠진 큐브 고양이가 테�
   - `core/scripts/escape_board.gd` — 필드/블록 로직 (블록이 캐릭터 열 추적 → 5초 후 자유낙하 → 락, 줄 클리어, 깔림 판정)
   - **블록 생성 타이밍은 두 모드가 같다** (2026-09-29): 추적이 끝나거나 낙하 키로 놓은 블록은 `loose`로 떨어져 나가고(`_release_piece()` → `_detach_piece()`) **다음 블록이 즉시 나온다**. 스테이지 모드의 새 블록은 우물 맨 위(0)에서 추적하되, 앞 블록이 아직 그 자리를 지나는 중이면 그 위(우물 밖, 안 그려지는 줄)에서 기다렸다 내려온다(`_spawn_row()`). 두 번 누르기 = 방금 놓은 블록 하드드롭(`_hard_drop_loose()`). **회전은 추적(매달린) 중에만** — 떨어지기 시작한 블록은 돌릴 수 없다(`_try_rotate()`의 `TRACKING` 가드). 예전 단일 블록 낙하 경로(`_fall`/`_landed`/`_hard_drop`)는 테스트용으로만 남아 있다
   - **무한의 용암은 늘 보인다**: 출발 바닥은 피버 끝 암반과 같은 암반 한 줄(`_draw()`가 `rows` 줄에 `_draw_bedrock`)이고, 시작 카메라 바닥(`cam_floor`)이 그 아래 용암까지 화면에 넣는다. 용암이 화면 아래로 벗어나면 보이는 아래 끝(`_view_bottom_y()`, 세로는 터치 덱 윗선)에 열기 띠 + `▼ n`(발끝~용암 칸 수) 알약을 띄운다(`_draw_lava_gauge()`). 캡처 `.tmp_shots/endless_lava_far.png`·`m_endless_lava_far.png`
-  - `core/scripts/player.gd` — 캐릭터 물리 (이동, 더블탭 대시, 점프+공중 제어, 빠른 낙하, AABB 충돌)
+  - `core/scripts/player.gd` — 캐릭터 물리 (이동, 더블탭 대시, 점프+공중 제어, 빠른 낙하, AABB 충돌). **풍선 점프(커비식, 2026-10-08 테스트 중)**: 공중에서 점프를 다시 누르면 부풀어 뜨고(`_flap()`, 상태 `floating`) 연타하면 마지막으로 디딘 자리(`float_base_y`)에서 `float_max_height_cells`칸까지 오른다 — 튜닝 값은 `@export`의 "풍선 점프" 묶음, 수치는 `docs/GDD.md` 3.2. 벽 점프는 제거됐다(벽 미끄럼은 남음). 회귀 `res://tests/test_escape.tscn`의 "float:" 줄, 실제 입력 캡처 `res://tests/float_capture.tscn` → `.tmp_shots/classic_float.png`
 - 테트리스 규칙 로직은 `core/scripts/board.gd`에 유지 (SRS 회전+월킥, 7-bag 등) — escape_board가 SHAPES/KICKS/COLORS 상수를 재사용
 - UI 배선/재시작/일시정지: `core/scripts/main.gd`
 - 렌더링은 텍스처 없이 `_draw()`로 직접 그림

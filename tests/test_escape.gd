@@ -67,7 +67,7 @@ func _ready() -> void:
 	board.grid.clear()
 	board.cracked.clear()
 
-	# Wall contact detection (for wall slide / wall jump)
+	# Wall contact detection (for wall slide)
 	player.position = Vector2(Player.SIZE / 2.0, 500.0)
 	_check(player._wall_contact() == -1, "left wall contact detected")
 	player.position = Vector2(EscapeBoard.COLS * c - Player.SIZE / 2.0, 500.0)
@@ -78,6 +78,52 @@ func _ready() -> void:
 	player.position = Vector2(6 * c - Player.SIZE / 2.0, 7 * c + 32.0)
 	_check(player._wall_contact() == 1, "block face counts as a wall")
 	board.grid.clear()
+
+	# 풍선 점프: 공중에서 점프를 누르면 부풀어 뜨고, 연타해도 정해진 높이까지만 오른다.
+	var dt := 1.0 / 60.0
+	var base_y := 700.0
+	player.position = Vector2(320.0, base_y)
+	player.velocity = Vector2.ZERO
+	player.on_floor = false
+	player.float_base_y = base_y
+	player._flap()
+	_check(player.floating and player.velocity.y < 0.0, "float: air jump puffs up and rises")
+	var top_y: float = base_y - player.float_max_height_cells * c
+	var highest := base_y
+	for i in range(600):
+		if i % 8 == 0:
+			player._flap()
+		player._handle_input(dt)
+		player._apply_motion(dt)
+		highest = minf(highest, player.position.y)
+	_check(highest >= top_y - 0.5, "float: mashing never passes the max height")
+	_check(highest <= top_y + 4.0, "float: mashing reaches the max height")
+	for i in range(120):
+		player._handle_input(dt)
+		player._apply_motion(dt)
+	_check(player.floating and is_equal_approx(player.velocity.y, player.float_max_fall),
+			"float: without flaps the cat sinks slowly")
+	# 부푼 몸으로는 머리 위 블록을 못 부순다.
+	var over := Vector2i(int(player.position.x / c), int((player.position.y - 40.0) / c))
+	board.grid[over] = "T"
+	player._flap()
+	for i in range(30):
+		player._handle_input(dt)
+		player._apply_motion(dt)
+	_check(board.grid.has(over) and not board.cracked.has(over),
+			"float: puffed head-bump leaves the block alone")
+	board.grid.clear()
+	# 발판에 내려앉으면 바람이 빠지고, 높이 기준이 그 자리로 옮겨 온다.
+	var pad := Vector2i(int(player.position.x / c), int(player.position.y / c) + 2)
+	board.grid[pad] = "O"
+	for i in range(240):
+		player._handle_input(dt)
+		player._apply_motion(dt)
+	_check(player.on_floor and not player.floating, "float: landing deflates")
+	_check(is_equal_approx(player.float_base_y, player.position.y),
+			"float: height limit is measured from the last footing")
+	board.grid.clear()
+	player.velocity = Vector2.ZERO
 
 	# Cracks follow blocks down through a line clear
 	for x in range(EscapeBoard.COLS):

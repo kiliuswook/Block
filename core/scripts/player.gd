@@ -1,7 +1,7 @@
 class_name Player
 extends Node2D
 ## Cube-cat character: run, double-tap dash, jump with air control,
-## fast fall. Custom AABB physics against the EscapeBoard grid.
+## balloon float (jump again in the air), fast fall. Custom AABB physics against the EscapeBoard grid.
 
 const CatArt := preload("res://core/scripts/cat_art.gd")
 
@@ -24,8 +24,7 @@ const BREAK_PROBE := 10.0
 const KNOCKBACK_SPEED := 420.0
 const KNOCKBACK_TIME := 0.15
 const WALL_SLIDE_SPEED := 160.0
-const WALL_JUMP_PUSH := 430.0
-const WALL_JUMP_TIME := 0.18
+const FLAP_TIME := 0.18  # 날갯짓 한 번에 몸이 출렁이는 시간
 const GRAVITY := 2300.0
 const FAST_FALL_FACTOR := 2.2
 const MAX_FALL := 1300.0
@@ -33,6 +32,22 @@ const JUMP_VEL := -840.0
 const COYOTE := 0.1
 const JUMP_BUFFER := 0.12
 const STEP := 4.0
+
+## 풍선 점프 (커비식): 공중에서 점프를 다시 누르면 몸을 부풀려 뜨고, 연타하면
+## 더 오른다. 테스트 중인 값이라 인스펙터에서 바로 만질 수 있게 열어 둔다.
+@export_group("풍선 점프")
+## 공중에서 점프를 누를 때마다 위로 붙는 속도 (px/s, × jump 능력치)
+@export var float_flap_velocity := -430.0
+## 부푼 동안의 중력 (px/s²) — 평소 GRAVITY 보다 훨씬 가볍다
+@export var float_gravity := 900.0
+## 부푼 채 가만히 있으면 이 속도로 천천히 가라앉는다 (px/s)
+@export var float_max_fall := 140.0
+## 부푼 동안의 좌우 이동 배율
+@export var float_move_factor := 0.75
+## 마지막으로 디딘 자리에서 몇 칸 위까지 뜰 수 있는가 (칸 = board.CELL)
+@export var float_max_height_cells := 5.0
+## 부풀었을 때 몸 그림 배율 (판정 크기는 그대로)
+@export var float_puff_scale := 1.28
 
 var velocity := Vector2.ZERO
 var alive := true
@@ -46,7 +61,9 @@ var knockback_timer := 0.0
 var knockback_vx := 0.0
 var wall_dir := 0  # -1: wall on the left, 1: on the right, 0: none
 var squash_timer := 0.0
-var wall_jumps_left := 1
+var floating := false  # 풍선처럼 부풀어 떠 있는 중
+var float_base_y := 0.0  # 마지막으로 디딘 자리 — 뜰 수 있는 높이의 기준
+var flap_timer := 0.0
 var facing := 1
 var last_tap := {-1: -1e9, 1: -1e9}
 var skin_override := ""
@@ -92,7 +109,9 @@ func respawn(pos: Vector2) -> void:
 	jump_buffer = 0.0
 	knockback_timer = 0.0
 	wall_dir = 0
-	wall_jumps_left = 1
+	floating = false
+	float_base_y = pos.y
+	flap_timer = 0.0
 	facing = 1
 	queue_redraw()
 
@@ -116,6 +135,7 @@ func _physics_process(delta: float) -> void:
 		queue_redraw()
 		return
 	squash_timer = maxf(squash_timer - delta, 0.0)
+	flap_timer = maxf(flap_timer - delta, 0.0)
 	# 머리 위 블록: 놀라는 건 즉시, 푸는 건 천천히 — 스쳐 지나가도 여운이 남는다.
 	scare = maxf(board.overhead_threat(rect()), scare - delta * SCARE_EASE)
 	jolt = maxf(jolt - delta / JOLT_TIME, 0.0)
@@ -135,7 +155,8 @@ func _fever_motion(delta: float) -> void:
 	on_floor = false
 	coyote_timer = 0.0
 	wall_dir = 0
-	wall_jumps_left = 1
+	floating = false
+	float_base_y = position.y
 	var axis := Input.get_axis("move_left", "move_right")
 	if axis != 0.0:
 		facing = int(signf(axis))
@@ -180,6 +201,10 @@ func _handle_input(delta: float) -> void:
 		velocity.x = dash_dir * DASH_SPEED * stat_dash
 	else:
 		velocity.x = axis * RUN_SPEED * stat_speed
+		if floating:
+			velocity.x *= float_move_factor
+	if dash_timer > 0.0:
+		floating = false  # 대시는 바람을 빼고 나간다
 	if Input.is_action_just_pressed("jump"):
 		jump_buffer = JUMP_BUFFER
 	else:
@@ -192,23 +217,37 @@ func _handle_input(delta: float) -> void:
 		jump_buffer = 0.0
 		coyote_timer = 0.0
 		Sfx.play("jump")
-	elif jump_buffer > 0.0 and not on_floor and wall_dir != 0 and wall_jumps_left > 0:
-		# Wall jump: leap up and away from the wall, once per airtime.
-		velocity.y = jump_vel
-		knockback_timer = WALL_JUMP_TIME
-		knockback_vx = -wall_dir * WALL_JUMP_PUSH
-		wall_jumps_left -= 1
-		jump_buffer = 0.0
-		dash_timer = 0.0
-		Sfx.play("walljump")
-	var g := GRAVITY
+	elif Input.is_action_just_pressed("jump") and not on_floor:
+		# 공중에서 다시 점프: 부풀어 뜬다. 입력 버퍼는 그대로 둬서, 바닥 직전에
+		# 누른 점프는 착지하자마자 평소 점프로 나간다.
+		_flap()
 	var fast_fall := Input.is_action_pressed("soft_drop")
-	if velocity.y > 0.0 and fast_fall:
-		g *= FAST_FALL_FACTOR * stat_weight
-	velocity.y = minf(velocity.y + g * delta, MAX_FALL)
+	if floating and fast_fall:
+		floating = false  # 낙하 키는 바람을 빼고 곧장 떨어진다
+	if floating:
+		velocity.y = minf(velocity.y + float_gravity * delta, float_max_fall)
+		# 뜰 수 있는 높이는 마지막으로 디딘 자리 기준으로 정해져 있다.
+		var top_y := float_base_y - float_max_height_cells * board.CELL
+		if velocity.y < 0.0:
+			velocity.y = maxf(velocity.y, minf((top_y - position.y) / delta, 0.0))
+	else:
+		var g := GRAVITY
+		if velocity.y > 0.0 and fast_fall:
+			g *= FAST_FALL_FACTOR * stat_weight
+		velocity.y = minf(velocity.y + g * delta, MAX_FALL)
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
 		velocity.y = WALL_SLIDE_SPEED
+
+
+## 풍선 점프 한 번: 처음이면 부풀고, 이미 부풀어 있으면 한 번 더 떠오른다.
+func _flap() -> void:
+	floating = true
+	velocity.y = float_flap_velocity * stat_jump
+	flap_timer = FLAP_TIME
+	dash_timer = 0.0
+	Sfx.play("puff")
+	board.land_dust(Vector2(position.x, rect().end.y), 0.2)
 
 
 func _apply_motion(delta: float) -> void:
@@ -239,9 +278,8 @@ func _apply_motion(delta: float) -> void:
 				board.land_dust(Vector2(position.x, rect().end.y),
 						clampf(velocity.y / 1400.0, 0.2, 1.0))
 			on_floor = true
-			wall_jumps_left = 1
-		elif velocity.y < 0.0:
-			# Head-bump smashes the single block above.
+		elif velocity.y < 0.0 and not floating:
+			# Head-bump smashes the single block above (부푼 몸으로는 못 부순다).
 			var head := rect()
 			head.position.y -= BREAK_PROBE
 			board.break_cell_in_rect(head.grow_individual(-6.0, 0.0, -6.0, 0.0))
@@ -249,8 +287,9 @@ func _apply_motion(delta: float) -> void:
 	else:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
 		on_floor = velocity.y >= 0.0 and board.rect_blocked_for_player(feet)
-		if on_floor:
-			wall_jumps_left = 1
+	if on_floor:
+		floating = false
+		float_base_y = position.y
 
 
 ## Returns which side has a wall/block flush against the player.
@@ -318,6 +357,12 @@ func _draw() -> void:
 			scale_xy = Vector2(0.9, 1.13)
 		elif velocity.y > 500.0:
 			scale_xy = Vector2(0.94, 1.07)
+	# 풍선 점프: 빵빵하게 부풀고, 날갯짓마다 위로 한 번 출렁인다.
+	if floating:
+		var pulse := flap_timer / FLAP_TIME
+		var breathe := sin(Time.get_ticks_msec() / 1000.0 * 5.0) * 0.03
+		scale_xy = Vector2.ONE * float_puff_scale \
+				+ Vector2(-0.1, 0.12) * pulse + Vector2(breathe, -breathe)
 	# 머리 위에서 블록이 내려오면 납작하게 움츠린다 — 놀랄수록 더 눌린다.
 	if alive and scare > 0.0:
 		scale_xy *= Vector2(1.0 + 0.14 * scare, 1.0 - 0.16 * scare)
@@ -326,7 +371,7 @@ func _draw() -> void:
 	if jolt > 0.0:
 		jitter = Vector2(sin(jolt * 47.0), cos(jolt * 61.0)) * 3.5 * jolt
 	draw_set_transform(jitter + Vector2(0.0, half * (1.0 - scale_xy.y)), 0.0, scale_xy)
-	var mouth_open := (not on_floor and velocity.y < -100.0) or scare > 0.45
+	var mouth_open := (not on_floor and not floating and velocity.y < -100.0) or scare > 0.45
 	paint_cat(self, Vector2.ZERO, SIZE, look, alive, mouth_open, skin)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if alive and scare > 0.2:

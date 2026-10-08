@@ -26,7 +26,7 @@ SET_BIND_TAKEN,That one is already taken!,이미 다른 조작이 쓰고 있어�
 SET_ACT_MOVE,Move,이동,[Ṁôṽé ———]
 SET_ACT_MOVE_LEFT,Move Left,좌로 이동,[Ṁôṽé Łéƒţ ———————]
 SET_ACT_MOVE_RIGHT,Move Right,우로 이동,[Ṁôṽé Řïğĥţ ————————]
-SET_ACT_JUMP,Jump / Wall Jump,점프 / 벽 점프,[Ĵüɱþ / Ŵàłł Ĵüɱþ ————————————]
+SET_ACT_JUMP,Jump / Float,점프 / 풍선 점프,[Ĵüɱþ / Ƒłôàţ —————————]
 SET_ACT_DASH,Dash,대시,[Ðàşĥ ———]
 SET_ACT_SOFT_DROP,Speed Up Block,블록 낙하 가속,[Şþééð Üþ Ɓłôçķ ———————————]
 SET_ACT_ROT_CCW,Rotate Block CCW,블록 반시계 회전,[Řôţàţé Ɓłôçķ ÇÇŴ ————————————]
@@ -55,7 +55,7 @@ Dash to break side blocks, jump to break blocks overhead!","블록을 밟고 올
 [àńð éşçàþé ţĥřôüğĥ ţĥé éẋïţ àţôþ éïţĥéř ŵàłł! ————————————————————————————————————]
 [Ğéţţïńğ çřüşĥéð ƀÿ à ƀłôçķ ïş ðéàţĥ (ƀüɱþş àřé ƒïńé) —————————————————————————————————————————]
 [Ðàşĥ ţô ƀřéàķ şïðé ƀłôçķş, ĵüɱþ ţô ƀřéàķ ƀłôçķş ôṽéřĥéàð! —————————————————————————————————————————————]"
-TUT_KEYS_ESCAPE,< >  Move (double tap: dash)      ^ / SPACE  Jump · jump again while sliding on a wall = one wall jump      v  Speed up block fall      Z / X  Rotate block      P  Pause      R  Restart      ESC  Title,< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 벽에서 미끄러질 때 다시 점프 = 벽점프 1회      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀,[< >  Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)      ^ / ŞÞÅÇÉ  Ĵüɱþ · ĵüɱþ àğàïń ŵĥïłé şłïðïńğ ôń à ŵàłł = ôńé ŵàłł ĵüɱþ      ṽ  Şþééð üþ ƀłôçķ ƒàłł      Ż / Ẋ  Řôţàţé ƀłôçķ      Þ  Þàüşé      Ř  Řéşţàřţ      ÉŞÇ  Ţïţłé ————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]
+TUT_KEYS_ESCAPE,< >  Move (double tap: dash)      ^ / SPACE  Jump · jump again in the air = puff up and float (mash to rise)      v  Speed up block fall      Z / X  Rotate block      P  Pause      R  Restart      ESC  Title,< >  이동 (더블탭: 대시)      ^ / SPACE  점프 · 공중에서 다시 점프 = 풍선처럼 부풀어 뜨기 (연타하면 더 높이)      v  블록 낙하 가속      Z / X  블록 회전      P  일시정지      R  재시작      ESC  타이틀,[< >  Ṁôṽé (ðôüƀłé ţàþ: ðàşĥ)      ^ / ŞÞÅÇÉ  Ĵüɱþ · ĵüɱþ àğàïń ïń ţĥé àïř = þüƒƒ üþ àńð ƒłôàţ (ɱàşĥ ţô řïşé)      ṽ  Şþééð üþ ƀłôçķ ƒàłł      Ż / Ẋ  Řôţàţé ƀłôçķ      Þ  Þàüşé      Ř  Řéşţàřţ      ÉŞÇ  Ţïţłé —————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————————]
 TOUCH_JUMP,Jump,점프,[Ĵüɱþ ———]
 TOUCH_ROTATE,Rotate,회전,[Řôţàţé ————]
 TOUCH_DROP,Drop,낙하,[Ðřôþ ———]
