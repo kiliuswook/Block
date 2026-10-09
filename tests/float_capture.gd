@@ -21,7 +21,14 @@ func _ready() -> void:
 	print("float via input: floating=%s rise=%.0fpx" % [player.floating, floor_y - player.position.y])
 	await get_tree().process_frame
 	await get_tree().process_frame
-	get_viewport().get_texture().get_image().save_png(OUT + "/classic_float.png")
+	var img := get_viewport().get_texture().get_image()
+	img.save_png(OUT + "/classic_float.png")
+	# 고양이 둘레만 크게 — 빵빵한 몸과 머리 위 게이지 막대를 확인한다.
+	var k := float(img.get_width()) / get_viewport().get_visible_rect().size.x
+	var at := Vector2i(player.get_global_transform_with_canvas().origin * k)
+	var crop := img.get_region(Rect2i(at - Vector2i(70, 90), Vector2i(140, 140)))
+	crop.resize(660, 660, Image.INTERPOLATE_NEAREST)
+	crop.save_png(OUT + "/classic_float_zoom.png")
 	print("ALL TESTS PASSED" if ok else "FAILED")
 	get_tree().quit(0 if ok else 1)
 

@@ -90,6 +90,11 @@ func _ready() -> void:
 	player.velocity = Vector2.ZERO
 	player.on_floor = false
 	player.float_base_y = base_y
+	# 높이 규칙부터 본다 — 게이지는 잠깐 꺼 두고(값 0) 아래에서 따로 잰다.
+	var flap_cost: float = player.float_gauge_flap_cost
+	var drain: float = player.float_gauge_drain
+	player.float_gauge_flap_cost = 0.0
+	player.float_gauge_drain = 0.0
 	player._flap()
 	_check(player.floating and player.velocity.y < 0.0, "float: air jump puffs up and rises")
 	var top_y: float = base_y - player.float_max_height_cells * c
@@ -126,6 +131,48 @@ func _ready() -> void:
 	_check(player.on_floor and not player.floating, "float: landing deflates")
 	_check(is_equal_approx(player.float_base_y, player.position.y),
 			"float: height limit is measured from the last footing")
+	# 풍선 게이지: 날갯짓마다 깎이고, 떠 있는 동안 줄고, 바닥나면 바람이 빠진다.
+	player.float_gauge_flap_cost = flap_cost
+	player.float_gauge_drain = drain
+	for i in range(int(8.0 / dt)):
+		player._handle_input(dt)
+		player._apply_motion(dt)
+	_check(is_equal_approx(player.float_gauge, 1.0), "gauge: refills while standing")
+	player.on_floor = false
+	player._flap()
+	_check(is_equal_approx(player.float_gauge, 1.0 - flap_cost), "gauge: each flap costs gauge")
+	var before: float = player.float_gauge
+	player._handle_input(dt)
+	player._apply_motion(dt)
+	_check(player.float_gauge < before, "gauge: drains while floating")
+	var flaps := 0
+	for i in range(600):
+		if i % 20 == 0 and player.floating:
+			player._flap()
+			flaps += 1
+		player._handle_input(dt)
+		player._apply_motion(dt)
+		if player.on_floor:
+			break
+	_check(player.float_gauge < flap_cost, "gauge: runs out in the air")
+	_check(flaps >= 2 and flaps <= 8, "gauge: a full gauge buys a handful of flaps")
+	player.on_floor = false
+	player.floating = false
+	player.float_gauge = flap_cost * 0.5
+	player._flap()
+	_check(not player.floating and player.gauge_flash > 0.0, "gauge: too little gauge refuses the flap")
+	player.float_gauge = 0.4
+	player.floating = true
+	player.velocity.y = 0.0
+	var mid_air: float = player.float_gauge
+	player.floating = false
+	for i in range(30):
+		player._handle_input(dt)
+		if player.on_floor:
+			break
+		player._apply_motion(dt)
+	_check(player.float_gauge <= mid_air or player.on_floor, "gauge: does not refill in the air")
+	player.float_gauge = 1.0
 	board.grid.clear()
 	player.velocity = Vector2.ZERO
 
