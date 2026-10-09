@@ -2,7 +2,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 최종 수정일 | 2026-10-08 |
+| 최종 수정일 | 2026-10-09 |
 | 게임 버전 | 0.1.0 (`project.godot` `config/version`) |
 | 기준 브랜치 / 커밋 | `main` / `e59c1c8` |
 | 엔진 | Godot 4.6 (2D, `config/features` = 4.6 / Forward Plus, 모바일은 `gl_compatibility`) |
@@ -552,6 +552,7 @@ boot.tscn               플랫폼 타이틀로 라우팅 (피처 태그 steam/mo
 | [steam_setup.md](steam_setup.md) | 스팀 파트너 사이트 작업 체크리스트, 업적 등록표 | 유효 (일부 수치 어긋남, §10) |
 | [cloud_setup.md](cloud_setup.md) | Supabase 세팅 체크리스트, 서버가 맡는 범위 | 유효 |
 | [figma_questions.md](figma_questions.md) | 피그마 UI 적용 중 기획 확인 필요 항목 | 유효 (미결) |
+| [ui_audit.md](ui_audit.md) | UI/UX 점검 결과(2026-10-09): 수정한 버그, 버그 후보, 일관성, UX·연출 제안 | 유효 (제안은 선택 대기) |
 | [my_tasks.md](my_tasks.md) | 사용자가 외부 사이트에서 할 일 | 유효 |
 | [../CLAUDE.md](../CLAUDE.md) | 개발 지침 겸 구현 설명 (모드·플랫폼 분리·UI 상세) | 유효 (일부 낡은 서술, §10) |
 

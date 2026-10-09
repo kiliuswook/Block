@@ -1647,7 +1647,8 @@ func _draw_unlock(ci: Control) -> void:
 	var nm := tr(str(cat.name))
 	var head_line := tr("CHAR_RECRUITED").format({"name": nm}) if grade <= 1 \
 			else tr("KEYCAP_GRADE_UP").format({"name": nm, "grade": grade})
-	UiKit.text(ci, head_line, Vector2(w / 2.0, 24.0), 20, TEXT, false, 1, w - 20.0)
+	# 제목(50) 아랫단과 겹치지 않게 닉네임 팝업의 부제와 같은 높이에 둔다.
+	UiKit.text(ci, head_line, Vector2(w / 2.0, 40.0), 20, TEXT, false, 1, w - 20.0)
 	var tier := clampi(grade - 1, 0, GameState.CustomCat.TIER_MAX)
 	var cy := 200.0
 	if grade <= 1:

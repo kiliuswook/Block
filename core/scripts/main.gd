@@ -507,6 +507,7 @@ func _layout_stat_column() -> void:
 			goal_meter.size = Vector2(HUD_COL_W - 40.0, 106.0)
 			goal_meter.per_row = 5
 			y = goal_meter.position.y + goal_meter.size.y + HUD_ROW_GAP
+			hud_dividers[-1] = y - HUD_ROW_GAP / 2.0
 	# 기록 갱신 줄은 판 도중에 켜진다 — 자리는 지금 잡아 둔다(카드가 자라지 않게).
 	record_label.position = Vector2(HUD_COL_X, y)
 	record_label.size = Vector2(HUD_COL_W, 36.0)
