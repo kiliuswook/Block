@@ -195,10 +195,14 @@ func _midi(m: int) -> float:
 
 func _build_sounds() -> void:
 	var b: PackedFloat32Array
-	# Jump: short rising chirp. Puff (balloon float flap): lower, softer, breathy.
+	# Jump: short rising chirp. Wall jump: same, a fifth higher.
+	# Puff (balloon float flap): lower, softer, breathy.
 	b = _buf(0.14)
 	_add_tone(b, 0.0, 0.14, 320.0, 640.0, 0.28, SQUARE)
 	_sounds["jump"] = _wav(b)
+	b = _buf(0.14)
+	_add_tone(b, 0.0, 0.14, 480.0, 960.0, 0.26, SQUARE)
+	_sounds["walljump"] = _wav(b)
 	b = _buf(0.14)
 	_add_tone(b, 0.0, 0.14, 240.0, 380.0, 0.16, SQUARE)
 	_add_tone(b, 0.0, 0.1, 0.0, 0.0, 0.08, NOISE, 2.0)

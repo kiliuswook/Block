@@ -1,7 +1,7 @@
 class_name Player
 extends Node2D
 ## Cube-cat character: run, double-tap dash, jump with air control,
-## balloon float (jump again in the air), fast fall. Custom AABB physics against the EscapeBoard grid.
+## wall jump, balloon float (jump again in the air), fast fall. Custom AABB physics against the EscapeBoard grid.
 
 const CatArt := preload("res://core/scripts/cat_art.gd")
 
@@ -24,6 +24,8 @@ const BREAK_PROBE := 10.0
 const KNOCKBACK_SPEED := 420.0
 const KNOCKBACK_TIME := 0.15
 const WALL_SLIDE_SPEED := 160.0
+const WALL_JUMP_PUSH := 430.0
+const WALL_JUMP_TIME := 0.18
 const FLAP_TIME := 0.18  # 날갯짓 한 번에 몸이 출렁이는 시간
 const PUFF_TIME := 0.14  # 부풀고 꺼지는 데 걸리는 시간
 const GAUGE_SIZE := Vector2(58.0, 10.0)  # 머리 위 풍선 게이지 막대
@@ -73,6 +75,7 @@ var knockback_timer := 0.0
 var knockback_vx := 0.0
 var wall_dir := 0  # -1: wall on the left, 1: on the right, 0: none
 var squash_timer := 0.0
+var wall_jumps_left := 1
 var floating := false  # 풍선처럼 부풀어 떠 있는 중
 var float_base_y := 0.0  # 마지막으로 디딘 자리 — 뜰 수 있는 높이의 기준
 var flap_timer := 0.0
@@ -126,6 +129,7 @@ func respawn(pos: Vector2) -> void:
 	jump_buffer = 0.0
 	knockback_timer = 0.0
 	wall_dir = 0
+	wall_jumps_left = 1
 	floating = false
 	float_base_y = pos.y
 	flap_timer = 0.0
@@ -184,6 +188,7 @@ func _fever_motion(delta: float) -> void:
 	on_floor = false
 	coyote_timer = 0.0
 	wall_dir = 0
+	wall_jumps_left = 1
 	floating = false
 	puff = 0.0
 	gauge_show = 0.0
@@ -256,9 +261,7 @@ func _handle_input(delta: float) -> void:
 		coyote_timer = 0.0
 		Sfx.play("jump")
 	elif Input.is_action_just_pressed("jump") and not on_floor:
-		# 공중에서 다시 점프: 부풀어 뜬다. 입력 버퍼는 그대로 둬서, 바닥 직전에
-		# 누른 점프는 착지하자마자 평소 점프로 나간다.
-		_flap()
+		_air_jump()
 	var fast_fall := Input.is_action_pressed("soft_drop")
 	if floating and fast_fall:
 		floating = false  # 낙하 키는 바람을 빼고 곧장 떨어진다
@@ -280,6 +283,24 @@ func _handle_input(delta: float) -> void:
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
 		velocity.y = WALL_SLIDE_SPEED
+
+
+## 공중에서 누른 점프: 벽에 붙어 있고 벽 점프가 남아 있으면 벽 점프가 먼저,
+## 아니면 풍선 점프다. 풍선 점프는 입력 버퍼를 그대로 둬서, 바닥 직전에 누른
+## 점프는 착지하자마자 평소 점프로 나간다.
+func _air_jump() -> void:
+	if wall_dir != 0 and wall_jumps_left > 0:
+		# Wall jump: leap up and away from the wall, once per airtime.
+		velocity.y = JUMP_VEL * stat_jump
+		knockback_timer = WALL_JUMP_TIME
+		knockback_vx = -wall_dir * WALL_JUMP_PUSH
+		wall_jumps_left -= 1
+		jump_buffer = 0.0
+		dash_timer = 0.0
+		floating = false  # 부푼 채 벽을 차면 바람이 빠진다
+		Sfx.play("walljump")
+	else:
+		_flap()
 
 
 ## 풍선 점프 한 번: 처음이면 부풀고, 이미 부풀어 있으면 한 번 더 떠오른다.
@@ -335,6 +356,7 @@ func _apply_motion(delta: float) -> void:
 		var feet := Rect2(position.x - SIZE / 2.0, position.y + SIZE / 2.0, SIZE, 2.0)
 		on_floor = velocity.y >= 0.0 and board.rect_blocked_for_player(feet)
 	if on_floor:
+		wall_jumps_left = 1
 		floating = false
 		float_base_y = position.y
 

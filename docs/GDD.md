@@ -83,8 +83,8 @@
 | 달리기 | `RUN_SPEED`=330 px/s × speed |
 | 점프 | `JUMP_VEL`=-840 × jump, 코요테 `COYOTE`=0.1초, 입력 버퍼 `JUMP_BUFFER`=0.12초 |
 | 중력 | `GRAVITY`=2300, 최대 낙하 `MAX_FALL`=1300. 낙하 키로 빠른 낙하 ×`FAST_FALL_FACTOR`=2.2 × weight |
-| 풍선 점프 (테스트 중) | 공중에서 점프를 다시 누르면 몸이 부풀어 뜨고, 누를 때마다 위로 `float_flap_velocity`=-430 × jump. 부푼 동안 중력 `float_gravity`=900, 가만히 두면 `float_max_fall`=140 px/s로 가라앉음, 좌우 이동 ×`float_move_factor`=0.75. **최대 높이는 마지막으로 디딘 자리에서 `float_max_height_cells`=5칸**(320px, 일반 점프는 약 2.4칸). 착지·낙하 키·대시로 바람이 빠진다. 부푼 동안은 머리 박기로 블록을 못 부순다. 그림만 `float_puff_scale`=1.28배로 커지고 판정 크기는 그대로(0.14초에 빵 하고 부풀며 살짝 넘쳤다 돌아오고, 몸 뒤로 몸 색의 둥근 풍선 배 + 흰 광택이 붙는다. 바람이 빠지면 발밑에 먼지). **풍선 게이지**(0~1, 판 시작 때 가득): 공중 점프 한 번에 `float_gauge_flap_cost`=0.12, 떠 있는 동안 초당 `float_gauge_drain`=0.25가 줄고, 한 번 값보다 적게 남으면 공중 점프가 안 먹고 0이 되면 바람이 빠진다. **바닥에 서 있을 때만** 착지 `float_gauge_refill_delay`=0.4초 뒤부터 초당 `float_gauge_refill`=0.18씩 찬다(빈 게이지가 가득 차는 데 약 6초, 가득 찬 게이지로 뜨는 시간은 약 2초·공중 점프 4~5번 = 최대 높이 한 번 오를 만큼). 게이지 막대는 고양이 머리 위(58×10px)에 뜨고, 가득 차면 0.7초 뒤 숨는다. 하늘색 → 두 번 값 미만이면 빨강, 모자라 거절되면 번쩍임. 값은 전부 `player.gd`의 `@export`(인스펙터 "풍선 점프" 묶음) |
-| 벽 | 벽 미끄럼 `WALL_SLIDE_SPEED`=160. 벽 점프는 제거됨 (2026-10-08, 풍선 점프로 대체) |
+| 풍선 점프 (테스트 중) | 공중에서 점프를 다시 누르면(벽 점프가 먼저 — 아래 "벽" 행) 몸이 부풀어 뜨고, 누를 때마다 위로 `float_flap_velocity`=-430 × jump. 부푼 동안 중력 `float_gravity`=900, 가만히 두면 `float_max_fall`=140 px/s로 가라앉음, 좌우 이동 ×`float_move_factor`=0.75. **최대 높이는 마지막으로 디딘 자리에서 `float_max_height_cells`=5칸**(320px, 일반 점프는 약 2.4칸). 착지·낙하 키·대시로 바람이 빠진다. 부푼 동안은 머리 박기로 블록을 못 부순다. 그림만 `float_puff_scale`=1.28배로 커지고 판정 크기는 그대로(0.14초에 빵 하고 부풀며 살짝 넘쳤다 돌아오고, 몸 뒤로 몸 색의 둥근 풍선 배 + 흰 광택이 붙는다. 바람이 빠지면 발밑에 먼지). **풍선 게이지**(0~1, 판 시작 때 가득): 공중 점프 한 번에 `float_gauge_flap_cost`=0.12, 떠 있는 동안 초당 `float_gauge_drain`=0.25가 줄고, 한 번 값보다 적게 남으면 공중 점프가 안 먹고 0이 되면 바람이 빠진다. **바닥에 서 있을 때만** 착지 `float_gauge_refill_delay`=0.4초 뒤부터 초당 `float_gauge_refill`=0.18씩 찬다(빈 게이지가 가득 차는 데 약 6초, 가득 찬 게이지로 뜨는 시간은 약 2초·공중 점프 4~5번 = 최대 높이 한 번 오를 만큼). 게이지 막대는 고양이 머리 위(58×10px)에 뜨고, 가득 차면 0.7초 뒤 숨는다. 하늘색 → 두 번 값 미만이면 빨강, 모자라 거절되면 번쩍임. 값은 전부 `player.gd`의 `@export`(인스펙터 "풍선 점프" 묶음) |
+| 벽 | 벽 미끄럼 `WALL_SLIDE_SPEED`=160, 벽 점프 체공 중 1회 (`WALL_JUMP_PUSH`=430, 0.18초 — 2026-10-08에 뺐다가 10-09에 되살림). **공중에서 누른 점프는 벽 점프를 먼저 본다**: 벽에 붙어 있고 벽 점프가 남아 있으면 벽 점프(풍선 게이지를 쓰지 않고, 부풀어 있었다면 바람이 빠진다), 아니면 풍선 점프 (`player.gd._air_jump()`) |
 | 대시 | 같은 방향 두 번(`DOUBLE_TAP`=0.3초) 또는 대시 키. `DASH_SPEED`=850 × dash, 0.22초, 쿨다운 0.25초 ÷ dash |
 | 대시 충돌 | 떨어지는/착지한 블록을 `push`칸 밀거나, 박힌 블록 한 칸을 친다. 튕겨남 `KNOCKBACK_SPEED`=420 ÷ weight |
 | 블록 부수기 | 대시·머리 박기(바닥 점프로 위 블록, 풍선 점프 중에는 불가). 일반 블록은 **두 번**(1타 금 감 → 2타 파괴), 금 블록은 한 번, 피버 암반은 불가 |
@@ -372,7 +372,7 @@ en·ko 외 11개 언어는 선택 목록에는 있으나 CSV에 번역 열이 �
 
 | 종류 | 목록 |
 |---|---|
-| 효과음 24종 | jump, puff(풍선 점프), dash, land, lock, rotate, harddrop, impact, clear, combo, crack, break, shove, gold, shutter, fever, milestone, record, death, pause, click, buy, error, escape |
+| 효과음 25종 | jump, walljump, puff(풍선 점프), dash, land, lock, rotate, harddrop, impact, clear, combo, crack, break, shove, gold, shutter, fever, milestone, record, death, pause, click, buy, error, escape |
 | BGM 2종 | `title`, `game` (첫 재생 때 렌더) |
 | 버스 | Master / BGM / SFX (런타임 생성) |
 

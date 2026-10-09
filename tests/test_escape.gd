@@ -71,7 +71,7 @@ func _ready() -> void:
 	board.grid.clear()
 	board.cracked.clear()
 
-	# Wall contact detection (for wall slide)
+	# Wall contact detection (for wall slide / wall jump)
 	player.position = Vector2(Player.SIZE / 2.0, 500.0)
 	_check(player._wall_contact() == -1, "left wall contact detected")
 	player.position = Vector2(EscapeBoard.COLS * c - Player.SIZE / 2.0, 500.0)
@@ -174,6 +174,32 @@ func _ready() -> void:
 	_check(player.float_gauge <= mid_air or player.on_floor, "gauge: does not refill in the air")
 	player.float_gauge = 1.0
 	board.grid.clear()
+	# 공중 점프 우선순위: 벽에 붙어 있으면 벽 점프가 먼저(체공 중 1회), 그다음 풍선 점프.
+	player.position = Vector2(Player.SIZE / 2.0, 500.0)
+	player.velocity = Vector2.ZERO
+	player.on_floor = false
+	player.floating = false
+	player.wall_jumps_left = 1
+	player.wall_dir = player._wall_contact()
+	player._air_jump()
+	_check(not player.floating and player.wall_jumps_left == 0 and player.knockback_vx > 0.0
+			and is_equal_approx(player.velocity.y, Player.JUMP_VEL * player.stat_jump),
+			"air jump: wall jump comes first")
+	_check(is_equal_approx(player.float_gauge, 1.0), "air jump: wall jump costs no gauge")
+	player._air_jump()
+	_check(player.floating, "air jump: with the wall jump spent, it floats")
+	player.wall_jumps_left = 1
+	player._air_jump()
+	_check(not player.floating, "air jump: wall jump deflates a floating cat")
+	player.position = Vector2(320.0, 500.0)
+	player.wall_dir = player._wall_contact()
+	player.wall_jumps_left = 1
+	player._air_jump()
+	_check(player.floating and player.wall_jumps_left == 1, "air jump: away from walls it floats")
+	player.floating = false
+	player.float_gauge = 1.0
+	player.knockback_timer = 0.0
+	player.velocity = Vector2.ZERO
 	player.velocity = Vector2.ZERO
 
 	# Cracks follow blocks down through a line clear
