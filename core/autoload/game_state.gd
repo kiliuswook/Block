@@ -8,6 +8,9 @@ const KeyBinds := preload("res://core/scripts/key_binds.gd")
 # 흔들리지 않게 비워 둔다 (escape_board.Mode 와 값이 1:1).
 const MODE_ENDLESS := 1
 const MODE_CLASSIC := 3  # arcade tetris: clear lines, survive, stage up
+const CONTROL_AUTO := -1
+const CONTROL_CLASSIC := 0
+const CONTROL_SIMPLE := 1  # 좌우 두 버튼 — 점프 대신 자동 파쿠르 (player.gd)
 
 ## Playable cube-cat skins. Unlock types:
 ##  free — 시작부터 지급되는 첫 캐릭터 (첫 키캡 한 바퀴를 공짜로 갖고 시작)
@@ -182,6 +185,9 @@ var resolution: String = ""
 var keybinds: Dictionary = {}
 ## 사용자가 바꾼 패드 바인딩 {"<액션>": {"t": "b"/"a", "i": 인덱스}}.
 var padbinds: Dictionary = {}
+## 조작 방식: CONTROL_AUTO(-1) = 플랫폼 기본(모바일은 두 버튼, 그 외는 기본 조작),
+## CONTROL_CLASSIC = 이동·점프·대시·낙하·회전, CONTROL_SIMPLE = 좌우 두 버튼 + 자동 파쿠르.
+var control_mode: int = CONTROL_AUTO
 
 var score: int = 0:
 	set(value):
@@ -201,6 +207,22 @@ func _ready() -> void:
 		nickname = tr("NICKNAME_DEFAULT").format({"n": "%04d" % (randi() % 10000)})
 		save_game()
 	EventBus.game_started.connect(func() -> void: games_played += 1)
+
+
+## 지금 적용되는 조작 방식 (CONTROL_CLASSIC / CONTROL_SIMPLE). 고른 적이 없으면
+## 모바일(실기기 · `--mobile` · 모바일 런처)은 두 버튼, 그 외는 기본 조작이다.
+func control_scheme() -> int:
+	if control_mode != CONTROL_AUTO:
+		return control_mode
+	var mobile := OS.has_feature("mobile") or "--mobile" in OS.get_cmdline_user_args() \
+			or "--mobile" in OS.get_cmdline_args() \
+			or str(load("res://core/scripts/boot.gd").dev_platform) == "mobile"
+	return CONTROL_SIMPLE if mobile else CONTROL_CLASSIC
+
+
+## 두 버튼 조작인가 — 점프·대시 키·낙하·회전 입력을 받지 않는다.
+func simple_controls() -> bool:
+	return control_scheme() == CONTROL_SIMPLE
 
 
 func set_nickname(n: String) -> void:
@@ -1102,6 +1124,7 @@ func save_dict() -> Dictionary:
 		"resolution": resolution,
 		"keybinds": keybinds,
 		"padbinds": padbinds,
+		"control_mode": control_mode,
 		"cloud_rev": cloud_rev,
 	}
 
@@ -1233,6 +1256,8 @@ func load_game() -> void:
 		vol_sfx = clampf(float(data.get("vol_sfx", 1.0)), 0.0, 1.0)
 		vibration = clampi(int(data.get("vibration", 2)), 0, 3)
 		resolution = str(data.get("resolution", ""))
+		control_mode = clampi(int(data.get("control_mode", CONTROL_AUTO)),
+				CONTROL_AUTO, CONTROL_SIMPLE)
 		var kb: Variant = data.get("keybinds", {})
 		if kb is Dictionary:
 			keybinds = {}

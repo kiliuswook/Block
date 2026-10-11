@@ -164,6 +164,7 @@ var playing := false
 var is_paused := false
 var break_fx: Array = []  # [cell: Vector2i, age: float]
 var mode := Mode.CLASSIC
+var simple_controls := false  # 두 버튼 조작 — start_game 때 GameState에서 읽는다
 var rows := PIT_ROWS  # pit height in cells
 ## 무한의 계단 카메라 배율과, 그 배율에서 화면을 덮는 "카메라 아래로 더 그리는
 ## 거리". 스테이지 모드와 같은 크기의 우물을 쓰려고 start_game에서 정해진다.
@@ -232,6 +233,7 @@ var fever_flash := 0.0  # 발동 순간의 섬광 (초)
 
 func start_game() -> void:
 	mode = GameState.mode as Mode
+	simple_controls = GameState.simple_controls()
 	rows = PIT_ROWS
 	grid.clear()
 	cracked.clear()
@@ -306,6 +308,16 @@ func _bank_ore(c: Vector2i, value: int) -> void:
 	EventBus.ore_collected.emit(value, at)
 
 
+## 블록 조작 키(회전 · 낙하). 두 버튼 조작에서는 아무것도 받지 않는다 — 블록은
+## 냥이를 따라오다 제 시간이 되면 알아서 떨어진다.
+func _pressed_now(action: String) -> bool:
+	return not simple_controls and Input.is_action_just_pressed(action)
+
+
+func _held(action: String) -> bool:
+	return not simple_controls and Input.is_action_pressed(action)
+
+
 func _process(delta: float) -> void:
 	if not playing or is_paused:
 		return
@@ -326,9 +338,9 @@ func _process(delta: float) -> void:
 	# 피버타임 동안은 판이 통째로 멎는다 — 조각도, 굴러다니는 덩어리도. 조여 오던
 	# 것이 잠깐 사라지는 것이 이 6초의 전부라, 위에서 뭐가 내려오면 안 된다.
 	if not fever_on():
-		if Input.is_action_just_pressed("rotate_cw"):
+		if _pressed_now("rotate_cw"):
 			_try_rotate(1)
-		if Input.is_action_just_pressed("rotate_ccw"):
+		if _pressed_now("rotate_ccw"):
 			_try_rotate(-1)
 		if piece_type != "":
 			match piece_state:
@@ -686,7 +698,7 @@ func piece_hits_rect(r: Rect2) -> bool:
 
 
 func _track(delta: float) -> void:
-	if Input.is_action_just_pressed("soft_drop"):
+	if _pressed_now("soft_drop"):
 		# 두 번 누르기 = 방금 놓은 블록을 하드드롭. 한 번 = 지금 블록을 놓는다.
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - drop_tap_time <= DROP_DOUBLE_TAP and _hard_drop_loose():
@@ -784,7 +796,7 @@ func _loose_blocked(i: int, dir: Vector2i) -> bool:
 ## Oldest (lowest) pieces step first so mid-air stacks settle bottom-up.
 func _step_loose(delta: float) -> void:
 	var interval := _fall_interval()
-	if Input.is_action_pressed("soft_drop"):
+	if _held("soft_drop"):
 		interval /= SOFT_DROP_FACTOR
 	var i := 0
 	while i < loose.size():
@@ -797,7 +809,7 @@ func _step_loose(delta: float) -> void:
 					_land_loose(e, 0)
 					break
 				e.p += Vector2i(0, 1)
-				if Input.is_action_pressed("soft_drop"):
+				if _held("soft_drop"):
 					_push_trail_cells(_loose_cells(e), 1, Board.COLORS[e.t], 0.5)
 				if _resolve_loose_overlap(i) or not playing:
 					return
@@ -895,7 +907,7 @@ func _start_fall() -> void:
 
 func _fall(delta: float) -> void:
 	# Double-tap soft drop slams the piece all the way down.
-	if Input.is_action_just_pressed("soft_drop"):
+	if _pressed_now("soft_drop"):
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - drop_tap_time <= DROP_DOUBLE_TAP:
 			drop_tap_time = -1e9
@@ -904,7 +916,7 @@ func _fall(delta: float) -> void:
 		drop_tap_time = now
 	fall_timer += delta
 	var interval := _fall_interval()
-	if Input.is_action_pressed("soft_drop"):
+	if _held("soft_drop"):
 		interval /= SOFT_DROP_FACTOR
 	while fall_timer >= interval and playing:
 		fall_timer -= interval
@@ -912,7 +924,7 @@ func _fall(delta: float) -> void:
 			_land()
 			return
 		piece_pos.y += 1
-		if Input.is_action_pressed("soft_drop"):
+		if _held("soft_drop"):
 			_push_trail(1, 0.5)  # 빠르게 내려올 때만 자국이 남는다
 		if _resolve_piece_overlap():
 			return
@@ -942,7 +954,7 @@ func _landed(delta: float) -> void:
 		fall_from = piece_pos.y
 		return
 	# Tapping down locks it in place immediately.
-	if Input.is_action_just_pressed("soft_drop"):
+	if _pressed_now("soft_drop"):
 		_lock_piece()
 		return
 	land_timer += delta

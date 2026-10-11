@@ -2,6 +2,8 @@ class_name Player
 extends Node2D
 ## Cube-cat character: run, double-tap dash, jump with air control,
 ## wall jump, balloon float (jump again in the air), fast fall. Custom AABB physics against the EscapeBoard grid.
+## 두 버튼 조작(GameState.simple_controls())에서는 좌우만 받고, 점프 대신 벽을 밀면
+## 저절로 넘어간다 — 낮은 턱은 딱 맞는 높이로 깡충, 높은 턱은 벽을 타고 오른다(`_parkour()`).
 
 const CatArt := preload("res://core/scripts/cat_art.gd")
 
@@ -63,6 +65,20 @@ const STEP := 4.0
 ## 착지한 뒤 차기 시작할 때까지의 뜸 (초)
 @export var float_gauge_refill_delay := 0.4
 
+## 두 버튼 조작의 자동 파쿠르: 좌우 키로 벽을 밀고 있으면 저절로 넘어간다.
+## 넘을 턱 높이(바로 앞 칸이 비는 데까지)가 점프로 닿으면 깡충, 더 높으면 벽타기.
+@export_group("두 버튼 파쿠르")
+## 바닥에서 벽을 이만큼(초) 밀고 있어야 넘기 시작한다 — 스치기만 해선 안 뛴다
+@export var parkour_delay := 0.08
+## 벽타기로 오를 수 있는 최대 턱 높이 (칸 = board.CELL). 이보다 높은 벽은 못 넘는다
+@export var climb_max_cells := 4.0
+## 벽을 타고 오르는 속도 (px/s, × jump 능력치)
+@export var climb_speed := 560.0
+## 깡충 넘기: 턱 위로 이만큼(px) 더 솟게 뛴다 — 넘어갈 틈
+@export var vault_clearance := 14.0
+## 벽 끝에 다다르면 턱 위로 올라서며 살짝 튀어 오르는 속도 (px/s)
+@export var ledge_pop := -320.0
+
 var velocity := Vector2.ZERO
 var alive := true
 var on_floor := false
@@ -95,6 +111,10 @@ var stat_jump := 1.0
 var stat_dash := 1.0
 var stat_weight := 1.0
 var stat_push := 2  # dash shove power, in cells
+var simple := false  # 두 버튼 조작 — respawn 때 GameState에서 읽는다
+var climbing := false  # 벽을 타고 오르는 중 (두 버튼 조작)
+var climb_dir := 0  # 타고 있는 벽 쪽 (-1 / 1)
+var push_timer := 0.0  # 바닥에서 벽을 민 시간 — parkour_delay를 넘기면 넘는다
 @onready var board: EscapeBoard = get_parent()
 
 
@@ -117,6 +137,10 @@ func _refresh_stats() -> void:
 
 func respawn(pos: Vector2) -> void:
 	_refresh_stats()
+	simple = GameState.simple_controls()
+	climbing = false
+	climb_dir = 0
+	push_timer = 0.0
 	position = pos
 	velocity = Vector2.ZERO
 	alive = true
@@ -190,6 +214,7 @@ func _fever_motion(delta: float) -> void:
 	wall_dir = 0
 	wall_jumps_left = 1
 	floating = false
+	climbing = false
 	puff = 0.0
 	gauge_show = 0.0
 	float_base_y = position.y
@@ -230,8 +255,10 @@ func _handle_input(delta: float) -> void:
 	var axis := Input.get_axis("move_left", "move_right")
 	if axis != 0.0:
 		facing = int(signf(axis))
+	# 두 버튼 조작은 좌우 말고는 아무 키도 받지 않는다 (대시는 좌우 더블탭으로).
+	var jump_pressed := not simple and Input.is_action_just_pressed("jump")
 	# Shift dash: dashes toward the held direction, or the way we last faced.
-	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0.0:
+	if not simple and Input.is_action_just_pressed("dash") and dash_cooldown <= 0.0:
 		dash_timer = DASH_TIME
 		dash_dir = int(signf(axis)) if axis != 0.0 else facing
 		dash_cooldown = DASH_COOLDOWN / stat_dash
@@ -248,7 +275,10 @@ func _handle_input(delta: float) -> void:
 			velocity.x *= float_move_factor
 	if dash_timer > 0.0:
 		floating = false  # 대시는 바람을 빼고 나간다
-	if Input.is_action_just_pressed("jump"):
+		climbing = false
+	if simple and _parkour(delta, axis):
+		return  # 벽을 타는 동안은 중력 대신 오르는 속도가 몸을 끈다
+	if jump_pressed:
 		jump_buffer = JUMP_BUFFER
 	else:
 		jump_buffer = maxf(jump_buffer - delta, 0.0)
@@ -260,9 +290,9 @@ func _handle_input(delta: float) -> void:
 		jump_buffer = 0.0
 		coyote_timer = 0.0
 		Sfx.play("jump")
-	elif Input.is_action_just_pressed("jump") and not on_floor:
+	elif jump_pressed and not on_floor:
 		_air_jump()
-	var fast_fall := Input.is_action_pressed("soft_drop")
+	var fast_fall := not simple and Input.is_action_pressed("soft_drop")
 	if floating and fast_fall:
 		floating = false  # 낙하 키는 바람을 빼고 곧장 떨어진다
 	if floating:
@@ -283,6 +313,91 @@ func _handle_input(delta: float) -> void:
 	# Hug a wall while falling to slide down it slowly (unless fast-falling).
 	if not on_floor and wall_dir != 0 and not fast_fall and velocity.y > WALL_SLIDE_SPEED:
 		velocity.y = WALL_SLIDE_SPEED
+
+
+## 두 버튼 조작의 자동 파쿠르. 좌우 키로 벽을 밀면:
+##   ① 바로 앞 턱이 점프로 닿는 높이면 — 바닥에서 parkour_delay만큼 밀었을 때 그 턱을
+##      딱 넘을 만큼만 깡충 뛴다 (한 칸 턱은 작게, 두 칸 턱은 크게)
+##   ② 그보다 높고 climb_max_cells 칸 이하면 — 벽을 타고 오르다 끝에서 턱 위로 올라선다
+##   ③ 공중(떨어지는 중)에서 벽을 밀면 기다림 없이 ②로 턱을 붙잡는다
+##   ④ 끝이 안 보이는 벽(우물 옆벽 · 너무 높은 스택)이나 머리 위가 막힌 곳은 넘지 않는다
+## 벽을 타는 중이면 true — 호출부는 중력을 건너뛴다. 키를 떼거나 반대로 누르면 놓는다.
+func _parkour(delta: float, axis: float) -> bool:
+	var dir := int(signf(axis))
+	if climbing:
+		if dir != climb_dir or knockback_timer > 0.0:
+			climbing = false  # 손을 놓으면 그대로 미끄러진다
+			velocity.y = 0.0
+			return false
+		var r := rect()
+		if board.rect_blocked_for_player(Rect2(r.position + Vector2(0.0, -2.0), r.size)):
+			climbing = false  # 머리 위가 막혔다 (내려온 조각 등)
+			velocity.y = 0.0
+			return false
+		if not board.rect_blocked_for_player(
+				Rect2(r.position + Vector2(climb_dir * 2.0, 0.0), r.size)):
+			# 벽 끝을 넘었다: 턱 위로 올라서며 살짝 튀어 오른다.
+			climbing = false
+			velocity.y = ledge_pop
+			velocity.x = climb_dir * RUN_SPEED * stat_speed
+			return true
+		velocity.y = -climb_speed * stat_jump
+		velocity.x = climb_dir * RUN_SPEED * stat_speed  # 벽에 붙여 둔다
+		return true
+	if dir == 0 or dash_timer > 0.0 or knockback_timer > 0.0 or not _touching(dir):
+		push_timer = 0.0
+		return false
+	if on_floor:
+		push_timer += delta
+		if push_timer < parkour_delay:
+			return false
+	elif velocity.y < 0.0:
+		return false  # 아직 솟는 중 — 깡충 뛴 몸이 알아서 넘는다
+	var h := ledge_height(dir)
+	if h < 0.0:
+		return false
+	push_timer = 0.0
+	if on_floor and h <= hop_reach():
+		velocity.y = -sqrt(2.0 * GRAVITY * (h + vault_clearance))
+		jump_buffer = 0.0
+		coyote_timer = 0.0
+		Sfx.play("jump")
+		return false
+	climbing = true
+	climb_dir = dir
+	velocity.y = -climb_speed * stat_jump
+	Sfx.play("walljump")
+	return true
+
+
+## 깡충 넘기로 넘을 수 있는 가장 높은 턱 (px) — 평소 점프 높이에서 틈만큼 뺀다.
+func hop_reach() -> float:
+	var v := JUMP_VEL * stat_jump
+	return v * v / (2.0 * GRAVITY) - vault_clearance
+
+
+## dir 쪽 턱 높이 (px): 몸을 몇 px 올려야 그쪽으로 한 걸음 들어갈 수 있는가.
+## climb_max_cells 칸 안에서 못 찾거나, 오르는 길(머리 위)이 막혔으면 -1.
+func ledge_height(dir: int) -> float:
+	var r := rect()
+	var max_h := climb_max_cells * board.CELL
+	var h := 0.0
+	while h < max_h:
+		h = minf(h + 4.0, max_h)
+		var up := Rect2(r.position + Vector2(0.0, -h), r.size)
+		if board.rect_blocked_for_player(up):
+			return -1.0
+		if not board.rect_blocked_for_player(
+				Rect2(up.position + Vector2(dir * 4.0, 0.0), r.size)):
+			return h
+	return -1.0
+
+
+## dir 쪽에 벽/블록이 몸에 딱 붙어 있는가 (`_wall_contact()`의 한쪽 버전).
+func _touching(dir: int) -> bool:
+	var half := SIZE / 2.0
+	var x := position.x + half if dir > 0 else position.x - half - 2.0
+	return board.rect_blocked_for_player(Rect2(x, position.y - half + 6.0, 2.0, SIZE - 12.0))
 
 
 ## 공중에서 누른 점프: 벽에 붙어 있고 벽 점프가 남아 있으면 벽 점프가 먼저,
@@ -348,7 +463,7 @@ func _apply_motion(delta: float) -> void:
 				board.land_dust(Vector2(position.x, rect().end.y),
 						clampf(velocity.y / 1400.0, 0.2, 1.0))
 			on_floor = true
-		elif velocity.y < 0.0 and not floating:
+		elif velocity.y < 0.0 and not floating and not climbing:
 			# Head-bump smashes the single block above (부푼 몸으로는 못 부순다).
 			var head := rect()
 			head.position.y -= BREAK_PROBE
