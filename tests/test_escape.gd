@@ -161,6 +161,19 @@ func _ready() -> void:
 	player.float_gauge = flap_cost * 0.5
 	player._flap()
 	_check(not player.floating and player.gauge_flash > 0.0, "gauge: too little gauge refuses the flap")
+	# 부풀기 시작하는 건 게이지가 가득 찼을 때만 — 일단 뜨면 남은 만큼 더 누를 수 있다.
+	player.float_gauge = 0.95
+	player.gauge_flash = 0.0
+	player._flap()
+	_check(not player.floating and player.gauge_flash > 0.0
+			and is_equal_approx(player.float_gauge, 0.95), "gauge: cannot start floating unless full")
+	player.float_gauge = 1.0
+	player._flap()
+	_check(player.floating, "gauge: a full gauge starts the float")
+	player.float_gauge = 0.5
+	player._flap()
+	_check(player.floating and is_equal_approx(player.float_gauge, 0.5 - flap_cost),
+			"gauge: once floating, a partial gauge still flaps")
 	player.float_gauge = 0.4
 	player.floating = true
 	player.velocity.y = 0.0
@@ -194,6 +207,7 @@ func _ready() -> void:
 	player.position = Vector2(320.0, 500.0)
 	player.wall_dir = player._wall_contact()
 	player.wall_jumps_left = 1
+	player.float_gauge = 1.0
 	player._air_jump()
 	_check(player.floating and player.wall_jumps_left == 1, "air jump: away from walls it floats")
 	player.floating = false

@@ -304,9 +304,11 @@ func _air_jump() -> void:
 
 
 ## 풍선 점프 한 번: 처음이면 부풀고, 이미 부풀어 있으면 한 번 더 떠오른다.
-## 게이지가 모자라면 아무 일도 없고 머리 위 막대만 번쩍인다.
+## 부풀기 시작하는 건 게이지가 가득 찼을 때만 된다 — 일단 뜨면 남은 게이지만큼
+## 더 누를 수 있다. 안 될 때는 아무 일도 없고 머리 위 막대만 번쩍인다.
 func _flap() -> void:
-	if float_gauge < float_gauge_flap_cost:
+	var need := float_gauge_flap_cost if floating else 1.0
+	if float_gauge < need:
 		gauge_flash = GAUGE_FLASH
 		return
 	float_gauge -= float_gauge_flap_cost
@@ -478,7 +480,8 @@ func _draw_balloon_shine(half: float, inflate: float) -> void:
 
 
 ## 풍선 게이지: 머리 위 작은 막대. 다 차 있으면 숨고, 쓰기 시작하면 뜬다.
-## 넉넉하면 하늘색, 날갯짓 두 번이 안 남으면 빨강, 모자라 거절당하면 번쩍인다.
+## 떠 있는 동안은 하늘색(날갯짓 두 번이 안 남으면 빨강), 충전 중에는 회색,
+## 못 쓰는데 눌러서 거절당하면 번쩍인다.
 func _draw_float_gauge(half: float) -> void:
 	var a := clampf(gauge_show / 0.3, 0.0, 1.0)
 	var head_y := half - SIZE * lerpf(1.0, float_puff_scale, clampf(puff, 0.0, 1.0))
@@ -486,7 +489,9 @@ func _draw_float_gauge(half: float) -> void:
 	draw_rect(bar.grow(3.0), Color(0.17, 0.11, 0.09, a))
 	draw_rect(bar, Color(1.0, 1.0, 1.0, 0.92 * a))
 	var col := Color("3ec1f3")
-	if float_gauge < float_gauge_flap_cost * 2.0:
+	if not floating:
+		col = Color("a9b4c2")  # 충전 중 — 가득 찰 때까지는 못 쓴다
+	elif float_gauge < float_gauge_flap_cost * 2.0:
 		col = Color("ff5a4d")
 	if gauge_flash > 0.0:
 		col = col.lerp(Color.WHITE, gauge_flash / GAUGE_FLASH)
