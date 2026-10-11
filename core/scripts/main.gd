@@ -37,7 +37,6 @@ const HUD_P_LEFT_W := 166.0
 const PORTRAIT_DESIGN := Vector2(1080.0, 1920.0)
 # 세로 화면에서 터치 덱이 차지하는 아래 몫(덱 윗선 = 화면 아래 - 이 값).
 const PORTRAIT_DECK_H := 520.0
-const SIMPLE_PAD_MARGIN := 40.0  # 두 버튼 조작의 넓은 좌우 패드 — 덱 양옆 여백
 
 ## 세로 화면이 설계 폭보다 넓을 때 오른쪽 열이 밀려난 거리 (`_spread_portrait()`).
 var _p_dx := 0.0
@@ -83,7 +82,6 @@ var key_hint: Control  # 좌하단 조작 안내 카드 (실제 키 바인딩으
 
 func _ready() -> void:
 	_spread_portrait()
-	_apply_control_scheme()
 	_build_backdrop()
 	EventBus.score_changed.connect(func(v: int) -> void: score_label.text = str(v))
 	EventBus.level_changed.connect(func(v: int) -> void: level_label.text = str(v))
@@ -612,7 +610,6 @@ func _build_hud_cards_portrait() -> void:
 
 ## 좌하단 조작 안내 카드 (피그마) — 실제 키 바인딩(KeyBinds)을 키캡 칩으로 그린다.
 ## 두 열: [이동 · 회전 · 점프] / [빠른 낙하 · 대시 · 일시정지].
-## 두 버튼 조작은 [이동 · 두 번: 대시 · 일시정지] / [벽을 계속 밀기: 자동으로 넘기].
 func _build_key_hint() -> void:
 	key_hint = Control.new()
 	key_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -626,11 +623,6 @@ func _draw_key_hint() -> void:
 	var ci := key_hint
 	UiKit.round_rect(ci, Rect2(Vector2.ZERO, ci.size), Color(UiKit.CARD_SKY, 0.85), 16)
 	var rows := [
-		[[_key("move_left", 0), _key("move_right", 0)], tr("HUD_KEYS_MOVE")],
-		[[], tr("HUD_KEYS_DASH_TAP")],
-		[[_key("pause", 0)], tr("SET_ACT_PAUSE")],
-		[[], tr("HUD_KEYS_PARKOUR")],
-	] if GameState.simple_controls() else [
 		[[_key("move_left", 0), _key("move_right", 0)], tr("HUD_KEYS_MOVE")],
 		[[_key("rotate_ccw", 0), _key("rotate_cw", 0)], tr("HUD_KEYS_ROTATE")],
 		[[_key("jump", 0), _key("jump", 1)], tr("SET_ACT_JUMP")],
@@ -849,28 +841,6 @@ func _spread_portrait() -> void:
 		var c := touch.get_node_or_null(path) as Control
 		if c != null:
 			c.position += Vector2(dx, dy)
-
-
-## 두 버튼 조작(GameState.simple_controls()): 터치 덱에는 좌우 패드 하나만 남긴다 —
-## 점프·회전·낙하 버튼을 숨기고, 세로 화면은 패드를 덱 폭만큼 크게 편다(왼쪽 반 ◀ ·
-## 오른쪽 반 ▶ — 양손 엄지로 따로 눌러도, 한 엄지로 미끄러져도 된다). `_spread_portrait()`
-## 뒤에 불러야 늘어난 화면 크기를 쓴다.
-func _apply_control_scheme() -> void:
-	if not GameState.simple_controls():
-		return
-	var vp := get_viewport_rect().size
-	var portrait := vp.y > vp.x
-	help_label.text = "TUT_KEYS_MOBILE_SIMPLE" if portrait else "TUT_KEYS_SIMPLE"
-	var touch := $TouchControls
-	for path: String in ["RotateButton", "DropButton", "JumpButton"]:
-		var c := touch.get_node_or_null(path) as Control
-		if c != null:
-			c.visible = false
-	var pad := touch.get_node_or_null("MovePad") as Control
-	if pad != null and portrait:
-		var deck_top := vp.y - PORTRAIT_DECK_H
-		pad.position = Vector2(SIMPLE_PAD_MARGIN, deck_top + 150.0)
-		pad.size = Vector2(vp.x - SIMPLE_PAD_MARGIN * 2.0, 280.0)
 
 
 ## Every fixed-pit mode plays in the standard 20-row tetris well — taller

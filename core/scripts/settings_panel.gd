@@ -31,7 +31,6 @@ const CARD_PAD := 40.0
 const LABEL_W := 200.0  # 줄 왼쪽 라벨
 const CTRL_X := 240.0  # 컨트롤이 시작하는 x (카드 안쪽 기준)
 const ROW_H := 98.0
-const ROW_H_MIN := 76.0  # 화면이 낮을 때 줄일 수 있는 데까지 (값 줄 높이 66 + 틈 10)
 const BIND_CARD_W := 1300.0  # 컨트롤러·키보드 카드
 const CHIP_W := 350.0
 const CHIP_H := 70.0
@@ -54,7 +53,6 @@ var _lang_row: Control
 var _res_label: Button
 var _lang_label: Button
 var _vib_label: Button
-var _ctl_label: Button  # 조작 방식 (기본 / 두 버튼)
 var _res_idx := 0
 var _lang_idx := 0
 var _res_applied := 0
@@ -155,9 +153,6 @@ func _build_main_page() -> Control:
 	var vib := _build_dropdown(page, "SET_VIBRATION", ctrl_w,
 			func() -> void: _open_vib_list())
 	_vib_label = vib.get_meta("value")
-	var ctl := _build_dropdown(page, "SET_CONTROL_MODE", ctrl_w,
-			func() -> void: _open_control_list())
-	_ctl_label = ctl.get_meta("value")
 	# 적용 — 해상도·언어는 고르는 즉시가 아니라 여기서 반영한다.
 	_apply_btn = Button.new()
 	_apply_btn.text = tr("SET_APPLY")
@@ -210,27 +205,15 @@ func _build_main_page() -> Control:
 
 
 ## 보이는 줄만 위에서부터 쌓고, 카드 높이를 그만큼으로 잡아 화면 가운데에 세운다.
-## 가로 1080 높이에 다 안 들어가면 값 줄(ROW_H) 사이 간격을 줄여 맞춘다(줄 높이 66까지).
 func _layout_main() -> void:
 	var page := _pages[PAGE_MAIN] if not _pages.is_empty() else null
-	var natural := CARD_PAD * 2.0 - 20.0
-	var squeezable := 0
-	for r: Dictionary in _main_rows:
-		if (r.node as Control).visible:
-			natural += float(r.h)
-			if float(r.h) == ROW_H:
-				squeezable += 1
-	var room := vh - PAGE_TOP - _page_drop() - 20.0
-	var row_h := ROW_H
-	if natural > room and squeezable > 0:
-		row_h = maxf(ROW_H_MIN, ROW_H - (natural - room) / squeezable)
 	var y := CARD_PAD
 	for r: Dictionary in _main_rows:
 		var node: Control = r.node
 		if not node.visible:
 			continue
 		node.position.y = y
-		y += row_h if float(r.h) == ROW_H else float(r.h)
+		y += float(r.h)
 	_main_card_h = y + CARD_PAD - 20.0
 	var cw := minf(CARD_W, vw - 80.0)
 	var top := maxf(PAGE_TOP + _page_drop(), (vh - _main_card_h) / 2.0)
@@ -564,21 +547,6 @@ func _open_vib_list() -> void:
 		_refresh())
 
 
-const CONTROL_NAMES := ["SET_CONTROL_CLASSIC", "SET_CONTROL_SIMPLE"]
-
-
-## 조작 방식: 기본(이동·점프·대시·낙하·회전) / 두 버튼(좌우만 + 자동 파쿠르).
-## 고르는 즉시 저장되고 다음 판부터 적용된다.
-func _open_control_list() -> void:
-	var names: Array = []
-	for k: String in CONTROL_NAMES:
-		names.append(tr(k))
-	_open_list(_ctl_label, names, GameState.control_scheme(), func(i: int) -> void:
-		GameState.control_mode = i
-		GameState.save_game()
-		_refresh())
-
-
 func _open_list(anchor: Button, labels: Array, cur: int, on_pick: Callable) -> void:
 	_close_list()
 	if labels.is_empty():
@@ -698,7 +666,6 @@ func _refresh() -> void:
 	_apply_btn.visible = _on_title and _has_pending()
 	_vib_label.text = tr("SET_VIBRATION_OFF") if GameState.vibration == 0 \
 			else str(GameState.vibration)
-	_ctl_label.text = tr(CONTROL_NAMES[GameState.control_scheme()])
 	for kind: String in _sliders:
 		_sliders[kind].set_value_no_signal(Sfx.get_volume(kind))
 	_refresh_chips()

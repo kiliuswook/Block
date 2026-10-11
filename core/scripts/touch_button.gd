@@ -32,8 +32,6 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_visible_in_tree():
-		return  # 숨긴 버튼(두 버튼 조작의 점프·회전·낙하)은 터치를 받지 않는다
 	if event is InputEventScreenTouch:
 		if event.pressed and touch_index == -1 and _hit(event.position):
 			_press(event.index)

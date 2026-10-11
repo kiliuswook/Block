@@ -8,8 +8,6 @@ var _fails := 0
 func _ready() -> void:
 	await get_tree().process_frame
 	GameState.mode = GameState.MODE_ENDLESS
-	var saved_ctl: int = GameState.control_mode
-	GameState.control_mode = GameState.CONTROL_CLASSIC  # 아래는 기본 조작의 버튼 배치
 	var inst: Node = (load("res://mobile/ui/main_mobile.tscn") as PackedScene).instantiate()
 	get_tree().root.add_child(inst)
 	var tc: CanvasLayer = inst.get_node("TouchControls")
@@ -56,32 +54,6 @@ func _ready() -> void:
 	await _frames(2)
 	_check("pause opens settings", inst.get_node("Board").is_paused and inst.settings_panel.visible)
 	_check("pause panel shows quit", inst.settings_panel._pause_quit.visible)
-	inst.queue_free()
-	await _frames(2)
-	# 두 버튼 조작: 좌우 패드만 남고 덱 폭만큼 넓어진다. 숨은 버튼은 터치를 안 받는다.
-	GameState.control_mode = GameState.CONTROL_SIMPLE
-	var s_inst: Node = (load("res://mobile/ui/main_mobile.tscn") as PackedScene).instantiate()
-	get_tree().root.add_child(s_inst)
-	var stc: CanvasLayer = s_inst.get_node("TouchControls")
-	stc.visible = true
-	await _frames(3)
-	var spad: Control = stc.get_node("MovePad")
-	var sjump: Control = stc.get_node("JumpButton")
-	var vw: float = s_inst.get_viewport_rect().size.x
-	_check("simple: action buttons hidden", not sjump.visible
-			and not stc.get_node("RotateButton").visible and not stc.get_node("DropButton").visible)
-	_check("simple: pad spans the deck", spad.size.x >= vw - 100.0)
-	_touch(4, true, sjump.get_global_rect().get_center())
-	await _frames(2)
-	_check("simple: hidden jump ignores touches", not Input.is_action_pressed("jump"))
-	_touch(4, false, sjump.get_global_rect().get_center())
-	var spr := spad.get_global_rect()
-	_touch(5, true, spr.position + Vector2(spr.size.x * 0.9, spr.size.y * 0.5))
-	await _frames(2)
-	_check("simple: right half moves right", Input.is_action_pressed("move_right"))
-	_touch(5, false, spr.position)
-	await _frames(2)
-	GameState.control_mode = saved_ctl
 	if _fails == 0:
 		print("ALL TESTS PASSED")
 	else:

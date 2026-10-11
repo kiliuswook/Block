@@ -898,8 +898,6 @@ func _ready() -> void:
 	_check(still == EscapeBoard.COLS, "fever: the anchored floor does not settle away")
 	b8.queue_free()
 
-	_test_simple_controls()
-
 	GameState.save_game()
 
 	if failures == 0:
@@ -907,116 +905,6 @@ func _ready() -> void:
 	else:
 		print("%d TEST(S) FAILED" % failures)
 	get_tree().quit(failures)
-
-
-## 두 버튼 조작: 좌우만으로 턱을 넘는다 — 낮은 턱은 깡충, 높은 턱은 벽타기,
-## 끝이 없는 벽·머리 위가 막힌 곳은 넘지 않는다. 블록 조작 키는 먹지 않는다.
-func _test_simple_controls() -> void:
-	var saved_mode: int = GameState.control_mode
-	GameState.control_mode = GameState.CONTROL_SIMPLE
-	var b: Node2D = load("res://core/scripts/escape_board.gd").new()
-	var p: Node2D = load("res://core/scripts/player.gd").new()
-	p.name = "Player"
-	b.add_child(p)
-	add_child(b)
-	b.start_game()
-	var c := EscapeBoard.CELL
-	var floor_y: float = b.rows * c - Player.SIZE / 2.0
-	_check(p.simple and b.simple_controls, "simple: player and board pick up the two-button scheme")
-	# 블록 조작 키(회전·낙하)는 받지 않는다.
-	Input.action_press("soft_drop")
-	_check(not b._held("soft_drop"), "simple: the drop key does nothing")
-	Input.action_release("soft_drop")
-	# 턱 높이(칸)별: 오르기 결과 · 벽타기를 썼는가.
-	for case: Array in [[1, true, false], [2, true, false], [3, true, true],
-			[4, true, true], [5, false, false]]:
-		var cells: int = case[0]
-		b.grid.clear()
-		for k in cells:
-			for x in range(5, EscapeBoard.COLS):
-				b.grid[Vector2i(x, b.rows - 1 - k)] = "O"
-		var res := _run_right(p, floor_y, 3.5 * c, 240)
-		var top: float = (b.rows - cells) * c - Player.SIZE / 2.0
-		var on_top: bool = p.on_floor and absf(p.position.y - top) < 1.0 and p.position.x > 5 * c
-		_check(on_top == bool(case[1]),
-				"simple: %d-cell ledge %s" % [cells, "is climbed over" if case[1] else "is too tall"])
-		_check(bool(res.climbed) == bool(case[2]),
-				"simple: %d-cell ledge %s" % [cells, "uses the wall climb" if case[2] else "needs no wall climb"])
-		if not case[1]:
-			_check(absf(p.position.y - floor_y) < 1.0 and not p.climbing,
-					"simple: a too-tall wall leaves the cat on the floor")
-	# 낮은 턱은 딱 맞게 깡충 — 한 칸 턱을 넘는 점프는 두 칸 높이까지 솟지 않는다.
-	b.grid.clear()
-	for x in range(5, EscapeBoard.COLS):
-		b.grid[Vector2i(x, b.rows - 1)] = "O"
-	var hop := _run_right(p, floor_y, 3.5 * c, 240)
-	_check(floor_y - hop.highest < 2.0 * c, "simple: a one-cell hop stays small")
-	# 우물 옆벽은 끝이 없다 — 밀어도 오르지 않는다.
-	b.grid.clear()
-	var wall := _run_right(p, floor_y, EscapeBoard.COLS * c - Player.SIZE, 120)
-	_check(not wall.climbed and absf(p.position.y - floor_y) < 1.0,
-			"simple: the well side wall is never climbed")
-	# 머리 위가 막혀 있으면 넘지 않는다.
-	b.grid.clear()
-	b.grid[Vector2i(5, b.rows - 1)] = "O"
-	b.grid[Vector2i(4, b.rows - 2)] = "O"
-	var roof := _run_right(p, floor_y, 4.5 * c - 2.0, 120)
-	_check(not roof.climbed and absf(p.position.y - floor_y) < 1.0,
-			"simple: no vault under a roof")
-	# 벽타기 도중 키를 떼면 놓고 미끄러진다.
-	b.grid.clear()
-	for k in 4:
-		b.grid[Vector2i(5, b.rows - 1 - k)] = "O"
-	var dt := 1.0 / 60.0
-	p.respawn(Vector2(5 * c - Player.SIZE / 2.0, floor_y))
-	p.on_floor = true
-	p.dash_cooldown = 1e9
-	Input.action_press("move_right")
-	for i in 20:
-		p._handle_input(dt)
-		p._apply_motion(dt)
-	var was_climbing: bool = p.climbing
-	Input.action_release("move_right")
-	p._handle_input(dt)
-	p._apply_motion(dt)
-	_check(was_climbing and not p.climbing, "simple: letting go drops off the wall")
-	for i in 120:
-		p._handle_input(dt)
-		p._apply_motion(dt)
-	_check(p.on_floor and absf(p.position.y - floor_y) < 1.0, "simple: the cat slides back to the floor")
-	# 기본 조작에서는 벽을 밀어도 저절로 넘지 않는다.
-	GameState.control_mode = GameState.CONTROL_CLASSIC
-	b.grid.clear()
-	for x in range(5, EscapeBoard.COLS):
-		b.grid[Vector2i(x, b.rows - 1)] = "O"
-	_run_right(p, floor_y, 3.5 * c, 120)
-	_check(not p.simple and absf(p.position.y - floor_y) < 1.0,
-			"classic: pushing a ledge does not auto-vault")
-	GameState.control_mode = saved_mode
-	b.queue_free()
-
-
-## 냥이를 (x, y)에 세우고 오른쪽을 frames 프레임 누른다. 벽타기를 썼는가 · 가장 높이 간 y.
-func _run_right(p: Node2D, y: float, x: float, frames: int) -> Dictionary:
-	var dt := 1.0 / 60.0
-	p.respawn(Vector2(x, y))
-	p.on_floor = true
-	# 헤드리스에선 한 프레임 안에서 여러 번 돌려 just_pressed가 계속 참이라 더블탭
-	# 대시로 읽힌다 — 이 시험은 대시를 막아 두고 파쿠르만 본다.
-	p.dash_cooldown = 1e9
-	var climbed := false
-	var highest := y
-	Input.action_press("move_right")
-	for i in frames:
-		p._handle_input(dt)
-		p._apply_motion(dt)
-		climbed = climbed or p.climbing
-		highest = minf(highest, p.position.y)
-	Input.action_release("move_right")
-	for i in 30:
-		p._handle_input(dt)
-		p._apply_motion(dt)
-	return {"climbed": climbed, "highest": highest}
 
 
 func _check(cond: bool, label: String) -> void:
